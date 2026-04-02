@@ -1,0 +1,3 @@
+[submodule "experiments/doc-to-lora/src"]
+	path = experiments/doc-to-lora/src
+	url = https://github.com/SakanaAI/doc-to-lora
