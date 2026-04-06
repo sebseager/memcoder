@@ -25,7 +25,8 @@ state_dict = torch.load(checkpoint_path, weights_only=False)
 from ctx_to_lora.modeling import idefics2
 
 # monkey-patch the missing key
-idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES["eager"] = idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES["sdpa"]
+available = next(iter(idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES.values()))
+idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES["eager"] = available
 
 model = ModulatedPretrainedModel.from_state_dict(
     state_dict,
