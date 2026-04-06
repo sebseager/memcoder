@@ -22,6 +22,11 @@ modeling_utils.PreTrainedModel._autoset_attn_implementation = _force_eager_attn
 checkpoint_path = "trained_d2l/gemma_demo/checkpoint-80000/pytorch_model.bin"
 state_dict = torch.load(checkpoint_path, weights_only=False)
 
+from ctx_to_lora.modeling import idefics2
+
+# monkey-patch the missing key
+idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES["eager"] = idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES["sdpa"]
+
 model = ModulatedPretrainedModel.from_state_dict(
     state_dict,
     train=False,
