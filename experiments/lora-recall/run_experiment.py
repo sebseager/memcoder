@@ -11,16 +11,20 @@ Usage:
   uv run python run_experiment.py
 """
 
+import csv
 import json
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
 
 # Add vendor src to path
-sys.path.insert(0, str(Path(__file__).parents[1] / ".." / "vendor" / "doc-to-lora" / "src"))
+sys.path.insert(
+    0, str(Path(__file__).parents[1] / ".." / "vendor" / "doc-to-lora" / "src")
+)
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
@@ -113,18 +117,20 @@ def run_probe(model, tokenizer, doc_text: str, probes: list[dict]) -> list[dict]
         full_response = tokenizer.decode(output[0], skip_special_tokens=True)
         # Strip the input prompt from the response to get just the generated part
         input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
-        generated = full_response[len(input_text):].strip()
+        generated = full_response[len(input_text) :].strip()
 
         match = exact_match(generated, probe["answer"])
 
-        results.append({
-            "id": probe["id"],
-            "question": question,
-            "gold_answer": probe["answer"],
-            "generated": generated,
-            "exact_match": match,
-            "category": probe["category"],
-        })
+        results.append(
+            {
+                "id": probe["id"],
+                "question": question,
+                "gold_answer": probe["answer"],
+                "generated": generated,
+                "exact_match": match,
+                "category": probe["category"],
+            }
+        )
 
         status = "✓" if match else "✗"
         print(f"  {status} [{probe['id']}] {question[:60]}...")
@@ -193,24 +199,31 @@ def run_baseline(model, tokenizer, probes_by_module: dict) -> dict:
             ).to(model.device)
 
             with torch.no_grad():
-                output = model.generate(input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS)
+                output = model.generate(
+                    input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS
+                )
 
             full_response = tokenizer.decode(output[0], skip_special_tokens=True)
             input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
-            generated = full_response[len(input_text):].strip()
+            generated = full_response[len(input_text) :].strip()
 
             match = exact_match(generated, probe["answer"])
-            results.append({
-                "id": probe["id"],
-                "question": question,
-                "gold_answer": probe["answer"],
-                "generated": generated,
-                "exact_match": match,
-                "category": probe["category"],
-            })
+            results.append(
+                {
+                    "id": probe["id"],
+                    "question": question,
+                    "gold_answer": probe["answer"],
+                    "generated": generated,
+                    "exact_match": match,
+                    "category": probe["category"],
+                }
+            )
 
             status = "✓" if match else "✗"
             print(f"  {status} [{probe['id']}] {question[:60]}...")
+            if not match:
+                print(f"    Expected: {probe['answer']}")
+                print(f"    Got:      {generated[:120]}")
 
         all_results[module_name] = {
             "results": results,
@@ -256,10 +269,14 @@ def main():
             elapsed = time.time() - t0
 
             stats = compute_stats(results)
-            print(f"\n  Recall: {stats['correct']}/{stats['total']} = {stats['overall_recall']:.1%}")
+            print(
+                f"\n  Recall: {stats['correct']}/{stats['total']} = {stats['overall_recall']:.1%}"
+            )
             print(f"  Time: {elapsed:.1f}s")
             for cat, cat_stats in stats["per_category"].items():
-                print(f"  {cat}: {cat_stats['correct']}/{cat_stats['total']} = {cat_stats['recall']:.1%}")
+                print(
+                    f"  {cat}: {cat_stats['correct']}/{cat_stats['total']} = {cat_stats['recall']:.1%}"
+                )
 
             all_results[key] = {
                 "results": results,
@@ -268,29 +285,135 @@ def main():
                 "doc_length_chars": len(doc_text),
             }
 
-    # Save all results
-    results_path = RESULTS_DIR / "recall_results.json"
+    # Save all results with timestamp
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    results_path = RESULTS_DIR / f"recall_{ts}.json"
     with open(results_path, "w") as f:
         json.dump(all_results, f, indent=2)
     print(f"\nResults saved to {results_path}")
+
+    # Write per-probe CSV
+    probes_csv_path = RESULTS_DIR / f"recall_{ts}_probes.csv"
+    with open(probes_csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "condition",
+                "module",
+                "variant",
+                "probe_id",
+                "category",
+                "question",
+                "gold_answer",
+                "generated",
+                "exact_match",
+            ]
+        )
+        for cond_key, cond_data in all_results.items():
+            if cond_key == "baseline":
+                for mod, mod_data in cond_data.items():
+                    for r in mod_data["results"]:
+                        writer.writerow(
+                            [
+                                "baseline",
+                                mod,
+                                "",
+                                r["id"],
+                                r["category"],
+                                r["question"],
+                                r["gold_answer"],
+                                r["generated"],
+                                int(r["exact_match"]),
+                            ]
+                        )
+            else:
+                mod, var = cond_key.split("/", 1)
+                for r in cond_data["results"]:
+                    writer.writerow(
+                        [
+                            cond_key,
+                            mod,
+                            var,
+                            r["id"],
+                            r["category"],
+                            r["question"],
+                            r["gold_answer"],
+                            r["generated"],
+                            int(r["exact_match"]),
+                        ]
+                    )
+    print(f"Per-probe CSV saved to {probes_csv_path}")
+
+    # Write summary CSV
+    summary_csv_path = RESULTS_DIR / f"recall_{ts}_summary.csv"
+    with open(summary_csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "module",
+                "condition",
+                "recall",
+                "correct",
+                "total",
+                "baseline_recall",
+                "delta_vs_baseline",
+            ]
+        )
+        for module_name in MODULES:
+            bl_stats = baseline[module_name]["stats"]
+            bl_recall = bl_stats["overall_recall"]
+            writer.writerow(
+                [
+                    module_name,
+                    "baseline",
+                    f"{bl_recall:.4f}",
+                    bl_stats["correct"],
+                    bl_stats["total"],
+                    f"{bl_recall:.4f}",
+                    "0.0000",
+                ]
+            )
+            for variant in VARIANTS:
+                key = f"{module_name}/{variant}"
+                if key not in all_results:
+                    continue
+                s = all_results[key]["stats"]
+                delta = s["overall_recall"] - bl_recall
+                writer.writerow(
+                    [
+                        module_name,
+                        variant,
+                        f"{s['overall_recall']:.4f}",
+                        s["correct"],
+                        s["total"],
+                        f"{bl_recall:.4f}",
+                        f"{delta:+.4f}",
+                    ]
+                )
+    print(f"Summary CSV saved to {summary_csv_path}")
 
     # Print summary table
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"{'Condition':<40} {'Recall':>10} {'Correct':>10}")
-    print("-" * 60)
+    print(f"{'Condition':<40} {'Recall':>10} {'Correct':>10} {'Δ baseline':>12}")
+    print("-" * 72)
 
     for module_name in MODULES:
         # Baseline for this module
         bl = baseline[module_name]["stats"]
-        print(f"  {module_name}/baseline{'':<15} {bl['overall_recall']:>9.1%} {bl['correct']:>5}/{bl['total']}")
+        print(
+            f"  {module_name}/baseline{'':<15} {bl['overall_recall']:>9.1%} {bl['correct']:>5}/{bl['total']}{'':>12}"
+        )
 
         for variant in VARIANTS:
             key = f"{module_name}/{variant}"
             if key in all_results:
                 s = all_results[key]["stats"]
-                print(f"  {key:<38} {s['overall_recall']:>9.1%} {s['correct']:>5}/{s['total']}")
+                delta = s["overall_recall"] - bl["overall_recall"]
+                print(
+                    f"  {key:<38} {s['overall_recall']:>9.1%} {s['correct']:>5}/{s['total']}  {delta:>+9.1%}"
+                )
 
     # Variant A vs B comparison
     print("\n" + "=" * 70)
