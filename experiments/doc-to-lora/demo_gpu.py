@@ -1,5 +1,3 @@
-"""Clean GPU demo using doc-to-lora with flash attention."""
-
 import sys
 from pathlib import Path
 
