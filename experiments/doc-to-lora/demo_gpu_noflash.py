@@ -2,32 +2,41 @@ import sys
 from pathlib import Path
 
 import torch
+import transformers.modeling_utils as modeling_utils
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "vendor" / "doc-to-lora" / "src"))
-
-# Apply perceiver no-flash patches before importing model classes
-from noflash_patches import apply_noflash_patches
-
-apply_noflash_patches()
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
 
+@classmethod
+def _force_eager_attn(cls, config, *args, **kwargs):
+    if hasattr(config, "_attn_implementation"):
+        config._attn_implementation = "eager"
+    if hasattr(config, "attn_implementation"):
+        config.attn_implementation = "eager"
+    return config
+
+modeling_utils.PreTrainedModel._autoset_attn_implementation = _force_eager_attn
+
 checkpoint_path = "trained_d2l/gemma_demo/checkpoint-80000/pytorch_model.bin"
 state_dict = torch.load(checkpoint_path, weights_only=False)
-state_dict["ctx_encoder_args"].quantize_ctx_encoder = False
+
+from ctx_to_lora.modeling import idefics2
+
+# monkey-patch the missing key
+available = next(iter(idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES.values()))
+idefics2.IDEFICS2_PERCEIVER_ATTENTION_CLASSES["eager"] = available
 
 model = ModulatedPretrainedModel.from_state_dict(
     state_dict,
     train=False,
     use_sequence_packing=False,
-    use_flash_attn=False,
 )
 model.reset()
 tokenizer = get_tokenizer(model.base_model.name_or_path)
 
-data_dir = Path(__file__).parents[2] / "vendor" / "doc-to-lora" / "data"
-doc = open(data_dir / "sakana_wiki.txt", "r").read()
+doc = open("data/sakana_wiki.txt", "r").read()
 model.internalize(doc)
 
 chat = [{"role": "user", "content": "Tell me about Sakana AI."}]
