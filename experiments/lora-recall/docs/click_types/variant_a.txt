@@ -1,0 +1,101 @@
+click.types — Parameter Type System
+
+This module implements Click's parameter type system. Parameter types validate and convert values from the command line or Python into the correct types.
+
+== Classes ==
+
+ParamType
+  Base class for all parameter types. To implement a custom type, subclass and set the name class attribute, then implement convert().
+  Methods: convert(value, param, ctx), fail(message, param, ctx) raises BadParameter, get_metavar(param, ctx), get_missing_message(param, ctx), shell_complete(ctx, param, incomplete), split_envvar_value(rv), to_info_dict().
+
+StringParamType
+  name = "text"
+  convert: If value is bytes, tries to decode using _get_argv_encoding(), falls back to filesystem encoding, then to utf-8 with 'replace' error handler. Otherwise returns str(value).
+  __repr__ returns "STRING"
+
+IntParamType
+  name = "integer"
+  _number_class = int
+  Error message on conversion failure: "{value!r} is not a valid {number_type}." where number_type is "integer".
+  __repr__ returns "INT"
+
+FloatParamType
+  name = "float"
+  _number_class = float
+  __repr__ returns "FLOAT"
+
+BoolParamType
+  name = "boolean"
+  Has a bool_states dict mapping strings to booleans: "1"->True, "0"->False, "yes"->True, "no"->False, "true"->True, "false"->False, "on"->True, "off"->False, "t"->True, "f"->False, "y"->True, "n"->False, ""->False.
+
+  str_to_bool(value): Static method. If value is already a bool, returns it. Otherwise strips whitespace, lowercases, and looks up in bool_states. Returns None if not found.
+  convert: Calls str_to_bool. If result is None, fails with "{value!r} is not a valid boolean. Recognized values: {states}" where states is sorted list of bool_states keys.
+  __repr__ returns "BOOL"
+
+UUIDParameterType
+  name = "uuid"
+  Converts strings to uuid.UUID objects.
+  __repr__ returns "UUID"
+
+UnprocessedParamType
+  name = "text"
+  convert returns value unchanged.
+
+FuncParamType
+  Takes a callable func in __init__. convert calls self.func(value). On ValueError, calls self.fail().
+
+Choice
+  Validates against a fixed set of supported values.
+  __init__(choices: Iterable, case_sensitive: bool = True)
+  The choices iterable is converted to a tuple (iterated only once).
+
+  normalize_choice(choice, ctx): Uses Context.token_normalize_func if available, otherwise uses casefold(). Always applies casefold when case_sensitive is False.
+
+  convert: Normalizes input value with _normalize_choice, builds a mapping of normalized choices to original choices. Looks up the normalized value. If not found, calls fail with get_invalid_choice_message.
+
+  get_invalid_choice_message(value, ctx): Uses ngettext. Singular: "{value!r} is not {choice}." Plural: "{value!r} is not one of {choices}." The choices string is comma-joined repr of original values.
+
+  get_missing_message(param, ctx): Returns "Choose from:\n\t{choices}" with comma-joined repr of choices.
+
+  shell_complete: Returns CompletionItem for each choice starting with incomplete. Case-sensitive filtering respects self.case_sensitive.
+
+  __repr__ returns "Choice({list_of_choices})"
+
+DateTime
+  Converts date strings to datetime objects.
+  name = "datetime"
+  Default formats: ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]
+
+  get_metavar: Returns "[format1|format2|format3]" joined by |.
+  convert: Tries each format with datetime.strptime. Returns first successful parse. On all failures, error uses ngettext: singular "{value!r} does not match the format {format}." plural "{value!r} does not match the formats {formats}."
+  __repr__ returns "DateTime"
+
+IntRange
+  Restricts INT to a range. name = "integer range".
+  __init__(min, max, min_open, max_open, clamp) — all optional.
+  If clamp is True, out-of-range values are clamped. For open boundaries, _clamp returns bound + dir (where dir is 1 or -1).
+  Range check error: "{value} is not in the range {range}."
+  _describe_range: Uses comparison operators like "x>=min", "min<=x<=max", etc.
+
+FloatRange
+  Restricts FLOAT to a range. name = "float range".
+  For open boundaries, _clamp is not supported and raises TypeError("Can't clamp open float ranges.").
+
+File
+  Declares a parameter as a file for reading or writing. The special value "-" indicates stdin or stdout.
+  __init__(mode='r', encoding=None, errors='strict', lazy=None, atomic=False)
+  resolve_lazy_flag(value): If self.lazy is not None, returns self.lazy. If value is "-", returns False. If "w" in self.mode, returns True. Otherwise returns False.
+  convert: Opens the file using click.utils.LazyFile. If atomic is True, uses AtomicFile for writing.
+
+Path
+  Similar to File but returns filename instead of open file.
+  __init__(exists=False, file_okay=True, dir_okay=True, writable=False, readable=True, resolve_path=False, allow_dash=False, path_type=None, executable=False)
+  convert: Validates existence, type (file vs dir), permissions (readable, writable, executable). If resolve_path, resolves to absolute path. If path_type is set, coerces the result.
+
+Tuple
+  For commands with fixed nargs where different types apply to different positions.
+  __init__(types: Sequence): Converts each type using convert_type().
+  name property: Returns concatenated names like "INT FLOAT TEXT".
+
+convert_type(ty, default):
+  Finds the most appropriate ParamType for a given Python type. Maps bool->BOOL, int->INT, float->FLOAT, str->STRING. If ty is None and default is a tuple, returns Tuple. If ty is callable, returns FuncParamType(ty).

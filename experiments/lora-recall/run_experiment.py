@@ -1,0 +1,331 @@
+"""LoRA Recall Probe — measures what doc-to-lora actually encodes.
+
+For each (module, variant) pair:
+  1. Internalize the document via model.internalize()
+  2. Ask ~20 cloze-style probe questions
+  3. Score exact-match recall
+  4. Reset and move to next
+
+Usage:
+  cd experiments/lora-recall
+  uv run python run_experiment.py
+"""
+
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+import torch
+
+# Add vendor src to path
+sys.path.insert(0, str(Path(__file__).parents[1] / ".." / "vendor" / "doc-to-lora" / "src"))
+
+from ctx_to_lora.model_loading import get_tokenizer
+from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+CHECKPOINT_PATH = str(
+    Path(__file__).parents[1]
+    / "doc-to-lora"
+    / "trained_d2l"
+    / "gemma_demo"
+    / "checkpoint-80000"
+    / "pytorch_model.bin"
+)
+
+DOCS_DIR = Path(__file__).parent / "docs"
+PROBES_PATH = Path(__file__).parent / "probes.json"
+RESULTS_DIR = Path(__file__).parent / "results"
+RESULTS_DIR.mkdir(exist_ok=True)
+
+MODULES = ["flask_sessions", "click_types", "marshmallow_validate"]
+VARIANTS = ["variant_a", "variant_b"]
+
+MAX_NEW_TOKENS = 100
+
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+def normalize(text: str) -> str:
+    """Lowercase, strip, collapse whitespace, remove quotes."""
+    text = text.lower().strip()
+    text = re.sub(r'["\']', "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def exact_match(predicted: str, gold: str) -> bool:
+    return normalize(gold) in normalize(predicted)
+
+
+def extract_answer(response: str, question: str) -> str:
+    """Try to extract the answer portion from the model response."""
+    # The model response includes the chat, so strip the question prefix
+    # Just take the generated part after the question
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Main experiment
+# ---------------------------------------------------------------------------
+def load_model():
+    print(f"Loading checkpoint: {CHECKPOINT_PATH}")
+    state_dict = torch.load(CHECKPOINT_PATH, weights_only=False)
+    state_dict["ctx_encoder_args"].quantize_ctx_encoder = False
+
+    model = ModulatedPretrainedModel.from_state_dict(
+        state_dict,
+        train=False,
+        use_sequence_packing=False,
+        use_flash_attn=True,
+    )
+    model.reset()
+    tokenizer = get_tokenizer(model.base_model.name_or_path)
+    return model, tokenizer
+
+
+def run_probe(model, tokenizer, doc_text: str, probes: list[dict]) -> list[dict]:
+    """Internalize a document and run all probe questions. Returns scored results."""
+    model.reset()
+    model.internalize(doc_text)
+
+    results = []
+    for probe in probes:
+        question = probe["question"]
+
+        chat = [{"role": "user", "content": question}]
+        chat_ids = tokenizer.apply_chat_template(
+            chat,
+            add_special_tokens=False,
+            return_attention_mask=False,
+            add_generation_prompt=True,
+            return_tensors="pt",
+        ).to(model.device)
+
+        with torch.no_grad():
+            output = model.generate(input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS)
+
+        full_response = tokenizer.decode(output[0], skip_special_tokens=True)
+        # Strip the input prompt from the response to get just the generated part
+        input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
+        generated = full_response[len(input_text):].strip()
+
+        match = exact_match(generated, probe["answer"])
+
+        results.append({
+            "id": probe["id"],
+            "question": question,
+            "gold_answer": probe["answer"],
+            "generated": generated,
+            "exact_match": match,
+            "category": probe["category"],
+        })
+
+        status = "✓" if match else "✗"
+        print(f"  {status} [{probe['id']}] {question[:60]}...")
+        if not match:
+            print(f"    Expected: {probe['answer']}")
+            print(f"    Got:      {generated[:120]}")
+
+    model.reset()
+    return results
+
+
+def compute_stats(results: list[dict]) -> dict:
+    """Compute aggregate statistics from probe results."""
+    total = len(results)
+    correct = sum(1 for r in results if r["exact_match"])
+
+    # Per-category breakdown
+    categories = {}
+    for r in results:
+        cat = r["category"]
+        if cat not in categories:
+            categories[cat] = {"total": 0, "correct": 0}
+        categories[cat]["total"] += 1
+        if r["exact_match"]:
+            categories[cat]["correct"] += 1
+
+    cat_rates = {
+        cat: {
+            "recall": v["correct"] / v["total"] if v["total"] > 0 else 0,
+            "correct": v["correct"],
+            "total": v["total"],
+        }
+        for cat, v in categories.items()
+    }
+
+    return {
+        "overall_recall": correct / total if total > 0 else 0,
+        "correct": correct,
+        "total": total,
+        "per_category": cat_rates,
+    }
+
+
+def run_baseline(model, tokenizer, probes_by_module: dict) -> dict:
+    """Run probes WITHOUT any document internalized (baseline)."""
+    print("\n" + "=" * 70)
+    print("BASELINE (no document)")
+    print("=" * 70)
+
+    model.reset()
+    all_results = {}
+
+    for module_name, probes in probes_by_module.items():
+        print(f"\n--- {module_name} ---")
+        results = []
+        for probe in probes:
+            question = probe["question"]
+
+            chat = [{"role": "user", "content": question}]
+            chat_ids = tokenizer.apply_chat_template(
+                chat,
+                add_special_tokens=False,
+                return_attention_mask=False,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            ).to(model.device)
+
+            with torch.no_grad():
+                output = model.generate(input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS)
+
+            full_response = tokenizer.decode(output[0], skip_special_tokens=True)
+            input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
+            generated = full_response[len(input_text):].strip()
+
+            match = exact_match(generated, probe["answer"])
+            results.append({
+                "id": probe["id"],
+                "question": question,
+                "gold_answer": probe["answer"],
+                "generated": generated,
+                "exact_match": match,
+                "category": probe["category"],
+            })
+
+            status = "✓" if match else "✗"
+            print(f"  {status} [{probe['id']}] {question[:60]}...")
+
+        all_results[module_name] = {
+            "results": results,
+            "stats": compute_stats(results),
+        }
+
+    return all_results
+
+
+def main():
+    # Load probes
+    with open(PROBES_PATH) as f:
+        probes_by_module = json.load(f)
+
+    # Load model
+    model, tokenizer = load_model()
+
+    # Run baseline first
+    baseline = run_baseline(model, tokenizer, probes_by_module)
+
+    # Run all (module, variant) combinations
+    all_results = {"baseline": baseline}
+
+    for module_name in MODULES:
+        for variant in VARIANTS:
+            key = f"{module_name}/{variant}"
+            doc_path = DOCS_DIR / module_name / f"{variant}.txt"
+
+            if not doc_path.exists():
+                print(f"\nSkipping {key}: {doc_path} not found")
+                continue
+
+            print(f"\n{'=' * 70}")
+            print(f"Running: {key}")
+            print(f"{'=' * 70}")
+
+            doc_text = doc_path.read_text()
+            print(f"Document length: {len(doc_text)} chars")
+
+            probes = probes_by_module[module_name]
+            t0 = time.time()
+            results = run_probe(model, tokenizer, doc_text, probes)
+            elapsed = time.time() - t0
+
+            stats = compute_stats(results)
+            print(f"\n  Recall: {stats['correct']}/{stats['total']} = {stats['overall_recall']:.1%}")
+            print(f"  Time: {elapsed:.1f}s")
+            for cat, cat_stats in stats["per_category"].items():
+                print(f"  {cat}: {cat_stats['correct']}/{cat_stats['total']} = {cat_stats['recall']:.1%}")
+
+            all_results[key] = {
+                "results": results,
+                "stats": stats,
+                "elapsed_seconds": elapsed,
+                "doc_length_chars": len(doc_text),
+            }
+
+    # Save all results
+    results_path = RESULTS_DIR / "recall_results.json"
+    with open(results_path, "w") as f:
+        json.dump(all_results, f, indent=2)
+    print(f"\nResults saved to {results_path}")
+
+    # Print summary table
+    print("\n" + "=" * 70)
+    print("SUMMARY")
+    print("=" * 70)
+    print(f"{'Condition':<40} {'Recall':>10} {'Correct':>10}")
+    print("-" * 60)
+
+    for module_name in MODULES:
+        # Baseline for this module
+        bl = baseline[module_name]["stats"]
+        print(f"  {module_name}/baseline{'':<15} {bl['overall_recall']:>9.1%} {bl['correct']:>5}/{bl['total']}")
+
+        for variant in VARIANTS:
+            key = f"{module_name}/{variant}"
+            if key in all_results:
+                s = all_results[key]["stats"]
+                print(f"  {key:<38} {s['overall_recall']:>9.1%} {s['correct']:>5}/{s['total']}")
+
+    # Variant A vs B comparison
+    print("\n" + "=" * 70)
+    print("VARIANT A vs B COMPARISON")
+    print("=" * 70)
+    for module_name in MODULES:
+        key_a = f"{module_name}/variant_a"
+        key_b = f"{module_name}/variant_b"
+        if key_a in all_results and key_b in all_results:
+            ra = all_results[key_a]["stats"]["overall_recall"]
+            rb = all_results[key_b]["stats"]["overall_recall"]
+            delta = rb - ra
+            print(f"  {module_name}: A={ra:.1%}  B={rb:.1%}  Δ={delta:+.1%}")
+
+    # Per-category breakdown
+    print("\n" + "=" * 70)
+    print("PER-CATEGORY BREAKDOWN (all modules combined)")
+    print("=" * 70)
+    for variant in VARIANTS:
+        cat_agg = {}
+        for module_name in MODULES:
+            key = f"{module_name}/{variant}"
+            if key not in all_results:
+                continue
+            for cat, cs in all_results[key]["stats"]["per_category"].items():
+                if cat not in cat_agg:
+                    cat_agg[cat] = {"correct": 0, "total": 0}
+                cat_agg[cat]["correct"] += cs["correct"]
+                cat_agg[cat]["total"] += cs["total"]
+
+        print(f"\n  {variant}:")
+        for cat, cs in sorted(cat_agg.items()):
+            rate = cs["correct"] / cs["total"] if cs["total"] > 0 else 0
+            print(f"    {cat:<20} {cs['correct']:>3}/{cs['total']:<3} = {rate:.1%}")
+
+
+if __name__ == "__main__":
+    main()

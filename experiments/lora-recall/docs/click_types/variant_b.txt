@@ -1,0 +1,89 @@
+Design Document: click.types — Click Parameter Type System
+
+1. PURPOSE
+The click.types module defines the type conversion and validation layer for the Click CLI framework. Every CLI parameter has an associated ParamType that converts raw string input from the command line (or environment variables) into Python objects, validates ranges/constraints, provides shell completion, and generates help text metadata. The module ships built-in types for primitives (string, int, float, bool, UUID), constrained ranges (IntRange, FloatRange), enumerated choices (Choice), temporal values (DateTime), filesystem objects (File, Path), composite values (Tuple), and escape hatches (FuncParamType, UnprocessedParamType).
+
+2. PUBLIC API SIGNATURES
+
+  class ParamType:
+    - name: str  [class attribute, must be set by subclasses]
+    - convert(value, param: Parameter | None, ctx: Context | None) -> Any
+    - fail(message: str, param, ctx) -> NoReturn  [raises BadParameter]
+    - get_metavar(param, ctx) -> str | None
+    - get_missing_message(param, ctx) -> str | None
+    - shell_complete(ctx, param, incomplete) -> list[CompletionItem]
+    - split_envvar_value(rv: str) -> Sequence[str]
+    - to_info_dict() -> dict[str, Any]
+
+  class StringParamType(ParamType):   name = "text"
+  class IntParamType(ParamType):      name = "integer",  _number_class = int
+  class FloatParamType(ParamType):    name = "float",    _number_class = float
+  class BoolParamType(ParamType):     name = "boolean"
+  class UUIDParameterType(ParamType): name = "uuid"
+  class UnprocessedParamType(ParamType): name = "text"
+  class FuncParamType(ParamType):     wraps an arbitrary callable
+
+  class Choice(ParamType):
+    __init__(choices: Iterable, case_sensitive: bool = True) -> None
+    normalize_choice(choice, ctx) -> str
+    get_invalid_choice_message(value, ctx) -> str
+    shell_complete(ctx, param, incomplete) -> list[CompletionItem]
+
+  class DateTime(ParamType):   name = "datetime"
+    __init__(formats: Sequence[str] | None = None)
+    Default formats: ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]
+
+  class IntRange(IntParamType):   name = "integer range"
+    __init__(min, max, min_open, max_open, clamp) all optional
+
+  class FloatRange(FloatParamType):  name = "float range"
+    __init__(min, max, min_open, max_open, clamp) all optional
+
+  class File(ParamType):
+    __init__(mode='r', encoding=None, errors='strict', lazy=None, atomic=False)
+    resolve_lazy_flag(value) -> bool
+
+  class Path(ParamType):
+    __init__(exists=False, file_okay=True, dir_okay=True, writable=False,
+             readable=True, resolve_path=False, allow_dash=False,
+             path_type=None, executable=False)
+
+  class Tuple(CompositeParamType):
+    __init__(types: Sequence[type | ParamType])
+
+  convert_type(ty, default=None) -> ParamType
+
+3. KEY INVARIANTS
+- BoolParamType.bool_states maps exactly these strings to booleans: "1"->True, "0"->False, "yes"->True, "no"->False, "true"->True, "false"->False, "on"->True, "off"->False, "t"->True, "f"->False, "y"->True, "n"->False, ""->False. The empty string maps to False.
+- BoolParamType.str_to_bool is a static method: strips whitespace, lowercases, then looks up in bool_states. Returns None for unrecognized values (does not raise).
+- Choice stores choices as a tuple (converted from the iterable on init).
+- Choice.normalize_choice applies Context.token_normalize_func (if available) then casefold() when case_sensitive is False.
+- DateTime tries each format sequentially with datetime.strptime and returns the first successful parse.
+- IntRange._clamp for open boundaries returns bound + dir (where dir is 1 or -1), giving the nearest valid integer.
+- FloatRange._clamp for open boundaries raises TypeError("Can't clamp open float ranges.") because there's no "next" float.
+- File.resolve_lazy_flag logic: if self.lazy is explicitly set, returns that; if value is "-" (stdin/stdout), returns False; if mode contains "w", returns True; otherwise returns False.
+- StringParamType falls back through _get_argv_encoding() -> filesystem encoding -> utf-8 with 'replace' when decoding bytes.
+- StringParamType.__repr__ returns "STRING". IntParamType.__repr__ returns "INT". FloatParamType.__repr__ returns "FLOAT". BoolParamType.__repr__ returns "BOOL". UUIDParameterType repr is "UUID".
+
+4. COMMON ERROR PATTERNS
+- Number conversion failure: "{value!r} is not a valid {number_type}." where number_type is the type's name attribute (e.g. "integer", "float").
+- Range violation: "{value} is not in the range {range}." where range is described using comparison operators (e.g. "0<=x<=10", "x>=5", "0<x<10" for open bounds).
+- Invalid choice: Singular form "{value!r} is not {choice}." or plural "{value!r} is not one of {choices}." using ngettext, where choices is comma-joined repr of original values.
+- Missing choice: "Choose from:\n\t{choices}" with comma-joined repr.
+- Invalid boolean: "{value!r} is not a valid boolean. Recognized values: {states}" where states is the sorted keys of bool_states.
+- DateTime parse failure: ngettext singular "{value!r} does not match the format {format}." or plural "{value!r} does not match the formats {formats}."
+
+5. INTER-MODULE DEPENDENCIES
+- click.exceptions.BadParameter: Raised by ParamType.fail().
+- click.utils.LazyFile: Used by File type for deferred opening.
+- click.utils.safecall: For safe callable invocation.
+- click.shell_completion.CompletionItem: Returned by shell_complete methods.
+- click.core.Context: Used for token_normalize_func in Choice.
+- click.core.Parameter: Passed to convert/fail methods for error context.
+- uuid module: Used by UUIDParameterType.
+- datetime module: Used by DateTime.
+
+6. __repr__ CONVENTIONS
+Each built-in type defines a concise __repr__: STRING, INT, FLOAT, BOOL, UUID, DateTime, Choice([...]).
+Tuple's name property dynamically concatenates the names of its child types separated by spaces.
+_NumberRangeBase.__repr__ includes "clamped" suffix when clamp=True, e.g. "<IntRange 0<=x<=10 clamped>".
