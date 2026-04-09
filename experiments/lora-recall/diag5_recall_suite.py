@@ -1,4 +1,4 @@
-"""LoRA Recall Probe — measures what doc-to-lora actually encodes.
+"""Diagnostic 5: LoRA recall suite.
 
 For each (module, variant) pair:
   1. Internalize the document via model.internalize()
@@ -8,7 +8,7 @@ For each (module, variant) pair:
 
 Usage:
   cd experiments/lora-recall
-  uv run python run_experiment.py
+    uv run python diag5_recall_suite.py
 """
 
 import csv
@@ -69,14 +69,35 @@ VARIANTS = ["variant_a", "variant_b"]
 
 MAX_NEW_TOKENS = 100
 
+NUMBER_WORDS = {
+    "0": "zero",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+    "11": "eleven",
+    "12": "twelve",
+}
+
 
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
 def normalize(text: str) -> str:
-    """Lowercase, strip, collapse whitespace, remove quotes."""
+    """Lowercase and normalize simple formatting/number variants."""
     text = text.lower().strip()
     text = re.sub(r'["\']', "", text)
+    text = re.sub(
+        r"\b\d+\b",
+        lambda match: NUMBER_WORDS.get(match.group(0), match.group(0)),
+        text,
+    )
     text = re.sub(r"\s+", " ", text)
     return text
 
@@ -334,6 +355,10 @@ def run_baseline(model, tokenizer, probes_by_module: dict) -> dict:
 
 
 def main():
+    print("=" * 70)
+    print("DIAGNOSTIC 5: Recall suite")
+    print("=" * 70)
+
     # Load probes
     with open(PROBES_PATH) as f:
         probes_by_module = json.load(f)
@@ -387,13 +412,13 @@ def main():
 
     # Save all results with timestamp
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    results_path = RESULTS_DIR / f"recall_{ts}.json"
+    results_path = RESULTS_DIR / f"diag5_recall_{ts}.json"
     with open(results_path, "w") as f:
         json.dump(all_results, f, indent=2)
     print(f"\nResults saved to {results_path}")
 
     # Write per-probe CSV
-    probes_csv_path = RESULTS_DIR / f"recall_{ts}_probes.csv"
+    probes_csv_path = RESULTS_DIR / f"diag5_recall_{ts}_probes.csv"
     with open(probes_csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
@@ -445,7 +470,7 @@ def main():
     print(f"Per-probe CSV saved to {probes_csv_path}")
 
     # Write summary CSV
-    summary_csv_path = RESULTS_DIR / f"recall_{ts}_summary.csv"
+    summary_csv_path = RESULTS_DIR / f"diag5_recall_{ts}_summary.csv"
     with open(summary_csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(

@@ -8,7 +8,7 @@
     },
     {
       "id": "fs02",
-      "question": "What is the exact error message raised when writing to a NullSession?",
+      "question": "What exact string does NullSession raise when you attempt to write to it?",
       "answer": "The session is unavailable because no secret key was set.  Set the secret_key on the application to something unique and secret.",
       "category": "error_message"
     },
@@ -172,7 +172,7 @@
     },
     {
       "id": "ct09",
-      "question": "What is the error message for FloatRange._clamp on open boundaries?",
+      "question": "What exact string does FloatRange._clamp raise for open boundaries?",
       "answer": "Can't clamp open float ranges.",
       "category": "error_message"
     },
@@ -208,13 +208,13 @@
     },
     {
       "id": "ct15",
-      "question": "What is the singular error message format for an invalid Choice value?",
+      "question": "Complete this exact template string for singular invalid Choice values: _____",
       "answer": "{value!r} is not {choice}.",
       "category": "error_message"
     },
     {
       "id": "ct16",
-      "question": "What is the plural error message format for an invalid Choice value?",
+      "question": "Complete this exact template string for plural invalid Choice values: _____",
       "answer": "{value!r} is not one of {choices}.",
       "category": "error_message"
     },
@@ -226,7 +226,7 @@
     },
     {
       "id": "ct18",
-      "question": "What is the error message format when a number conversion fails in Click?",
+      "question": "Complete this exact template string for Click number-conversion failure: _____",
       "answer": "{value!r} is not a valid {number_type}.",
       "category": "error_message"
     },
@@ -246,7 +246,7 @@
   "marshmallow_validate": [
     {
       "id": "mv01",
-      "question": "What is the default_message for the URL validator?",
+      "question": "Complete this exact string: URL.default_message = \"_____\"",
       "answer": "Not a valid URL.",
       "category": "error_message"
     },
@@ -258,7 +258,7 @@
     },
     {
       "id": "mv03",
-      "question": "What is the default_message for the Email validator?",
+      "question": "Complete this exact string: Email.default_message = \"_____\"",
       "answer": "Not a valid email address.",
       "category": "error_message"
     },
@@ -300,7 +300,7 @@
     },
     {
       "id": "mv10",
-      "question": "What is the default_message for the Equal validator?",
+      "question": "Complete this exact string: Equal.default_message = \"_____\"",
       "answer": "Must be equal to {other}.",
       "category": "error_message"
     },
@@ -312,31 +312,31 @@
     },
     {
       "id": "mv12",
-      "question": "What is the default_message for the Regexp validator?",
+      "question": "Complete this exact string: Regexp.default_message = \"_____\"",
       "answer": "String does not match expected pattern.",
       "category": "error_message"
     },
     {
       "id": "mv13",
-      "question": "What is the default_message for the NoneOf validator?",
+      "question": "Complete this exact string: NoneOf.default_message = \"_____\"",
       "answer": "Invalid input.",
       "category": "error_message"
     },
     {
       "id": "mv14",
-      "question": "What is the default_message for the OneOf validator?",
+      "question": "Complete this exact string: OneOf.default_message = \"_____\"",
       "answer": "Must be one of: {choices}.",
       "category": "error_message"
     },
     {
       "id": "mv15",
-      "question": "What is the default_message for the ContainsOnly validator?",
+      "question": "Complete this exact string: ContainsOnly.default_message = \"_____\"",
       "answer": "One or more of the choices you made was not in: {choices}.",
       "category": "error_message"
     },
     {
       "id": "mv16",
-      "question": "What is the default_message for the ContainsNoneOf validator?",
+      "question": "Complete this exact string: ContainsNoneOf.default_message = \"_____\"",
       "answer": "One or more of the choices you made was in: {values}.",
       "category": "error_message"
     },
@@ -360,7 +360,7 @@
     },
     {
       "id": "mv20",
-      "question": "What ValueError message does the URL validator raise when both relative and absolute are set to False?",
+      "question": "What exact ValueError string is raised when URL is configured with relative=False and absolute=False?",
       "answer": "URL validation cannot set both relative and absolute to False.",
       "category": "error_message"
     }
