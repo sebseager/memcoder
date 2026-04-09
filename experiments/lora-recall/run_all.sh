@@ -96,43 +96,43 @@ for step in "${STEPS[@]}"; do
     case "$step" in
         1)
             if run_step 1 "Checkpoint validation (vendor eval)" "diag_checkpoint_eval.py"; then
-                ((passed++))
+                ((passed+=1))
             else
-                ((failed++))
+                ((failed+=1))
                 log "${YELLOW}  ⚠ Checkpoint eval failed — remaining diagnostics may still be useful.${NC}"
             fi
             ;;
         2)
             if run_step 2 "Context window & token length check" "diag_context_window.py"; then
-                ((passed++))
+                ((passed+=1))
             else
-                ((failed++))
+                ((failed+=1))
             fi
             ;;
         3)
             if run_step 3 "Synthetic canary test" "diag_canary.py"; then
-                ((passed++))
+                ((passed+=1))
             else
-                ((failed++))
+                ((failed+=1))
             fi
             ;;
         4)
             if run_step 4 "Reset verification" "diag_reset_verify.py"; then
-                ((passed++))
+                ((passed+=1))
             else
-                ((failed++))
+                ((failed+=1))
             fi
             ;;
         5)
             if run_step 5 "Main recall experiment" "run_experiment.py"; then
-                ((passed++))
+                ((passed+=1))
             else
-                ((failed++))
+                ((failed+=1))
             fi
             ;;
         *)
             log "${YELLOW}  Unknown step: ${step} (valid: 1-5)${NC}"
-            ((skipped++))
+            ((skipped+=1))
             ;;
     esac
 done
