@@ -19,11 +19,10 @@ from __future__ import annotations
 from math import ceil
 
 import torch
-from torch.nn.utils.rnn import pad_sequence
-
 from ctx_to_lora.data.definitions import CTX_AFFIXES
 from ctx_to_lora.data.processing import tokenize_ctx_text
 from ctx_to_lora.model_loading import get_tokenizer
+from torch.nn.utils.rnn import pad_sequence
 
 
 def _chunk_ctx_ids(
@@ -76,9 +75,9 @@ def internalize_chunked(
     ctx_tokenizer = get_tokenizer(model.ctx_encoder.base_model.name_or_path)
 
     # Step 1: tokenize exactly like the training pipeline
-    ctx_ids_nested = tokenize_ctx_text(
-        dict(context=[doc_text]), ctx_tokenizer
-    )["ctx_ids"]
+    ctx_ids_nested = tokenize_ctx_text(dict(context=[doc_text]), ctx_tokenizer)[
+        "ctx_ids"
+    ]
     ctx_ids_flat: list[int] = ctx_ids_nested[0]  # single sample → flat list
 
     # Step 2: optionally chunk

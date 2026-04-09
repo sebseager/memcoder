@@ -14,16 +14,14 @@ Usage:
 import csv
 import json
 import os
-import re
 import sys
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 import torch
+import yaml
 
 # Add vendor src to path
 sys.path.insert(
@@ -31,10 +29,10 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[2] / "vendor" / "doc-to-lora" / "src"),
 )
 
+from chunk_helper import generate_with_chunks, internalize_chunked
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
-
-from internalize_chunked import generate_with_chunks, internalize_chunked
+from score_helper import score
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
@@ -84,49 +82,6 @@ def _read_max_ctx_chunk_len() -> int:
         val = args.get("max_ctx_chunk_len", -1)
         return int(val)
     return -1
-
-NUMBER_WORDS = {
-    "0": "zero",
-    "1": "one",
-    "2": "two",
-    "3": "three",
-    "4": "four",
-    "5": "five",
-    "6": "six",
-    "7": "seven",
-    "8": "eight",
-    "9": "nine",
-    "10": "ten",
-    "11": "eleven",
-    "12": "twelve",
-}
-
-
-# ---------------------------------------------------------------------------
-# Scoring
-# ---------------------------------------------------------------------------
-def normalize(text: str) -> str:
-    """Lowercase and normalize simple formatting/number variants."""
-    text = text.lower().strip()
-    text = re.sub(r'["\']', "", text)
-    text = re.sub(
-        r"\b\d+\b",
-        lambda match: NUMBER_WORDS.get(match.group(0), match.group(0)),
-        text,
-    )
-    text = re.sub(r"\s+", " ", text)
-    return text
-
-
-def exact_match(predicted: str, gold: str) -> bool:
-    return normalize(gold) in normalize(predicted)
-
-
-def extract_answer(response: str, question: str) -> str:
-    """Try to extract the answer portion from the model response."""
-    # The model response includes the chat, so strip the question prefix
-    # Just take the generated part after the question
-    return response
 
 
 def _is_cuda_oom(exc: Exception) -> bool:
@@ -258,7 +213,7 @@ def run_probe(
         del chat_ids
         _clear_cuda_cache()
 
-        match = exact_match(generated, probe["answer"])
+        result = score(generated, probe["answer"])
 
         results.append(
             {
@@ -266,14 +221,15 @@ def run_probe(
                 "question": question,
                 "gold_answer": probe["answer"],
                 "generated": generated,
-                "exact_match": match,
+                "correct": result.correct,
+                "score_method": result.method,
                 "category": probe["category"],
             }
         )
 
-        status = "✓" if match else "✗"
+        status = "✓" if result.correct else "✗"
         print(f"  {status} [{probe['id']}] {question[:60]}...")
-        if not match:
+        if not result.correct:
             print(f"    Expected: {probe['answer']}")
             print(f"    Got:      {generated[:120]}")
 
@@ -284,7 +240,7 @@ def run_probe(
 def compute_stats(results: list[dict]) -> dict:
     """Compute aggregate statistics from probe results."""
     total = len(results)
-    correct = sum(1 for r in results if r["exact_match"])
+    correct = sum(1 for r in results if r["correct"])
 
     # Per-category breakdown
     categories = {}
@@ -293,7 +249,7 @@ def compute_stats(results: list[dict]) -> dict:
         if cat not in categories:
             categories[cat] = {"total": 0, "correct": 0}
         categories[cat]["total"] += 1
-        if r["exact_match"]:
+        if r["correct"]:
             categories[cat]["correct"] += 1
 
     cat_rates = {
@@ -348,21 +304,22 @@ def run_baseline(model, tokenizer, probes_by_module: dict) -> dict:
             del chat_ids
             _clear_cuda_cache()
 
-            match = exact_match(generated, probe["answer"])
+            result = score(generated, probe["answer"])
             results.append(
                 {
                     "id": probe["id"],
                     "question": question,
                     "gold_answer": probe["answer"],
                     "generated": generated,
-                    "exact_match": match,
+                    "correct": result.correct,
+                    "score_method": result.method,
                     "category": probe["category"],
                 }
             )
 
-            status = "✓" if match else "✗"
+            status = "✓" if result.correct else "✗"
             print(f"  {status} [{probe['id']}] {question[:60]}...")
-            if not match:
+            if not result.correct:
                 print(f"    Expected: {probe['answer']}")
                 print(f"    Got:      {generated[:120]}")
 
@@ -457,7 +414,8 @@ def main():
                 "question",
                 "gold_answer",
                 "generated",
-                "exact_match",
+                "correct",
+                "score_method",
             ]
         )
         for cond_key, cond_data in all_results.items():
@@ -474,7 +432,8 @@ def main():
                                 r["question"],
                                 r["gold_answer"],
                                 r["generated"],
-                                int(r["exact_match"]),
+                                int(r["correct"]),
+                                r["score_method"],
                             ]
                         )
             else:
@@ -490,7 +449,8 @@ def main():
                             r["question"],
                             r["gold_answer"],
                             r["generated"],
-                            int(r["exact_match"]),
+                            int(r["correct"]),
+                            r["score_method"],
                         ]
                     )
     print(f"Per-probe CSV saved to {probes_csv_path}")

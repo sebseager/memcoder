@@ -14,25 +14,23 @@ Usage:
 
 import json
 import os
-import re
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 import torch
+import yaml
 
 sys.path.insert(
     0,
     str(Path(__file__).resolve().parents[2] / "vendor" / "doc-to-lora" / "src"),
 )
 
+from chunk_helper import generate_with_chunks, internalize_chunked
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
-
-from internalize_chunked import generate_with_chunks, internalize_chunked
+from score_helper import score
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
@@ -62,22 +60,6 @@ def _read_max_ctx_chunk_len() -> int:
         val = args.get("max_ctx_chunk_len", -1)
         return int(val)
     return -1
-
-NUMBER_WORDS = {
-    "0": "zero",
-    "1": "one",
-    "2": "two",
-    "3": "three",
-    "4": "four",
-    "5": "five",
-    "6": "six",
-    "7": "seven",
-    "8": "eight",
-    "9": "nine",
-    "10": "ten",
-    "11": "eleven",
-    "12": "twelve",
-}
 
 
 @contextmanager
@@ -165,22 +147,6 @@ SAKANA_PROBES = [
 ]
 
 
-def normalize(text: str) -> str:
-    text = text.lower().strip()
-    text = re.sub(r'["\']', "", text)
-    text = re.sub(
-        r"\b\d+\b",
-        lambda match: NUMBER_WORDS.get(match.group(0), match.group(0)),
-        text,
-    )
-    text = re.sub(r"\s+", " ", text)
-    return text
-
-
-def exact_match(predicted: str, gold: str) -> bool:
-    return normalize(gold) in normalize(predicted)
-
-
 def run_probes(model, tokenizer, doc_text, probes, label, max_chunk_len=-1):
     """Internalize a document and probe it."""
     print(f"\n{'─' * 50}")
@@ -214,8 +180,8 @@ def run_probes(model, tokenizer, doc_text, probes, label, max_chunk_len=-1):
         input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
         generated = full_response[len(input_text) :].strip()
 
-        match = exact_match(generated, probe["answer"])
-        status = "✓" if match else "✗"
+        result = score(generated, probe["answer"])
+        status = "✓" if result.correct else "✗"
         print(f"  {status} [{probe['id']}] {question}")
         print(f"      Gold: {probe['answer']}")
         print(f"      Got:  {generated[:200]}")
@@ -226,14 +192,15 @@ def run_probes(model, tokenizer, doc_text, probes, label, max_chunk_len=-1):
                 "question": question,
                 "gold_answer": probe["answer"],
                 "generated": generated,
-                "exact_match": match,
+                "correct": result.correct,
+                "score_method": result.method,
                 "category": probe["category"],
             }
         )
 
     model.reset()
 
-    correct = sum(1 for r in results if r["exact_match"])
+    correct = sum(1 for r in results if r["correct"])
     total = len(results)
     print(f"\n  Recall: {correct}/{total} = {correct / total:.0%}")
     return results
@@ -266,14 +233,17 @@ def main():
 
     # --- Canary test ---
     canary_results = run_probes(
-        model, tokenizer, CANARY_DOC, CANARY_PROBES,
+        model,
+        tokenizer,
+        CANARY_DOC,
+        CANARY_PROBES,
         "CANARY: Blorbinator (fictitious)",
         max_chunk_len=max_chunk_len,
     )
     all_results["canary"] = {
         "document": CANARY_DOC,
         "results": canary_results,
-        "correct": sum(1 for r in canary_results if r["exact_match"]),
+        "correct": sum(1 for r in canary_results if r["correct"]),
         "total": len(canary_results),
     }
 
@@ -292,7 +262,7 @@ def main():
         all_results["sakana_control"] = {
             "document_path": str(sakana_path),
             "results": sakana_results,
-            "correct": sum(1 for r in sakana_results if r["exact_match"]),
+            "correct": sum(1 for r in sakana_results if r["correct"]),
             "total": len(sakana_results),
         }
 
@@ -324,8 +294,8 @@ def main():
         input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
         generated = full_response[len(input_text) :].strip()
 
-        match = exact_match(generated, probe["answer"])
-        status = "✓" if match else "✗"
+        result = score(generated, probe["answer"])
+        status = "✓" if result.correct else "✗"
         print(f"  {status} [{probe['id']}] {question}")
         print(f"      Gold: {probe['answer']}")
         print(f"      Got:  {generated[:200]}")
@@ -336,12 +306,13 @@ def main():
                 "question": question,
                 "gold_answer": probe["answer"],
                 "generated": generated,
-                "exact_match": match,
+                "correct": result.correct,
+                "score_method": result.method,
                 "category": probe["category"],
             }
         )
 
-    baseline_correct = sum(1 for r in baseline_results if r["exact_match"])
+    baseline_correct = sum(1 for r in baseline_results if r["correct"])
     print(f"\n  Baseline recall: {baseline_correct}/{len(baseline_results)}")
     all_results["canary_baseline"] = {
         "results": baseline_results,

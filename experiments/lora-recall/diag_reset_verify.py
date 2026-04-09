@@ -16,20 +16,18 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 import torch
+import yaml
 
 sys.path.insert(
     0,
     str(Path(__file__).resolve().parents[2] / "vendor" / "doc-to-lora" / "src"),
 )
 
+from chunk_helper import generate_with_chunks, internalize_chunked
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
 from ctx_to_lora.utils import get_layers, get_peft_modules
-
-from internalize_chunked import generate_with_chunks, internalize_chunked
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"

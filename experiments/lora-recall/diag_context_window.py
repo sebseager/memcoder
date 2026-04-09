@@ -17,19 +17,18 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 import torch
+import yaml
 
 sys.path.insert(
     0,
     str(Path(__file__).resolve().parents[2] / "vendor" / "doc-to-lora" / "src"),
 )
 
+from chunk_helper import generate_with_chunks, internalize_chunked
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
-
-from internalize_chunked import generate_with_chunks, internalize_chunked
+from score_helper import score
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
@@ -60,22 +59,6 @@ def _read_max_ctx_chunk_len() -> int:
         val = args.get("max_ctx_chunk_len", -1)
         return int(val)
     return -1
-
-NUMBER_WORDS = {
-    "0": "zero",
-    "1": "one",
-    "2": "two",
-    "3": "three",
-    "4": "four",
-    "5": "five",
-    "6": "six",
-    "7": "seven",
-    "8": "eight",
-    "9": "nine",
-    "10": "ten",
-    "11": "eleven",
-    "12": "twelve",
-}
 
 
 @contextmanager
@@ -113,24 +96,6 @@ TINY_PROBES = [
         "answer": "nominal",
     },
 ]
-
-
-def normalize(text: str) -> str:
-    import re
-
-    text = text.lower().strip()
-    text = re.sub(r'["\']', "", text)
-    text = re.sub(
-        r"\b\d+\b",
-        lambda match: NUMBER_WORDS.get(match.group(0), match.group(0)),
-        text,
-    )
-    text = re.sub(r"\s+", " ", text)
-    return text
-
-
-def exact_match(predicted: str, gold: str) -> bool:
-    return normalize(gold) in normalize(predicted)
 
 
 def main():
@@ -242,8 +207,8 @@ def main():
         input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
         generated = full_response[len(input_text) :].strip()
 
-        match = exact_match(generated, probe["answer"])
-        status = "✓" if match else "✗"
+        result = score(generated, probe["answer"])
+        status = "✓" if result.correct else "✗"
         print(f"  {status} Q: {question}")
         print(f"      Gold: {probe['answer']}")
         print(f"      Got:  {generated[:150]}")
@@ -253,13 +218,14 @@ def main():
                 "question": question,
                 "gold_answer": probe["answer"],
                 "generated": generated,
-                "exact_match": match,
+                "correct": result.correct,
+                "score_method": result.method,
             }
         )
 
     model.reset()
 
-    correct = sum(1 for r in tiny_results if r["exact_match"])
+    correct = sum(1 for r in tiny_results if r["correct"])
     total = len(tiny_results)
     print(f"\nTiny doc recall: {correct}/{total} = {correct / total:.0%}")
 
