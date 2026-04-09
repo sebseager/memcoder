@@ -17,6 +17,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 import torch
 
 sys.path.insert(
@@ -26,6 +28,8 @@ sys.path.insert(
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
+
+from internalize_chunked import generate_with_chunks, internalize_chunked
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
@@ -44,6 +48,18 @@ RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 MAX_NEW_TOKENS = 100
+
+
+def _read_max_ctx_chunk_len() -> int:
+    """Read max_ctx_chunk_len from the checkpoint's args.yaml."""
+    checkpoint_dir = Path(CHECKPOINT_PATH).parent.parent
+    args_path = checkpoint_dir / "args.yaml"
+    if args_path.exists():
+        with open(args_path) as f:
+            args = yaml.unsafe_load(f)
+        val = args.get("max_ctx_chunk_len", -1)
+        return int(val)
+    return -1
 
 NUMBER_WORDS = {
     "0": "zero",
@@ -193,13 +209,17 @@ def main():
     print("Part B: Tiny document probe (3 sentences, made-up fact)")
     print("-" * 50)
 
+    max_chunk_len = _read_max_ctx_chunk_len()
+    print(f"max_ctx_chunk_len from checkpoint config: {max_chunk_len}")
+
     tiny_tokens = ctx_tokenizer.encode(TINY_DOC)
     print(f"\nTiny doc length: {len(TINY_DOC)} chars, {len(tiny_tokens)} tokens")
     print(f"Document:\n  {TINY_DOC}\n")
 
     model.reset()
     with pushd(VENDOR_D2L_ROOT):
-        model.internalize(TINY_DOC)
+        n_chunks = internalize_chunked(model, TINY_DOC, max_chunk_len=max_chunk_len)
+    print(f"Internalized: {n_chunks} chunk(s)")
 
     tiny_results = []
     for probe in TINY_PROBES:
@@ -214,7 +234,9 @@ def main():
         ).to(model.device)
 
         with torch.no_grad():
-            output = model.generate(input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS)
+            output = generate_with_chunks(
+                model, input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS
+            )
 
         full_response = tokenizer.decode(output[0], skip_special_tokens=True)
         input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)

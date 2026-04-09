@@ -21,6 +21,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 import torch
 
 # Add vendor src to path
@@ -31,6 +33,8 @@ sys.path.insert(
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
+
+from internalize_chunked import generate_with_chunks, internalize_chunked
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
@@ -68,6 +72,18 @@ MODULES = ["flask_sessions", "click_types", "marshmallow_validate"]
 VARIANTS = ["variant_a", "variant_b"]
 
 MAX_NEW_TOKENS = 100
+
+
+def _read_max_ctx_chunk_len() -> int:
+    """Read max_ctx_chunk_len from the checkpoint's args.yaml."""
+    checkpoint_dir = Path(CHECKPOINT_PATH).parent.parent
+    args_path = checkpoint_dir / "args.yaml"
+    if args_path.exists():
+        with open(args_path) as f:
+            args = yaml.unsafe_load(f)
+        val = args.get("max_ctx_chunk_len", -1)
+        return int(val)
+    return -1
 
 NUMBER_WORDS = {
     "0": "zero",
@@ -171,7 +187,7 @@ def generate_with_retry(model, tokenizer, chat_ids: torch.Tensor, question: str)
                 generate_kwargs["pad_token_id"] = tokenizer.eos_token_id
 
             with torch.no_grad():
-                return model.generate(**generate_kwargs)
+                return generate_with_chunks(model, **generate_kwargs)
         except Exception as exc:
             if not _is_cuda_oom(exc):
                 raise
@@ -209,11 +225,14 @@ def load_model():
     return model, tokenizer
 
 
-def run_probe(model, tokenizer, doc_text: str, probes: list[dict]) -> list[dict]:
+def run_probe(
+    model, tokenizer, doc_text: str, probes: list[dict], max_chunk_len: int = -1
+) -> list[dict]:
     """Internalize a document and run all probe questions. Returns scored results."""
     model.reset()
     with pushd(VENDOR_D2L_ROOT):
-        model.internalize(doc_text)
+        n_chunks = internalize_chunked(model, doc_text, max_chunk_len=max_chunk_len)
+    print(f"  Internalized: {len(doc_text)} chars, {n_chunks} chunk(s)")
 
     results = []
     for probe in probes:
@@ -301,6 +320,7 @@ def run_baseline(model, tokenizer, probes_by_module: dict) -> dict:
     print("=" * 70)
 
     model.reset()
+    model._n_ctx_chunks = 1  # no LoRA active for baseline
     all_results = {}
 
     for module_name, probes in probes_by_module.items():
@@ -366,6 +386,10 @@ def main():
     # Load model
     model, tokenizer = load_model()
 
+    # Read chunk config from checkpoint's training args
+    max_chunk_len = _read_max_ctx_chunk_len()
+    print(f"max_ctx_chunk_len from checkpoint config: {max_chunk_len}")
+
     # Run baseline first
     baseline = run_baseline(model, tokenizer, probes_by_module)
 
@@ -390,7 +414,9 @@ def main():
 
             probes = probes_by_module[module_name]
             t0 = time.time()
-            results = run_probe(model, tokenizer, doc_text, probes)
+            results = run_probe(
+                model, tokenizer, doc_text, probes, max_chunk_len=max_chunk_len
+            )
             elapsed = time.time() - t0
 
             stats = compute_stats(results)
