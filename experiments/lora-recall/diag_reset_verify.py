@@ -25,6 +25,7 @@ sys.path.insert(
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
+from ctx_to_lora.utils import get_layers, get_peft_modules
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
@@ -106,8 +107,6 @@ def run_fixed_probes(model, tokenizer, label):
 
 def check_weight_norms(model, label):
     """Snapshot the norms of LoRA-targeted layers."""
-    from ctx_to_lora.modeling.lora_layer import get_layers, get_peft_modules
-
     layers = get_layers(model.base_model)
     norms = {}
     for layer_idx in model.hypernet.layer_indices:
@@ -168,8 +167,6 @@ def main():
     norms_during = check_weight_norms(model, "with LoRA active")
 
     # Check if the forward is patched
-    from ctx_to_lora.modeling.lora_layer import get_layers, get_peft_modules
-
     layers = get_layers(model.base_model)
     patched_count = 0
     for layer_idx in model.hypernet.layer_indices:
