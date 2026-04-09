@@ -92,6 +92,82 @@ def extract_answer(response: str, question: str) -> str:
     return response
 
 
+def _is_cuda_oom(exc: Exception) -> bool:
+    """Best-effort CUDA OOM detection across torch/runtime variants."""
+    accelerator_error = getattr(torch, "AcceleratorError", None)
+    if isinstance(exc, torch.cuda.OutOfMemoryError):
+        return True
+    if accelerator_error is not None and isinstance(exc, accelerator_error):
+        text = str(exc).lower()
+        return "out of memory" in text or "cudaerrormemoryallocation" in text
+
+    text = str(exc).lower()
+    return (
+        ("cuda" in text and "out of memory" in text)
+        or "cuda out of memory" in text
+        or "cudaerrormemoryallocation" in text
+    )
+
+
+def _clear_cuda_cache() -> None:
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def _build_generation_attempts() -> list[tuple[int, bool]]:
+    """Retry plan: first preserve quality, then progressively reduce memory."""
+    candidates = [
+        (MAX_NEW_TOKENS, True),
+        (min(MAX_NEW_TOKENS, 64), True),
+        (min(MAX_NEW_TOKENS, 64), False),
+        (min(MAX_NEW_TOKENS, 48), False),
+        (min(MAX_NEW_TOKENS, 32), False),
+    ]
+
+    attempts = []
+    seen = set()
+    for max_new_tokens, use_cache in candidates:
+        key = (max_new_tokens, use_cache)
+        if max_new_tokens <= 0 or key in seen:
+            continue
+        seen.add(key)
+        attempts.append(key)
+    return attempts
+
+
+def generate_with_retry(model, tokenizer, chat_ids: torch.Tensor, question: str):
+    """Generate with CUDA-OOM retries so a single probe doesn't abort the run."""
+    attempts = _build_generation_attempts()
+    for idx, (max_new_tokens, use_cache) in enumerate(attempts, start=1):
+        try:
+            generate_kwargs = {
+                "input_ids": chat_ids,
+                "max_new_tokens": max_new_tokens,
+                "do_sample": False,
+                "use_cache": use_cache,
+            }
+            if tokenizer.eos_token_id is not None:
+                generate_kwargs["pad_token_id"] = tokenizer.eos_token_id
+
+            with torch.no_grad():
+                return model.generate(**generate_kwargs)
+        except Exception as exc:
+            if not _is_cuda_oom(exc):
+                raise
+
+            _clear_cuda_cache()
+            if idx == len(attempts):
+                raise RuntimeError(
+                    f"CUDA OOM while generating for probe: {question[:80]}"
+                ) from exc
+
+            next_max_new_tokens, next_use_cache = attempts[idx]
+            print(
+                "    [OOM] Retrying with "
+                f"max_new_tokens={next_max_new_tokens}, use_cache={next_use_cache}"
+            )
+
+
 # ---------------------------------------------------------------------------
 # Main experiment
 # ---------------------------------------------------------------------------
@@ -131,13 +207,16 @@ def run_probe(model, tokenizer, doc_text: str, probes: list[dict]) -> list[dict]
             return_tensors="pt",
         ).to(model.device)
 
-        with torch.no_grad():
-            output = model.generate(input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS)
+        output = generate_with_retry(model, tokenizer, chat_ids, question)
 
         full_response = tokenizer.decode(output[0], skip_special_tokens=True)
         # Strip the input prompt from the response to get just the generated part
         input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
         generated = full_response[len(input_text) :].strip()
+
+        del output
+        del chat_ids
+        _clear_cuda_cache()
 
         match = exact_match(generated, probe["answer"])
 
@@ -218,14 +297,15 @@ def run_baseline(model, tokenizer, probes_by_module: dict) -> dict:
                 return_tensors="pt",
             ).to(model.device)
 
-            with torch.no_grad():
-                output = model.generate(
-                    input_ids=chat_ids, max_new_tokens=MAX_NEW_TOKENS
-                )
+            output = generate_with_retry(model, tokenizer, chat_ids, question)
 
             full_response = tokenizer.decode(output[0], skip_special_tokens=True)
             input_text = tokenizer.decode(chat_ids[0], skip_special_tokens=True)
             generated = full_response[len(input_text) :].strip()
+
+            del output
+            del chat_ids
+            _clear_cuda_cache()
 
             match = exact_match(generated, probe["answer"])
             results.append(
