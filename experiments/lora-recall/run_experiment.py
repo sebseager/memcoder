@@ -13,9 +13,11 @@ Usage:
 
 import csv
 import json
+import os
 import re
 import sys
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,11 +25,27 @@ import torch
 
 # Add vendor src to path
 sys.path.insert(
-    0, str(Path(__file__).parents[1] / ".." / "vendor" / "doc-to-lora" / "src")
+    0,
+    str(Path(__file__).resolve().parents[2] / "vendor" / "doc-to-lora" / "src"),
 )
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
+
+
+@contextmanager
+def pushd(path: Path):
+    """Temporarily change cwd so doc-to-lora can resolve relative assets."""
+    prev = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev)
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -89,14 +107,16 @@ def load_model():
         use_flash_attn=True,
     )
     model.reset()
-    tokenizer = get_tokenizer(model.base_model.name_or_path)
+    with pushd(VENDOR_D2L_ROOT):
+        tokenizer = get_tokenizer(model.base_model.name_or_path)
     return model, tokenizer
 
 
 def run_probe(model, tokenizer, doc_text: str, probes: list[dict]) -> list[dict]:
     """Internalize a document and run all probe questions. Returns scored results."""
     model.reset()
-    model.internalize(doc_text)
+    with pushd(VENDOR_D2L_ROOT):
+        model.internalize(doc_text)
 
     results = []
     for probe in probes:
