@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = "==3.10.*"
 dependencies = [
     "transformers==4.51.3",
-    "flash-attn~=2.8.3",
+    "flash-attn~=2.8.3 ; sys_platform == 'linux'",
     "peft>=0.18.1",
     "jaxtyping>=0.3.7",
     "datasets>=4.8.4",
@@ -22,4 +22,6 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-flash-attn = { path = "../wheels/flash_attn-2.8.3-cp310-cp310-linux_x86_64.whl" }
+flash-attn = [
+    { path = "../wheels/flash_attn-2.8.3-cp310-cp310-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
+]
