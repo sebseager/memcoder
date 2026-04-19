@@ -13,6 +13,7 @@ Usage:
   uv run python run_all.py       # run everything
   uv run python run_all.py 2 3   # run only diagnostics 2 and 3
   uv run python run_all.py 5     # run only the recall suite
+  uv run python run_all.py 6 7   # run compositional + routing experiments
 """
 
 from __future__ import annotations
@@ -40,13 +41,15 @@ class Step:
     script: str
 
 
-ALL_STEPS: tuple[int, ...] = (1, 2, 3, 4, 5)
+ALL_STEPS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
 STEP_DEFS: dict[int, Step] = {
     1: Step(1, "Checkpoint validation (vendor eval)", "diag_checkpoint_eval.py"),
     2: Step(2, "Context window & token length check", "diag_context_window.py"),
     3: Step(3, "Synthetic canary test", "diag_canary.py"),
     4: Step(4, "Reset verification", "diag_reset_verify.py"),
     5: Step(5, "Recall suite", "diag5_recall_suite.py"),
+    6: Step(6, "Compositional stability (multi-LoRA merge)", "diag6_compositional.py"),
+    7: Step(7, "Routing signal quality", "diag7_routing.py"),
 }
 
 
@@ -114,7 +117,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "steps",
         nargs="*",
-        help="Optional step numbers to run (1-5). Default: run all.",
+        help="Optional step numbers to run (1-7). Default: run all.",
     )
     return parser.parse_args(argv)
 
@@ -141,6 +144,7 @@ def main(argv: list[str]) -> int:
     log = make_logger(log_file)
 
     steps_to_run = args.steps if args.steps else [str(s) for s in ALL_STEPS]
+    valid_range = f"1-{max(ALL_STEPS)}"
 
     log(f"Starting run_all.py at {utc_now().strftime('%a %b %d %H:%M:%S UTC %Y')}")
     log(f"Steps to run: {' '.join(steps_to_run)}")
@@ -156,13 +160,13 @@ def main(argv: list[str]) -> int:
         try:
             step_num = int(raw_step)
         except ValueError:
-            log(f"{YELLOW}  Unknown step: {raw_step} (valid: 1-5){NC}")
+            log(f"{YELLOW}  Unknown step: {raw_step} (valid: {valid_range}){NC}")
             skipped += 1
             continue
 
         step = STEP_DEFS.get(step_num)
         if step is None:
-            log(f"{YELLOW}  Unknown step: {step_num} (valid: 1-5){NC}")
+            log(f"{YELLOW}  Unknown step: {step_num} (valid: {valid_range}){NC}")
             skipped += 1
             continue
 
