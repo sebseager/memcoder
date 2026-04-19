@@ -177,13 +177,19 @@ def main(argv: list[str]) -> int:
         if args.checkpoint_step:
             step_env["D2L_CHECKPOINT_STEP"] = args.checkpoint_step
 
+    effective_checkpoint_path = step_env.get("D2L_CHECKPOINT_PATH", "").strip()
+    effective_checkpoint_run = step_env.get("D2L_CHECKPOINT_RUN", "").strip()
+    effective_checkpoint_step = step_env.get("D2L_CHECKPOINT_STEP", "").strip()
+
     log(f"Starting run_all.py at {utc_now().strftime('%a %b %d %H:%M:%S UTC %Y')}")
     log(f"Steps to run: {' '.join(steps_to_run)}")
-    if args.checkpoint_path:
-        log(f"Checkpoint override path: {args.checkpoint_path}")
-    elif args.checkpoint_run:
-        step_label = args.checkpoint_step if args.checkpoint_step else "default"
-        log(f"Checkpoint override run: {args.checkpoint_run} (step: {step_label})")
+    if effective_checkpoint_path:
+        log(f"Checkpoint override path: {effective_checkpoint_path}")
+    elif effective_checkpoint_run:
+        step_label = (
+            effective_checkpoint_step if effective_checkpoint_step else "default"
+        )
+        log(f"Checkpoint override run: {effective_checkpoint_run} (step: {step_label})")
     else:
         log("Checkpoint override: default (gemma_demo/checkpoint-80000)")
     log(f"Results directory: {results_dir}")
