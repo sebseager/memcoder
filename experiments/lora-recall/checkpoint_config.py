@@ -58,7 +58,12 @@ def read_max_ctx_chunk_len(checkpoint_path: str | Path) -> int:
     checkpoint_dir = checkpoint_path.parent.parent
     args_path = checkpoint_dir / "args.yaml"
     if args_path.exists():
-        with args_path.open(encoding="utf-8") as f:
-            args = yaml.safe_load(f) or {}
+        raw_yaml = args_path.read_text(encoding="utf-8")
+        try:
+            args = yaml.safe_load(raw_yaml) or {}
+        except yaml.YAMLError:
+            # Some training args files include Python-tagged enums/objects.
+            # These are produced by the trainer stack and need unsafe loading.
+            args = yaml.unsafe_load(raw_yaml) or {}
         return int(args.get("max_ctx_chunk_len", -1))
     return -1
