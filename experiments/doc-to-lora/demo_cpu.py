@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import torch
+from checkpoint_config import resolve_checkpoint_path
 from transformers import AutoModelForCausalLM
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "vendor" / "doc-to-lora" / "src"))
@@ -12,14 +13,17 @@ from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
 # Monkey-patch model loading so CPU runs do not try to use FlashAttention2
 _original_from_pretrained = AutoModelForCausalLM.from_pretrained
 
+
 def _cpu_safe_from_pretrained(*args, **kwargs):
     kwargs["attn_implementation"] = "eager"
     return _original_from_pretrained(*args, **kwargs)
 
+
 AutoModelForCausalLM.from_pretrained = _cpu_safe_from_pretrained
 
 # Load the hypernetwork + base model
-checkpoint_path = "trained_d2l/gemma_demo/checkpoint-80000/pytorch_model.bin"
+checkpoint_path = resolve_checkpoint_path()
+print(f"Loading checkpoint: {checkpoint_path}")
 state_dict = torch.load(
     checkpoint_path,
     map_location=torch.device("cpu"),
@@ -33,7 +37,7 @@ model = ModulatedPretrainedModel.from_state_dict(
 model.reset()
 tokenizer = get_tokenizer(model.base_model.name_or_path)
 
-doc = open("data/sakana_wiki.txt", "r").read()
+doc = (Path(__file__).resolve().parent / "data" / "sakana_wiki.txt").read_text()
 
 # Internalize the document into the model's hypernetwork
 model.internalize(doc)

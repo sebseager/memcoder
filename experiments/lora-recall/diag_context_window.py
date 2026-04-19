@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
-import yaml
+from checkpoint_config import read_max_ctx_chunk_len, resolve_checkpoint_path
 
 sys.path.insert(
     0,
@@ -33,32 +33,13 @@ from score_helper import score
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
 
-CHECKPOINT_PATH = str(
-    Path(__file__).parents[1]
-    / "doc-to-lora"
-    / "trained_d2l"
-    / "gemma_demo"
-    / "checkpoint-80000"
-    / "pytorch_model.bin"
-)
+CHECKPOINT_PATH = str(resolve_checkpoint_path())
 
 DOCS_DIR = Path(__file__).parent / "docs"
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 MAX_NEW_TOKENS = 100
-
-
-def _read_max_ctx_chunk_len() -> int:
-    """Read max_ctx_chunk_len from the checkpoint's args.yaml."""
-    checkpoint_dir = Path(CHECKPOINT_PATH).parent.parent
-    args_path = checkpoint_dir / "args.yaml"
-    if args_path.exists():
-        with open(args_path) as f:
-            args = yaml.unsafe_load(f)
-        val = args.get("max_ctx_chunk_len", -1)
-        return int(val)
-    return -1
 
 
 @contextmanager
@@ -174,7 +155,7 @@ def main():
     print("Part B: Tiny document probe (3 sentences, made-up fact)")
     print("-" * 50)
 
-    max_chunk_len = _read_max_ctx_chunk_len()
+    max_chunk_len = read_max_ctx_chunk_len(CHECKPOINT_PATH)
     print(f"max_ctx_chunk_len from checkpoint config: {max_chunk_len}")
 
     tiny_tokens = ctx_tokenizer.encode(TINY_DOC)

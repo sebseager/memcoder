@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import torch
+from checkpoint_config import resolve_checkpoint_path
 
 sys.path.insert(
     0,
@@ -28,7 +29,8 @@ def pushd(path: Path):
         os.chdir(prev)
 
 
-checkpoint_path = "trained_d2l/gemma_demo/checkpoint-80000/pytorch_model.bin"
+checkpoint_path = resolve_checkpoint_path()
+print(f"Loading checkpoint: {checkpoint_path}")
 state_dict = torch.load(checkpoint_path, weights_only=False)
 state_dict["ctx_encoder_args"].quantize_ctx_encoder = False
 

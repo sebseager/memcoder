@@ -15,16 +15,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from checkpoint_config import resolve_checkpoint_path
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VENDOR_D2L_ROOT = PROJECT_ROOT / "vendor" / "doc-to-lora"
-CHECKPOINT_PATH = (
-    Path(__file__).parents[1]
-    / "doc-to-lora"
-    / "trained_d2l"
-    / "gemma_demo"
-    / "checkpoint-80000"
-    / "pytorch_model.bin"
-)
+CHECKPOINT_PATH = resolve_checkpoint_path()
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 

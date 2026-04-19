@@ -14,6 +14,7 @@ Usage:
   uv run python run_all.py 2 3   # run only diagnostics 2 and 3
   uv run python run_all.py 5     # run only the recall suite
   uv run python run_all.py 6 7   # run compositional + routing experiments
+    uv run python run_all.py --checkpoint-run qwen_4b_d2l --checkpoint-step 20000
 """
 
 from __future__ import annotations
@@ -71,7 +72,9 @@ def make_logger(log_file: Path):
     return log
 
 
-def run_step(step: Step, script_dir: Path, log_file: Path, log) -> int:
+def run_step(
+    step: Step, script_dir: Path, log_file: Path, log, env: dict[str, str]
+) -> int:
     log("")
     log(f"{CYAN}{'=' * 66}{NC}")
     log(f"{CYAN}  Step {step.number}: {step.name}{NC}")
@@ -88,6 +91,7 @@ def run_step(step: Step, script_dir: Path, log_file: Path, log) -> int:
     process = subprocess.Popen(
         cmd,
         cwd=str(script_dir),
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -114,6 +118,21 @@ def run_step(step: Step, script_dir: Path, log_file: Path, log) -> int:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument(
+        "--checkpoint-path",
+        help=(
+            "Optional path to checkpoint file (or checkpoint dir). "
+            "When set, overrides checkpoint run/step."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-run",
+        help="Optional run directory name under experiments/doc-to-lora/trained_d2l/.",
+    )
+    parser.add_argument(
+        "--checkpoint-step",
+        help="Optional checkpoint step (e.g. 20000 or checkpoint-20000).",
+    )
     parser.add_argument(
         "steps",
         nargs="*",
@@ -146,8 +165,27 @@ def main(argv: list[str]) -> int:
     steps_to_run = args.steps if args.steps else [str(s) for s in ALL_STEPS]
     valid_range = f"1-{max(ALL_STEPS)}"
 
+    step_env = os.environ.copy()
+    if args.checkpoint_path:
+        step_env["D2L_CHECKPOINT_PATH"] = args.checkpoint_path
+        step_env.pop("D2L_CHECKPOINT_RUN", None)
+        step_env.pop("D2L_CHECKPOINT_STEP", None)
+    elif args.checkpoint_run or args.checkpoint_step:
+        step_env.pop("D2L_CHECKPOINT_PATH", None)
+        if args.checkpoint_run:
+            step_env["D2L_CHECKPOINT_RUN"] = args.checkpoint_run
+        if args.checkpoint_step:
+            step_env["D2L_CHECKPOINT_STEP"] = args.checkpoint_step
+
     log(f"Starting run_all.py at {utc_now().strftime('%a %b %d %H:%M:%S UTC %Y')}")
     log(f"Steps to run: {' '.join(steps_to_run)}")
+    if args.checkpoint_path:
+        log(f"Checkpoint override path: {args.checkpoint_path}")
+    elif args.checkpoint_run:
+        step_label = args.checkpoint_step if args.checkpoint_step else "default"
+        log(f"Checkpoint override run: {args.checkpoint_run} (step: {step_label})")
+    else:
+        log("Checkpoint override: default (gemma_demo/checkpoint-80000)")
     log(f"Results directory: {results_dir}")
     log(f"Log file: {log_file}")
 
@@ -170,7 +208,7 @@ def main(argv: list[str]) -> int:
             skipped += 1
             continue
 
-        rc = run_step(step, script_dir, log_file, log)
+        rc = run_step(step, script_dir, log_file, log, env=step_env)
         if rc == 0:
             passed += 1
         else:
