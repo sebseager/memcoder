@@ -1,3 +1,6 @@
 [submodule "vendor/doc-to-lora"]
 	path = vendor/doc-to-lora
 	url = https://github.com/SakanaAI/doc-to-lora
+[submodule "vendor/DyPRAG"]
+	path = vendor/DyPRAG
+	url = https://github.com/Trae1ounG/DyPRAG
