@@ -1,7 +1,8 @@
 """
 Exp 1 — Oracle Ceiling: Generate patches for all conditions.
 
-For each instance × condition, generates a unified-diff patch using Qwen3-8B.
+For each instance × condition, generates a SEARCH/REPLACE patch using Qwen3-8B,
+then converts the result to a unified diff for SWE-bench evaluation.
 
 Conditions:
   A — No context, no LoRA
@@ -15,6 +16,7 @@ Usage:
 """
 
 import argparse
+import difflib
 import json
 import sys
 import time
@@ -39,12 +41,13 @@ from helpers import (
     load_swebench_dataset,
     load_token_counts,
     truncate_to_budget,
+    unload_peft,
 )
 from prompts import SYSTEM_PROMPT, make_user_prompt
 
 
-def generate_patch(model, tokenizer, system_prompt: str, user_prompt: str) -> str:
-    """Generate a patch from the model. Returns raw model output."""
+def generate_raw(model, tokenizer, system_prompt: str, user_prompt: str) -> str:
+    """Generate a response from the model. Returns raw model output."""
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -72,40 +75,72 @@ def generate_patch(model, tokenizer, system_prompt: str, user_prompt: str) -> st
     return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
 
-def extract_diff_from_output(raw_output: str) -> str:
-    """Try to extract a unified diff from model output.
+# ---------------------------------------------------------------------------
+# SEARCH/REPLACE → unified-diff conversion
+# ---------------------------------------------------------------------------
 
-    The model may wrap the diff in markdown code fences or add commentary.
+
+def parse_search_replace_blocks(raw_output: str) -> list[tuple[str, str]]:
+    """Parse <<<< SEARCH / ==== / >>>> REPLACE blocks from model output.
+
+    Returns a list of (search_text, replace_text) tuples.
     """
-    # Try to find diff blocks
+    blocks = []
     lines = raw_output.split("\n")
-    diff_lines = []
-    in_diff = False
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "<<<< SEARCH":
+            search_lines = []
+            i += 1
+            while i < len(lines) and lines[i].strip() != "====":
+                search_lines.append(lines[i])
+                i += 1
+            i += 1  # skip ====
+            replace_lines = []
+            while i < len(lines) and lines[i].strip() != ">>>> REPLACE":
+                replace_lines.append(lines[i])
+                i += 1
+            if i < len(lines):
+                i += 1  # skip >>>> REPLACE
+            blocks.append(("\n".join(search_lines), "\n".join(replace_lines)))
+        else:
+            i += 1
+    return blocks
 
-    for line in lines:
-        if line.startswith("---") or line.startswith("diff --git"):
-            in_diff = True
-        if in_diff:
-            diff_lines.append(line)
-        # Stop if we hit a non-diff line after collecting some diff
-        if in_diff and not line.strip() and len(diff_lines) > 3:
-            # Check if next meaningful content is still diff
-            pass
 
-    if diff_lines:
-        return "\n".join(diff_lines)
+def search_replace_to_diff(
+    blocks: list[tuple[str, str]], file_content: str, file_path: str
+) -> str:
+    """Apply SEARCH/REPLACE blocks to file content and produce a unified diff.
 
-    # Fallback: strip markdown code fences
-    if "```" in raw_output:
-        parts = raw_output.split("```")
-        for part in parts[1::2]:  # odd-indexed parts are inside fences
-            stripped = part.strip()
-            if stripped.startswith("diff"):
-                stripped = stripped[4:].strip()
-            if "---" in stripped or "@@" in stripped:
-                return stripped
+    Each SEARCH block is located in the file by exact substring match.  If the
+    SEARCH text is not found, that block is skipped (the model hallucinated).
+    """
+    modified = file_content
+    applied = 0
+    for search, replace in blocks:
+        if search and search in modified:
+            modified = modified.replace(search, replace, 1)
+            applied += 1
 
-    return raw_output
+    if applied == 0:
+        return ""
+
+    orig_lines = file_content.splitlines(keepends=True)
+    mod_lines = modified.splitlines(keepends=True)
+    # Ensure files end with newline for clean diffs
+    if orig_lines and not orig_lines[-1].endswith("\n"):
+        orig_lines[-1] += "\n"
+    if mod_lines and not mod_lines[-1].endswith("\n"):
+        mod_lines[-1] += "\n"
+
+    diff = difflib.unified_diff(
+        orig_lines,
+        mod_lines,
+        fromfile=f"a/{file_path}",
+        tofile=f"b/{file_path}",
+    )
+    return "".join(diff)
 
 
 def run_condition(
@@ -119,11 +154,7 @@ def run_condition(
     needs_lora = condition == "D"
 
     print(f"\nLoading model for condition {condition}...")
-    if needs_lora:
-        # We'll load per-instance LoRA; start with base model
-        base_model, tokenizer = load_base_model()
-    else:
-        base_model, tokenizer = load_base_model()
+    base_model, tokenizer = load_base_model()
 
     predictions = []
     skipped = []
@@ -134,19 +165,23 @@ def run_condition(
         row = swebench_data[iid]
         problem_statement = row["problem_statement"]
 
-        # Determine context
-        if condition == "A":
-            user_prompt = make_user_prompt(problem_statement)
-        else:
-            fpath, content = get_file_content_for_instance(
+        # Get file content (needed for prompt and SEARCH/REPLACE → diff conversion)
+        file_content = None
+        fpath = None
+        if condition != "A":
+            fpath, file_content = get_file_content_for_instance(
                 iid, token_counts, swebench_data
             )
 
-            if condition in ("B", "D"):
-                content = truncate_to_budget(content, tokenizer, BUDGET_TOKENS)
+        # Determine prompt context
+        if condition == "A":
+            user_prompt = make_user_prompt(problem_statement)
+        elif condition in ("B", "D"):
+            prompt_content = truncate_to_budget(file_content, tokenizer, BUDGET_TOKENS)
+            user_prompt = make_user_prompt(problem_statement, prompt_content, fpath)
+        else:
             # condition C: full content, no truncation
-
-            user_prompt = make_user_prompt(problem_statement, content, fpath)
+            user_prompt = make_user_prompt(problem_statement, file_content, fpath)
 
         # Load oracle LoRA for condition D
         if needs_lora:
@@ -164,10 +199,15 @@ def run_condition(
             model.eval()
 
         t0 = time.time()
-        raw_output = generate_patch(model, tokenizer, SYSTEM_PROMPT, user_prompt)
+        raw_output = generate_raw(model, tokenizer, SYSTEM_PROMPT, user_prompt)
         gen_time = time.time() - t0
 
-        patch = extract_diff_from_output(raw_output)
+        # Convert SEARCH/REPLACE blocks to unified diff
+        blocks = parse_search_replace_blocks(raw_output)
+        if blocks and file_content is not None:
+            patch = search_replace_to_diff(blocks, file_content, fpath)
+        else:
+            patch = ""
 
         predictions.append(
             {
@@ -179,13 +219,15 @@ def run_condition(
             }
         )
 
-        print(f"    Generated {len(patch)} chars in {gen_time:.1f}s")
+        n_blocks = len(blocks)
+        print(
+            f"    Generated {n_blocks} block(s), "
+            f"diff {len(patch)} chars in {gen_time:.1f}s"
+        )
 
-        # Remove LoRA adapter to prevent stacking on the next iteration.
-        # PeftModel.from_pretrained() attaches adapters to base_model in-place;
-        # delete_adapter("default") undoes that so the next instance starts clean.
+        # Fully unload LoRA so base_model is clean for the next instance.
         if needs_lora:
-            model.delete_adapter("default")
+            unload_peft(model)
             del model
             torch.cuda.empty_cache()
 

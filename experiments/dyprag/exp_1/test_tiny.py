@@ -2,7 +2,7 @@
 Tiny-scale smoke test for Exp 1 pipeline.
 
 Runs 2 instances through oracle training → generation (conditions B & D)
-to verify the adapter stacking fix and basic pipeline correctness.
+to verify the adapter lifecycle and basic pipeline correctness.
 Does NOT run SWE-bench Docker evaluation — just checks model behavior.
 
 Usage:
@@ -28,6 +28,7 @@ from config import (
     ENABLE_THINKING,
     ORACLE_LORA_DIR,
 )
+from generate_patches import parse_search_replace_blocks, search_replace_to_diff
 from helpers import (
     get_file_content_for_instance,
     load_base_model,
@@ -35,6 +36,7 @@ from helpers import (
     load_swebench_dataset,
     load_token_counts,
     truncate_to_budget,
+    unload_peft,
 )
 from prompts import SYSTEM_PROMPT, make_user_prompt
 from train_oracle import train_one_oracle
@@ -67,11 +69,6 @@ def generate_one(model, tokenizer, system_prompt, user_prompt, max_tokens=512):
 
     gen_ids = output_ids[0, inputs["input_ids"].shape[1] :]
     return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
-
-
-def check_no_stacking_warnings():
-    """Context manager would be cleaner, but for a quick test just check stderr."""
-    pass
 
 
 def main():
@@ -200,19 +197,31 @@ def main():
             raw = generate_one(model, tokenizer, SYSTEM_PROMPT, user_prompt)
             elapsed = time.time() - t0
 
+            # Parse SEARCH/REPLACE blocks and convert to diff
+            blocks = parse_search_replace_blocks(raw)
+            if blocks:
+                diff = search_replace_to_diff(blocks, content, fpath)
+            else:
+                diff = ""
+
             results[cond].append(
                 {
                     "instance_id": iid,
                     "raw_output": raw,
+                    "diff": diff,
+                    "n_blocks": len(blocks),
                     "generation_time_s": elapsed,
                 }
             )
 
-            print(f"    [{i + 1}] {iid}: {len(raw)} chars, {elapsed:.1f}s")
+            print(
+                f"    [{i + 1}] {iid}: {len(blocks)} block(s), "
+                f"diff {len(diff)} chars, {elapsed:.1f}s"
+            )
             print(f"        first 200: {repr(raw[:200])}")
 
             if cond == "D":
-                model.delete_adapter("default")
+                unload_peft(model)
                 del model
                 torch.cuda.empty_cache()
 
@@ -224,8 +233,14 @@ def main():
         b_out = results["B"][i]["raw_output"] if i < len(results["B"]) else ""
         d_out = results["D"][i]["raw_output"] if i < len(results["D"]) else ""
         same = b_out == d_out
+        b_diff = results["B"][i].get("diff", "") if i < len(results["B"]) else ""
+        d_diff = results["D"][i].get("diff", "") if i < len(results["D"]) else ""
         print(f"  {iid}:")
-        print(f"    B len={len(b_out)}, D len={len(d_out)}, identical={same}")
+        print(
+            f"    B: {len(b_out)} chars raw, {len(b_diff)} chars diff  |  "
+            f"D: {len(d_out)} chars raw, {len(d_diff)} chars diff  |  "
+            f"identical_raw={same}"
+        )
         if same:
             print(
                 "    ** WARNING: D output identical to B — LoRA may not be loading **"

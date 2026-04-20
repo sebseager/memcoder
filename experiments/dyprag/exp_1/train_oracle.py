@@ -48,6 +48,7 @@ from helpers import (
     load_swebench_dataset,
     load_token_counts,
     make_lora_config,
+    unload_peft,
 )
 
 
@@ -190,9 +191,8 @@ def train_one_oracle(
     with open(output_dir / "training_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
-    # Remove LoRA adapter from the shared base model to prevent stacking.
-    # get_peft_model() mutates base_model in-place; delete_adapter undoes that.
-    model.delete_adapter("default")
+    # Fully unload LoRA so the shared base model is clean for the next instance.
+    unload_peft(model)
     del trainer, model
     torch.cuda.empty_cache()
 

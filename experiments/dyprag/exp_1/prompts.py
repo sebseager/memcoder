@@ -2,20 +2,29 @@
 Exp 1 — Oracle Ceiling: Prompt templates for patch generation.
 
 All conditions use the same prompt structure; only the context differs.
+The model outputs SEARCH/REPLACE blocks; generate_patches.py converts
+them to unified diffs programmatically via difflib.
 """
 
 SYSTEM_PROMPT = """\
 You are an expert software engineer. You will be given a bug report describing \
-an issue in a Python project. Your task is to generate a minimal patch in \
-unified diff format that fixes the issue.
+an issue in a Python project. Your task is to generate a minimal fix using \
+SEARCH/REPLACE blocks.
 
 Rules:
-- Output ONLY the unified diff. No explanation, no markdown fences.
-- The diff must start with `--- a/<filepath>` and `+++ b/<filepath>`.
-- Use the correct full repository-relative file paths.
+- The SEARCH section must contain the exact lines from the source file that \
+need to be changed (copy them verbatim, including indentation).
+- The REPLACE section must contain the replacement lines.
 - Make the smallest change necessary to fix the described issue.
-- Ensure each hunk header (@@ ... @@) has correct line numbers.
-- End the patch with a newline character."""
+- You may use multiple SEARCH/REPLACE blocks if multiple changes are needed.
+- Output ONLY the SEARCH/REPLACE blocks. No explanation, no markdown fences.
+
+Format:
+<<<< SEARCH
+<exact lines from source to find>
+====
+<replacement lines>
+>>>> REPLACE"""
 
 
 def make_user_prompt(
@@ -42,8 +51,8 @@ def make_user_prompt(
 
     parts.append(
         "\n\n## Instructions\n\n"
-        "Generate a unified diff patch that fixes the bug described above. "
-        "Output ONLY the patch, starting with `--- a/` and `+++ b/`. "
-        "No explanation, no markdown fences. End with a newline."
+        "Generate SEARCH/REPLACE blocks that fix the bug described above. "
+        "Output ONLY the blocks using the format shown in the system prompt. "
+        "No explanation, no markdown fences."
     )
     return "".join(parts)
