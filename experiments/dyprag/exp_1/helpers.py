@@ -6,7 +6,6 @@ Keeps train_oracle.py and generate_patches.py DRY.
 
 import json
 import re
-from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -23,16 +22,8 @@ from config import (
     SUBSETS_PATH,
     TOKEN_COUNTS_PATH,
 )
-from peft import LoraConfig, PeftModel, get_peft_model
+from peft import LoraConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-# Attributes that PEFT may leave on the base model after wrapping.
-_PEFT_RESIDUAL_ATTRS = (
-    "peft_config",
-    "active_adapter",
-    "active_adapters",
-    "_hf_peft_config_loaded",
-)
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -156,7 +147,7 @@ def load_base_model(device_map="auto"):
         MODEL_ID,
         quantization_config=bnb_config,
         device_map=device_map,
-        dtype=torch.bfloat16,
+        torch_dtype=torch.bfloat16,
     )
     return model, tokenizer
 
@@ -173,32 +164,31 @@ def make_lora_config():
     )
 
 
-def unload_peft(model):
-    """Fully unload PEFT adapter, returning the clean base model.
+def cycle_lora(peft_model, new_config=None, adapter_name: str = "default"):
+    """Drop the current adapter and attach a fresh one in-place.
 
-    ``model.unload()`` strips injected LoRA layers from the underlying
-    nn.Module, but may leave bookkeeping attributes (``peft_config``, etc.)
-    that cause spurious warnings on the next ``get_peft_model()`` call.
-    This helper removes those too.
+    This is the canonical pattern for training N adapters sequentially on a
+    single base model without re-loading weights.
+
+    Returns the same peft_model object (now with a clean, untrained adapter).
     """
-    base = model.unload()
-
-    # Shouldn't need this -- unload() takes care of all of it
-    # for attr in _PEFT_RESIDUAL_ATTRS:
-    #     if hasattr(base, attr):
-    #         if attr in base.__dict__:
-    #             delattr(base, attr)
-    return base
+    peft_model.delete_adapter(adapter_name)
+    peft_model.add_adapter(adapter_name, new_config or make_lora_config())
+    peft_model.set_adapter(adapter_name)
+    return peft_model
 
 
-def load_model_with_lora(adapter_path: str | Path | None = None, device_map="auto"):
+def load_model_with_lora(adapter_path=None, device_map="auto"):
     """Load base model, optionally with a saved LoRA adapter.
 
-    If adapter_path is None, adds a fresh (untrained) LoRA.
+    If adapter_path is None, adds a fresh (untrained) LoRA via add_adapter().
     """
     model, tokenizer = load_base_model(device_map=device_map)
     if adapter_path is not None:
         model = PeftModel.from_pretrained(model, str(adapter_path))
     else:
-        model = get_peft_model(model, make_lora_config())
+        # add_adapter() is the non-mutating alternative to get_peft_model().
+        # It returns None — the adapter is attached in-place.
+        model.add_adapter(make_lora_config(), adapter_name="default")
+        model.set_adapter("default")
     return model, tokenizer

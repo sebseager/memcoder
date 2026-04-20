@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from datasets import Dataset as HFDataset
-from peft import get_peft_model
+from peft import PeftModel, get_peft_model
 from transformers import (
     DataCollatorForLanguageModeling,
     EarlyStoppingCallback,
@@ -42,13 +42,13 @@ from config import (
     SEED,
 )
 from helpers import (
+    cycle_lora,
     get_file_content_for_instance,
     load_base_model,
     load_subsets,
     load_swebench_dataset,
     load_token_counts,
     make_lora_config,
-    unload_peft,
 )
 
 
@@ -85,17 +85,25 @@ def make_chunk_dataset(
 def train_one_oracle(
     instance_id: str,
     file_content: str,
-    base_model,
+    model,
     tokenizer,
     output_dir: Path,
-) -> dict:
-    """Train an oracle LoRA for one instance. Returns training metadata."""
+):
+    """Train an oracle LoRA for one instance.
+
+    Returns (metadata_dict, model).  The returned model is a PeftModel;
+    pass it back on subsequent calls to avoid adapter stacking.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dataset = make_chunk_dataset(file_content, tokenizer)
     n_chunks = len(dataset)
     if n_chunks == 0:
-        return {"instance_id": instance_id, "status": "skipped", "reason": "no chunks"}
+        return {
+            "instance_id": instance_id,
+            "status": "skipped",
+            "reason": "no chunks",
+        }, model
 
     # Split 80/20 for early stopping eval set
     if n_chunks >= 5:
@@ -106,8 +114,11 @@ def train_one_oracle(
         train_ds = dataset
         eval_ds = dataset
 
-    # Fresh LoRA
-    model = get_peft_model(base_model, make_lora_config())
+    # Fresh LoRA — wrap on first call, cycle on subsequent
+    if isinstance(model, PeftModel):
+        model = cycle_lora(model)
+    else:
+        model = get_peft_model(model, make_lora_config())
 
     # Scale max steps with file size
     n_tokens = len(tokenizer.encode(file_content, add_special_tokens=False))
@@ -191,12 +202,10 @@ def train_one_oracle(
     with open(output_dir / "training_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
-    # Fully unload LoRA so the shared base model is clean for the next instance.
-    unload_peft(model)
-    del trainer, model
+    del trainer
     torch.cuda.empty_cache()
 
-    return meta
+    return meta, model
 
 
 def main():
@@ -240,7 +249,9 @@ def main():
         print(f"  File: {fpath} ({n_tokens} tokens)")
 
         t0 = time.time()
-        meta = train_one_oracle(iid, content, base_model, tokenizer, lora_dir)
+        meta, base_model = train_one_oracle(
+            iid, content, base_model, tokenizer, lora_dir
+        )
         meta["wall_time_s"] = time.time() - t0
         results.append(meta)
 

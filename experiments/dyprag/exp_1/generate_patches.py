@@ -41,8 +41,8 @@ from helpers import (
     load_swebench_dataset,
     load_token_counts,
     truncate_to_budget,
-    unload_peft,
 )
+from peft import PeftModel
 from prompts import SYSTEM_PROMPT, make_user_prompt
 
 
@@ -158,6 +158,7 @@ def run_condition(
 
     predictions = []
     skipped = []
+    peft_model = None
 
     for i, iid in enumerate(instance_ids):
         print(f"\n  [{i + 1}/{len(instance_ids)}] {iid} (condition {condition})")
@@ -190,9 +191,13 @@ def run_condition(
                 print(f"    SKIP: no oracle LoRA at {lora_path}")
                 skipped.append(iid)
                 continue
-            from peft import PeftModel
-
-            model = PeftModel.from_pretrained(base_model, str(lora_path))
+            if peft_model is None:
+                peft_model = PeftModel.from_pretrained(base_model, str(lora_path))
+            else:
+                peft_model.delete_adapter("default")
+                peft_model.load_adapter(str(lora_path), adapter_name="default")
+                peft_model.set_adapter("default")
+            model = peft_model
             model.eval()
         else:
             model = base_model
@@ -224,12 +229,6 @@ def run_condition(
             f"    Generated {n_blocks} block(s), "
             f"diff {len(patch)} chars in {gen_time:.1f}s"
         )
-
-        # Fully unload LoRA so base_model is clean for the next instance.
-        if needs_lora:
-            unload_peft(model)
-            del model
-            torch.cuda.empty_cache()
 
     # Save predictions (JSONL for swebench compatibility)
     output_path.parent.mkdir(parents=True, exist_ok=True)

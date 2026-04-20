@@ -36,7 +36,6 @@ from helpers import (
     load_swebench_dataset,
     load_token_counts,
     truncate_to_budget,
-    unload_peft,
 )
 from prompts import SYSTEM_PROMPT, make_user_prompt
 from train_oracle import train_one_oracle
@@ -116,7 +115,9 @@ def main():
             # Capture warnings to detect stacking
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                meta = train_one_oracle(iid, content, base_model, tokenizer, lora_dir)
+                meta, base_model = train_one_oracle(
+                    iid, content, base_model, tokenizer, lora_dir
+                )
 
             stacking_warns = [
                 w
@@ -148,6 +149,7 @@ def main():
     base_model, tokenizer = load_base_model()
 
     results = {}
+    peft_model = None
     for cond in ["B", "D"]:
         results[cond] = []
         print(f"\n  Condition {cond}:")
@@ -173,7 +175,14 @@ def main():
 
                 with warnings.catch_warnings(record=True) as caught:
                     warnings.simplefilter("always")
-                    model = PeftModel.from_pretrained(base_model, str(lora_path))
+                    if peft_model is None:
+                        peft_model = PeftModel.from_pretrained(
+                            base_model, str(lora_path)
+                        )
+                    else:
+                        peft_model.delete_adapter("default")
+                        peft_model.load_adapter(str(lora_path), adapter_name="default")
+                        peft_model.set_adapter("default")
 
                 stacking_warns = [
                     w
@@ -188,6 +197,7 @@ def main():
                 else:
                     print(f"    OK: no stacking warnings (D[{i + 1}])")
 
+                model = peft_model
                 model.eval()
             else:
                 model = base_model
@@ -220,11 +230,6 @@ def main():
             )
             print(f"        first 200: {repr(raw[:200])}")
 
-            if cond == "D":
-                unload_peft(model)
-                del model
-                torch.cuda.empty_cache()
-
     # ------------------------------------------------------------------
     # Step 3: Compare B vs D
     # ------------------------------------------------------------------
@@ -246,18 +251,10 @@ def main():
                 "    ** WARNING: D output identical to B — LoRA may not be loading **"
             )
 
-    # Save results
+    # Save results (including raw_output for debugging)
     with open(TINY_DIR / "tiny_results.json", "w") as f:
         json.dump(
-            {
-                "test_ids": test_ids,
-                "results": {
-                    cond: [
-                        {k: v for k, v in r.items() if k != "raw_output"} for r in recs
-                    ]
-                    for cond, recs in results.items()
-                },
-            },
+            {"test_ids": test_ids, "results": results},
             f,
             indent=2,
         )

@@ -9,14 +9,14 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-EXP1_DIR = Path(__file__).resolve().parent
-EXP0_DIR = EXP1_DIR.parent / "exp_0"
-RESULTS_DIR = EXP1_DIR / "results"
+EXP0_DIR = Path(__file__).resolve().parents[1] / "exp_0"
+RESULTS_DIR = Path(__file__).resolve().parent / "results"
 ORACLE_LORA_DIR = RESULTS_DIR / "oracle_loras"
 PATCHES_DIR = RESULTS_DIR / "patches"
 EVAL_DIR = RESULTS_DIR / "eval_reports"
 ANALYSIS_DIR = RESULTS_DIR / "analysis"
 LOSS_CURVES_DIR = RESULTS_DIR / "loss_curves"
+SWEBENCH_DIR = RESULTS_DIR / "swebench"
 
 # exp_0 outputs
 SUBSETS_PATH = EXP0_DIR / "results" / "subsets.json"

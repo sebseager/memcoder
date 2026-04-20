@@ -25,8 +25,8 @@ from config import (
     CONDITION_LABELS,
     CONDITIONS,
     EVAL_DIR,
-    EXP1_DIR,
     PATCHES_DIR,
+    SWEBENCH_DIR
 )
 from helpers import load_subsets, load_swebench_dataset, load_token_counts
 
@@ -35,7 +35,7 @@ def load_eval_results(condition: str) -> dict | None:
     """Load the evaluation summary for a condition."""
     # swebench writes report to CWD as dyprag_exp1_condition_X.exp1_condition_X.json
     summary_path = (
-        EXP1_DIR / f"dyprag_exp1_condition_{condition}.exp1_condition_{condition}.json"
+        SWEBENCH_DIR / f"exp1_condition_{condition}.json"
     )
     if not summary_path.exists():
         # Fallback to old location
