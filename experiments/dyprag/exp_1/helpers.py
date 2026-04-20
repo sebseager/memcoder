@@ -26,6 +26,14 @@ from config import (
 from peft import LoraConfig, PeftModel, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+# Attributes that PEFT may leave on the base model after wrapping.
+_PEFT_RESIDUAL_ATTRS = (
+    "peft_config",
+    "active_adapter",
+    "active_adapters",
+    "_hf_peft_config_loaded",
+)
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -163,6 +171,24 @@ def make_lora_config():
         bias="none",
         task_type="CAUSAL_LM",
     )
+
+
+def unload_peft(model):
+    """Fully unload PEFT adapter, returning the clean base model.
+
+    ``model.unload()`` strips injected LoRA layers from the underlying
+    nn.Module, but may leave bookkeeping attributes (``peft_config``, etc.)
+    that cause spurious warnings on the next ``get_peft_model()`` call.
+    This helper removes those too.
+    """
+    base = model.unload()
+
+    # Shouldn't need this -- unload() takes care of all of it
+    # for attr in _PEFT_RESIDUAL_ATTRS:
+    #     if hasattr(base, attr):
+    #         if attr in base.__dict__:
+    #             delattr(base, attr)
+    return base
 
 
 def load_model_with_lora(adapter_path: str | Path | None = None, device_map="auto"):
