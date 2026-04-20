@@ -190,6 +190,9 @@ def train_one_oracle(
     with open(output_dir / "training_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
+    # Remove LoRA adapter from the shared base model to prevent stacking.
+    # get_peft_model() mutates base_model in-place; delete_adapter undoes that.
+    model.delete_adapter("default")
     del trainer, model
     torch.cuda.empty_cache()
 

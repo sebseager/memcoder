@@ -181,8 +181,11 @@ def run_condition(
 
         print(f"    Generated {len(patch)} chars in {gen_time:.1f}s")
 
-        # Unload LoRA
+        # Remove LoRA adapter to prevent stacking on the next iteration.
+        # PeftModel.from_pretrained() attaches adapters to base_model in-place;
+        # delete_adapter("default") undoes that so the next instance starts clean.
         if needs_lora:
+            model.delete_adapter("default")
             del model
             torch.cuda.empty_cache()
 

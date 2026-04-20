@@ -148,7 +148,7 @@ def load_base_model(device_map="auto"):
         MODEL_ID,
         quantization_config=bnb_config,
         device_map=device_map,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
     )
     return model, tokenizer
 
