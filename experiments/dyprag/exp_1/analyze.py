@@ -25,6 +25,7 @@ from config import (
     CONDITION_LABELS,
     CONDITIONS,
     EVAL_DIR,
+    EXP1_DIR,
     PATCHES_DIR,
 )
 from helpers import load_subsets, load_swebench_dataset, load_token_counts
@@ -32,11 +33,27 @@ from helpers import load_subsets, load_swebench_dataset, load_token_counts
 
 def load_eval_results(condition: str) -> dict | None:
     """Load the evaluation summary for a condition."""
-    summary_path = EVAL_DIR / f"condition_{condition}" / "summary.json"
+    # swebench writes report to CWD as dyprag_exp1_condition_X.exp1_condition_X.json
+    summary_path = (
+        EXP1_DIR / f"dyprag_exp1_condition_{condition}.exp1_condition_{condition}.json"
+    )
+    if not summary_path.exists():
+        # Fallback to old location
+        summary_path = EVAL_DIR / f"condition_{condition}" / "summary.json"
     if not summary_path.exists():
         return None
     with open(summary_path) as f:
-        return json.load(f)
+        raw = json.load(f)
+    # Normalise keys
+    total = raw.get("total", raw.get("total_instances", 0))
+    resolved_count = raw.get("resolved_count", raw.get("resolved_instances", 0))
+    resolved = raw.get("resolved", raw.get("resolved_ids", []))
+    return {
+        "total": total,
+        "resolved_count": resolved_count,
+        "resolve_rate": resolved_count / total if total else 0.0,
+        "resolved": resolved,
+    }
 
 
 def load_patches(condition: str) -> dict:
