@@ -57,9 +57,29 @@ def filter_instances_by_ids(instances: list[dict], ids_file: str | None) -> list
     return filtered
 
 
-def maybe_load_adapter(model, adapter_state: dict, adapter_path: Path):
+def adapter_base_model_id(adapter_path: Path) -> str | None:
+    cfg = adapter_path / "adapter_config.json"
+    if not cfg.exists():
+        return None
+    try:
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data.get("base_model_name_or_path")
+
+
+def maybe_load_adapter(
+    model,
+    adapter_state: dict,
+    adapter_path: Path,
+    expected_model_id: str,
+):
     if not adapter_path.exists():
         return None, "missing_adapter"
+
+    adapter_base = adapter_base_model_id(adapter_path)
+    if adapter_base and adapter_base != expected_model_id:
+        return None, f"incompatible_adapter_base_model:{adapter_base}"
 
     active = adapter_state.get("active")
     peft_model = adapter_state.get("peft")
@@ -115,7 +135,10 @@ def main() -> int:
         if args.condition == "D":
             adapter_path = ORACLE_LORA_DIR / file_key
             model_for_run, adapter_status = maybe_load_adapter(
-                model, adapter_state, adapter_path
+                model,
+                adapter_state,
+                adapter_path,
+                expected_model_id=args.model_id,
             )
             if model_for_run is None:
                 rows.append(
@@ -124,10 +147,10 @@ def main() -> int:
                         "condition": args.condition,
                         "file_key": file_key,
                         "status": "skipped",
-                        "reason": "missing_adapter",
+                        "reason": adapter_status,
                     }
                 )
-                print(f"[{i + 1}/{len(instances)}] {iid} skip missing adapter")
+                print(f"[{i + 1}/{len(instances)}] {iid} skip {adapter_status}")
                 continue
 
         sys_prompt, user_prompt = make_chat_prompt(
@@ -147,6 +170,7 @@ def main() -> int:
             top_p=args.top_p,
         )
         pred_body = normalize_body_prediction(raw)
+        generated_token_count = len(tokenizer.encode(raw, add_special_tokens=False))
         elapsed = time.perf_counter() - t0
 
         rows.append(
@@ -165,6 +189,8 @@ def main() -> int:
                 "context_token_count": len(
                     tokenizer.encode(context, add_special_tokens=False)
                 ),
+                "generated_token_count": generated_token_count,
+                "hit_max_new_tokens": int(generated_token_count >= args.max_new_tokens),
                 "adapter_status": adapter_status,
                 "generation_time_s": elapsed,
             }

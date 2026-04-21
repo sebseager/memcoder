@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 from config import (
@@ -76,7 +77,19 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Stage 1 capability interference check")
     p.add_argument("--model-id", default=MODEL_ID)
     p.add_argument("--max-adapters", type=int, default=None)
+    p.add_argument("--file-keys-file", default=None)
     return p.parse_args()
+
+
+def adapter_base_model_id(adapter_dir: Path) -> str | None:
+    cfg = adapter_dir / "adapter_config.json"
+    if not cfg.exists():
+        return None
+    try:
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data.get("base_model_name_or_path")
 
 
 def main() -> int:
@@ -95,8 +108,32 @@ def main() -> int:
         ],
         key=lambda x: x.name,
     )
+
+    if args.file_keys_file:
+        wanted = {
+            line.strip()
+            for line in Path(args.file_keys_file)
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        }
+        adapter_dirs = [p for p in adapter_dirs if p.name in wanted]
+
+    compatible_dirs = []
+    skipped_incompatible = 0
+    for p in adapter_dirs:
+        base_model = adapter_base_model_id(p)
+        if base_model and base_model != args.model_id:
+            skipped_incompatible += 1
+            continue
+        compatible_dirs.append(p)
+    adapter_dirs = compatible_dirs
+
     if args.max_adapters is not None:
         adapter_dirs = adapter_dirs[: args.max_adapters]
+
+    if skipped_incompatible:
+        print(f"Skipped {skipped_incompatible} adapter(s) with mismatched base model")
 
     rows = []
     peft_model = None

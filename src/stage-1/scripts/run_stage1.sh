@@ -26,14 +26,36 @@ STAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC_DIR="$(cd "$STAGE_DIR/.." && pwd)"
 
 cd "$SRC_DIR"
+
+if [[ ! -d ".venv" ]]; then
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "Missing uv binary; install uv before running Stage 1"
+    exit 1
+  fi
+  echo "Creating src/.venv with uv"
+  uv venv .venv
+fi
+
 source .venv/bin/activate
 cd "$STAGE_DIR"
 
 if [[ "$MODE" == "pilot" ]]; then
+  MODE="tiny"
+fi
+
+if [[ "$MODE" == "tiny" ]]; then
   MAX_INSTANCES=4
   TRAIN_MAX_EPOCHS=2
   TRAIN_MIN_EPOCHS=1
   CAP_MAX_ADAPTERS=4
+  if [[ -z "$MODEL_ID" ]]; then
+    MODEL_ID="Qwen/Qwen2.5-Coder-1.5B-Instruct"
+  fi
+elif [[ "$MODE" == "small" ]]; then
+  MAX_INSTANCES=12
+  TRAIN_MAX_EPOCHS=4
+  TRAIN_MIN_EPOCHS=2
+  CAP_MAX_ADAPTERS=12
   if [[ -z "$MODEL_ID" ]]; then
     MODEL_ID="Qwen/Qwen2.5-Coder-1.5B-Instruct"
   fi
@@ -46,7 +68,7 @@ elif [[ "$MODE" == "full" ]]; then
     MODEL_ID="Qwen/Qwen3-8B"
   fi
 else
-  echo "Invalid mode: $MODE (expected pilot|full)"
+  echo "Invalid mode: $MODE (expected pilot|tiny|small|full)"
   exit 1
 fi
 
@@ -54,10 +76,10 @@ echo "Running Stage 1 mode=$MODE model=$MODEL_ID"
 
 PILOT_INSTANCE_IDS_FILE=""
 PILOT_FILE_KEYS_FILE=""
-if [[ "$MODE" == "pilot" ]]; then
+if [[ -n "$MAX_INSTANCES" ]]; then
   mkdir -p outputs/logs
-  PILOT_INSTANCE_IDS_FILE="outputs/logs/pilot_instance_ids.txt"
-  PILOT_FILE_KEYS_FILE="outputs/logs/pilot_file_keys.txt"
+  PILOT_INSTANCE_IDS_FILE="outputs/logs/${MODE}_instance_ids.txt"
+  PILOT_FILE_KEYS_FILE="outputs/logs/${MODE}_file_keys.txt"
   export STAGE0_INSTANCES_JSONL="$SRC_DIR/stage-0/outputs/instances.jsonl"
   export PILOT_INSTANCE_IDS_FILE
   export PILOT_FILE_KEYS_FILE
@@ -122,6 +144,9 @@ python scripts/analyze_stage1.py
 CAP_ARGS=(--model-id "$MODEL_ID")
 if [[ -n "$CAP_MAX_ADAPTERS" ]]; then
   CAP_ARGS+=(--max-adapters "$CAP_MAX_ADAPTERS")
+fi
+if [[ -n "$PILOT_FILE_KEYS_FILE" ]]; then
+  CAP_ARGS+=(--file-keys-file "$PILOT_FILE_KEYS_FILE")
 fi
 python scripts/capability_interference.py "${CAP_ARGS[@]}"
 

@@ -91,11 +91,21 @@ def truncate_to_budget(text: str, tokenizer, budget_tokens: int) -> str:
     ids = tokenizer.encode(text, add_special_tokens=False)
     if len(ids) <= budget_tokens:
         return text
-    clipped = tokenizer.decode(ids[:budget_tokens], skip_special_tokens=True)
+
+    marker = "\n# ... [truncated to token budget] ...\n"
+    marker_ids = tokenizer.encode(marker, add_special_tokens=False)
+    keep_tokens = max(0, budget_tokens - len(marker_ids))
+
+    clipped = tokenizer.decode(ids[:keep_tokens], skip_special_tokens=True)
     cut = clipped.rfind("\n")
     if cut > 0:
         clipped = clipped[: cut + 1]
-    return clipped + "\n# ... [truncated to token budget] ...\n"
+
+    merged = clipped + marker
+    merged_ids = tokenizer.encode(merged, add_special_tokens=False)
+    if len(merged_ids) > budget_tokens:
+        merged = tokenizer.decode(merged_ids[:budget_tokens], skip_special_tokens=True)
+    return merged
 
 
 def make_lora_config() -> LoraConfig:

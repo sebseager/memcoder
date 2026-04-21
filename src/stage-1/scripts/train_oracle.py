@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -55,9 +56,41 @@ def filter_file_records(records: list, include_keys: set[str] | None) -> list:
     return [r for r in records if r.file_key in include_keys]
 
 
+def _float_close(a, b, atol: float = 1e-12) -> bool:
+    try:
+        return abs(float(a) - float(b)) <= atol
+    except (TypeError, ValueError):
+        return False
+
+
+def existing_meta_compatible(meta: dict, args: argparse.Namespace) -> tuple[bool, str]:
+    if meta.get("status") != "trained":
+        return False, "status_not_trained"
+
+    checks = {
+        "model_id": args.model_id,
+        "chunk_size": args.chunk_size,
+        "batch_size": args.batch_size,
+        "grad_accum": args.grad_accum,
+        "min_epochs": args.min_epochs,
+        "max_epochs": args.max_epochs,
+    }
+
+    for key, expected in checks.items():
+        got = meta.get(key)
+        if got != expected:
+            return False, f"{key}_mismatch"
+
+    if not _float_close(meta.get("lr"), args.lr):
+        return False, "lr_mismatch"
+
+    return True, "compatible"
+
+
 def train_one_file(
     model,
     tokenizer,
+    model_id: str,
     file_key: str,
     file_text: str,
     out_dir: Path,
@@ -77,6 +110,13 @@ def train_one_file(
             "file_key": file_key,
             "status": "skipped",
             "reason": "no_valid_chunks",
+            "model_id": model_id,
+            "chunk_size": chunk_size,
+            "batch_size": batch_size,
+            "grad_accum": grad_accum,
+            "lr": lr,
+            "min_epochs": min_epochs,
+            "max_epochs": max_epochs,
         }
         return meta, model
 
@@ -149,6 +189,13 @@ def train_one_file(
     meta = {
         "file_key": file_key,
         "status": "trained",
+        "model_id": model_id,
+        "chunk_size": chunk_size,
+        "batch_size": batch_size,
+        "grad_accum": grad_accum,
+        "lr": lr,
+        "min_epochs": min_epochs,
+        "max_epochs": max_epochs,
         "n_tokens": n_tokens,
         "n_chunks": len(ds),
         "n_train_chunks": len(train_ds),
@@ -232,15 +279,23 @@ def main() -> int:
         out_dir = ORACLE_LORA_DIR / fr.file_key
         meta_path = out_dir / "training_meta.json"
         if meta_path.exists() and not args.force:
-            print("  skip existing adapter")
             with meta_path.open("r", encoding="utf-8") as f:
-                rows.append(json.load(f))
-            continue
+                existing_meta = json.load(f)
+
+            compatible, reason = existing_meta_compatible(existing_meta, args)
+            if compatible:
+                print("  skip existing compatible adapter")
+                rows.append(existing_meta)
+                continue
+
+            print(f"  existing adapter incompatible ({reason}); retraining")
+            shutil.rmtree(out_dir, ignore_errors=True)
 
         t0 = time.time()
         meta, model = train_one_file(
             model=model,
             tokenizer=tokenizer,
+            model_id=args.model_id,
             file_key=fr.file_key,
             file_text=fr.full_file,
             out_dir=out_dir,

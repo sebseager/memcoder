@@ -32,13 +32,24 @@ source .venv/bin/activate
 - scripts/capability_interference.py: probe-based adapter interference check.
 - scripts/run_stage1.sh: pilot/full orchestration.
 
-## Typical Pilot Run
+## Typical Tiny Pilot Run
 
 ```bash
 cd /home/seb/Developer/Classes/continual-learning/src
 source .venv/bin/activate
 cd stage-1
 bash scripts/run_stage1.sh --mode pilot
+```
+
+`pilot` is an alias for `tiny`.
+
+## Small Pilot Run
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src
+source .venv/bin/activate
+cd stage-1
+bash scripts/run_stage1.sh --mode small
 ```
 
 ## Outputs

@@ -18,6 +18,8 @@ PER_INSTANCE_COLUMNS = [
     "syntax_valid",
     "generation_time_s",
     "context_token_count",
+    "generated_token_count",
+    "hit_max_new_tokens",
 ]
 
 
@@ -105,6 +107,8 @@ def evaluate_condition(condition: str) -> tuple[pd.DataFrame, dict]:
                     "syntax_valid": valid,
                     "generation_time_s": rec.get("generation_time_s", 0.0),
                     "context_token_count": rec.get("context_token_count", 0),
+                    "generated_token_count": rec.get("generated_token_count", 0),
+                    "hit_max_new_tokens": rec.get("hit_max_new_tokens", 0),
                 }
             )
 
@@ -118,6 +122,8 @@ def evaluate_condition(condition: str) -> tuple[pd.DataFrame, dict]:
             "syntax_valid_rate": 0.0,
             "mean_generation_time_s": 0.0,
             "mean_context_token_count": 0.0,
+            "mean_generated_token_count": 0.0,
+            "max_new_token_hit_rate": 0.0,
         }
         return df, summary
 
@@ -129,6 +135,8 @@ def evaluate_condition(condition: str) -> tuple[pd.DataFrame, dict]:
         "syntax_valid_rate": float(df["syntax_valid"].mean()),
         "mean_generation_time_s": float(df["generation_time_s"].mean()),
         "mean_context_token_count": float(df["context_token_count"].mean()),
+        "mean_generated_token_count": float(df["generated_token_count"].mean()),
+        "max_new_token_hit_rate": float(df["hit_max_new_tokens"].mean()),
     }
     return df, summary
 
