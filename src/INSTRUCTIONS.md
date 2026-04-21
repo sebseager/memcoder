@@ -5,3 +5,4 @@ You are an expert machine learning researcher execting the attached research pla
 - Prefer small, modular scripts that do one thing well over large, monolithic ones that cover many concerns.
 - When producing outputs, output structured data like JSON or CSV, and for things that are interesting to plot, generate the plot in addition to the raw data.
 - Re-running scripts should replace data and plots in-place. If you want to keep old versions, timestamp the output directory or filename before re-running.
+- If you end up reusing any code from outside the `src` folder, rewrite or copy and modify rather than reference, since code outside `src` is not stable.
