@@ -68,6 +68,15 @@ def adapter_base_model_id(adapter_path: Path) -> str | None:
     return data.get("base_model_name_or_path")
 
 
+def active_adapter_name(peft_model: PeftModel) -> str:
+    active = getattr(peft_model, "active_adapter", None)
+    if active is None:
+        return "unknown"
+    if isinstance(active, (list, tuple)):
+        return ",".join(str(x) for x in active)
+    return str(active)
+
+
 def maybe_load_adapter(
     model,
     adapter_state: dict,
@@ -75,11 +84,11 @@ def maybe_load_adapter(
     expected_model_id: str,
 ):
     if not adapter_path.exists():
-        return None, "missing_adapter"
+        return None, "missing_adapter", "none"
 
     adapter_base = adapter_base_model_id(adapter_path)
     if adapter_base and adapter_base != expected_model_id:
-        return None, f"incompatible_adapter_base_model:{adapter_base}"
+        return None, f"incompatible_adapter_base_model:{adapter_base}", "none"
 
     active = adapter_state.get("active")
     peft_model = adapter_state.get("peft")
@@ -89,7 +98,7 @@ def maybe_load_adapter(
         )
         adapter_state["peft"] = peft_model
         adapter_state["active"] = "default"
-        return peft_model, "loaded_initial"
+        return peft_model, "loaded_initial", active_adapter_name(peft_model)
 
     safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", adapter_path.name)
     new_name = f"adapter_{safe_name}"
@@ -98,7 +107,7 @@ def maybe_load_adapter(
     if active and active in peft_model.peft_config:
         peft_model.delete_adapter(active)
     adapter_state["active"] = new_name
-    return peft_model, "swapped"
+    return peft_model, "swapped", active_adapter_name(peft_model)
 
 
 def main() -> int:
@@ -132,9 +141,10 @@ def main() -> int:
 
         model_for_run = model
         adapter_status = "not_used"
+        active_before_generate = "base_model"
         if args.condition == "D":
             adapter_path = ORACLE_LORA_DIR / file_key
-            model_for_run, adapter_status = maybe_load_adapter(
+            model_for_run, adapter_status, active_before_generate = maybe_load_adapter(
                 model,
                 adapter_state,
                 adapter_path,
@@ -148,6 +158,7 @@ def main() -> int:
                         "file_key": file_key,
                         "status": "skipped",
                         "reason": adapter_status,
+                        "active_adapter_before_generate": active_before_generate,
                     }
                 )
                 print(f"[{i + 1}/{len(instances)}] {iid} skip {adapter_status}")
@@ -170,8 +181,16 @@ def main() -> int:
             top_p=args.top_p,
         )
         pred_body = normalize_body_prediction(raw)
-        generated_token_count = len(tokenizer.encode(raw, add_special_tokens=False))
+        raw_token_ids = tokenizer.encode(raw, add_special_tokens=False)
+        generated_token_count = len(raw_token_ids)
+        first_5_ids = raw_token_ids[:5]
+        first_5_tokens = [tokenizer.decode([tid]) for tid in first_5_ids]
         elapsed = time.perf_counter() - t0
+
+        print(
+            f"{iid} | {file_key} | {adapter_status} | "
+            f"{active_before_generate} | {first_5_tokens}"
+        )
 
         rows.append(
             {
@@ -192,6 +211,9 @@ def main() -> int:
                 "generated_token_count": generated_token_count,
                 "hit_max_new_tokens": int(generated_token_count >= args.max_new_tokens),
                 "adapter_status": adapter_status,
+                "active_adapter_before_generate": active_before_generate,
+                "first_5_output_token_ids": first_5_ids,
+                "first_5_output_tokens": first_5_tokens,
                 "generation_time_s": elapsed,
             }
         )

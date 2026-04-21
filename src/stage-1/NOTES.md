@@ -229,3 +229,88 @@ bash scripts/run_stage1.sh --mode small
   - Not promising yet for progression to Stage 2.
   - We satisfy the precondition that truncated context hurts (C > B), but oracle adapters fail to recover and currently degrade performance (D <= B).
   - Following the research plan's stop condition, we should pause and diagnose Stage 1 before advancing.
+
+## Entry 2026-04-21 11
+
+- Implemented FIX1 core repair in Stage 1 training/inference code:
+  - `scripts/train_oracle.py` objective changed from raw file LM chunking to supervised prompt->body completion with prompt-token loss masking.
+  - `scripts/helpers.py` extended with AST function extraction plus Stage 0 instance fallback builders for supervised records.
+  - `scripts/generate_completions.py` now logs adapter activity per row (`adapter_status`, `active_adapter_before_generate`, first output tokens) for swap/load verification.
+  - Added objective/truncation/eval compatibility checks in adapter metadata to prevent stale adapter reuse.
+
+- Gate diagnostics executed:
+  - Gate 1: strict baseline-vs-oracle next-token probe on evaluation prompt showed near-identical behavior pre-fix, confirming training distribution mismatch.
+  - Gate 2: inspect-only sample verified prompt/target boundaries and loss masking on paper.
+  - Gate 3: single-adapter retrain converged and produced B vs D divergence.
+
+## Entry 2026-04-21 12
+
+- During Gate 3 and early tiny reruns, discovered a second major issue:
+  - `ORACLE_CHUNK_SIZE=1536` forced truncation of essentially all supervised records (prompt+target lengths were mostly ~2.1k-3.0k tokens).
+  - This violated FIX1's train/eval distribution alignment intent.
+
+- Fix applied:
+  - `scripts/config.py`: `ORACLE_CHUNK_SIZE` raised to 3072.
+  - Eval kept optional/off by default in training to avoid eval-time OOM.
+
+- Gate 4 verification:
+  - Checked `loaded_initial` and `swapped` paths on explicit two-instance runs.
+  - Active adapter names matched expected file keys at generation time.
+
+## Entry 2026-04-21 13
+
+- Post-fix reruns (no extra intervention beyond supervised objective + 3072 sequence cap):
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src
+source .venv/bin/activate
+cd stage-1
+bash scripts/run_stage1.sh --mode tiny
+bash scripts/run_stage1.sh --mode small
+```
+
+- Tiny (n=4):
+  - B BLEU-4 = 0.036
+  - C BLEU-4 = 0.235
+  - D BLEU-4 = 0.283
+  - Gate 5 minimum (`D > B` aggregate) passed.
+
+- Small (n=12):
+  - B BLEU-4 = 0.074
+  - C BLEU-4 = 0.308
+  - D BLEU-4 = 0.163
+  - BLEU recovery ratio mean = 0.675, but CI lower bound remained below 0.
+  - Strict Gate 6 CI criterion did not clear.
+
+## Entry 2026-04-21 14
+
+- FIX1 Step 7 interventions run independently:
+
+1) Intervention A (tighten truncation budget 2048 -> 1024)
+  - Tiny (n=4): directional success (`D >> B` on BLEU).
+  - Small (n=12): unstable/weak aggregate recovery; not selected.
+
+2) Intervention B (behavioral second-pass regularization)
+  - Added optional flags to `scripts/train_oracle.py`:
+    - `--behavioral-probes`
+    - `--behavioral-epochs`
+    - `--behavioral-lr-mult`
+  - Second pass trains on up to 5 eval-style probe prompts per file using the same masked completion objective.
+
+- Intervention B tiny run (n=4):
+  - B BLEU-4 = 0.036
+  - C BLEU-4 = 0.235
+  - D BLEU-4 = 0.347
+  - Gate 7 condition satisfied (`D > B` on tiny).
+
+- Intervention B small run (n=12):
+  - B: pass@1 proxy = 0.000, BLEU-4 = 0.074
+  - C: pass@1 proxy = 0.083, BLEU-4 = 0.308
+  - D: pass@1 proxy = 0.083, BLEU-4 = 0.207
+  - Recovery summary:
+    - pass recovery mean = 0.824 (CI [0.000, 3.000])
+    - BLEU recovery mean = 0.739 (CI [-1.940, 4.507])
+
+- Current status:
+  - Mean recovery is now directionally strong and D reaches C on pass@1 proxy at n=12.
+  - Strict Gate 6 requirement (BLEU recovery CI lower bound > 0) is still not met with current sample size/noise.

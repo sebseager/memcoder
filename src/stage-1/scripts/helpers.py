@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import random
 import re
@@ -18,6 +19,7 @@ from config import (
     MODEL_ID,
     ORACLE_MIN_CHUNK_TOKENS,
     SEED,
+    TRUNCATION_BUDGET_TOKENS,
 )
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -29,6 +31,15 @@ class FileRecord:
     repo: str
     file_path: str
     full_file: str
+
+
+@dataclass
+class FunctionExample:
+    function_name: str
+    masked_function: str
+    ground_truth_body: str
+    context_text: str
+    source: str
 
 
 def set_seed(seed: int = SEED) -> None:
@@ -258,6 +269,281 @@ def normalize_body_prediction(raw_text: str) -> str:
         else:
             norm.append(f"    {line.rstrip()}")
     return "\n".join(norm).rstrip()
+
+
+def _line_indent(line: str) -> str:
+    match = re.match(r"^\s*", line)
+    return "" if match is None else match.group(0)
+
+
+def _replace_line_span(
+    lines: list[str],
+    start_line: int,
+    end_line: int,
+    replacement_lines: list[str],
+) -> list[str]:
+    start_idx = max(0, start_line - 1)
+    end_idx = min(len(lines), end_line)
+    return lines[:start_idx] + replacement_lines + lines[end_idx:]
+
+
+def masked_file_context_from_span(
+    full_file: str,
+    start_line: int,
+    end_line: int,
+    masked_function: str,
+    tokenizer,
+    trunc_budget_tokens: int = TRUNCATION_BUDGET_TOKENS,
+) -> str:
+    lines = full_file.splitlines()
+    masked_lines = masked_function.splitlines()
+    replaced = _replace_line_span(lines, start_line, end_line, masked_lines)
+    masked_file_text = "\n".join(replaced)
+    return truncate_to_budget(masked_file_text, tokenizer, trunc_budget_tokens)
+
+
+def _collect_function_nodes(tree: ast.AST) -> list[ast.AST]:
+    nodes: list[ast.AST] = []
+
+    class _Collector(ast.NodeVisitor):
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            nodes.append(node)
+            self.generic_visit(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            nodes.append(node)
+            self.generic_visit(node)
+
+    _Collector().visit(tree)
+    return sorted(nodes, key=lambda n: getattr(n, "lineno", 0))
+
+
+def _extract_function_example_from_node(
+    file_text: str,
+    node: ast.AST,
+    tokenizer,
+    trunc_budget_tokens: int,
+) -> FunctionExample | None:
+    if not hasattr(node, "body") or not getattr(node, "body"):
+        return None
+    if not hasattr(node, "lineno") or not hasattr(node, "end_lineno"):
+        return None
+
+    body = getattr(node, "body")
+    first_body_node = body[0]
+    if not hasattr(first_body_node, "lineno"):
+        return None
+
+    name = getattr(node, "name", None)
+    if not isinstance(name, str) or not name:
+        return None
+
+    lines = file_text.splitlines()
+    decorator_lines = [
+        getattr(d, "lineno", getattr(node, "lineno"))
+        for d in getattr(node, "decorator_list", [])
+    ]
+    start_line = min([getattr(node, "lineno")] + decorator_lines)
+    end_line = int(getattr(node, "end_lineno"))
+    body_start_line = int(getattr(first_body_node, "lineno"))
+
+    if start_line < 1 or end_line > len(lines) or body_start_line <= start_line:
+        return None
+
+    signature_lines = lines[start_line - 1 : body_start_line - 1]
+    body_lines = lines[body_start_line - 1 : end_line]
+    if not signature_lines or not body_lines:
+        return None
+
+    body_indent = _line_indent(body_lines[0])
+    masked_function = "\n".join(signature_lines).rstrip() + "\n" + body_indent + "pass"
+    ground_truth_body = "\n".join(body_lines).rstrip()
+    context_text = masked_file_context_from_span(
+        full_file=file_text,
+        start_line=start_line,
+        end_line=end_line,
+        masked_function=masked_function,
+        tokenizer=tokenizer,
+        trunc_budget_tokens=trunc_budget_tokens,
+    )
+
+    return FunctionExample(
+        function_name=name,
+        masked_function=masked_function,
+        ground_truth_body=ground_truth_body,
+        context_text=context_text,
+        source="ast",
+    )
+
+
+def build_function_examples_from_file(
+    file_text: str,
+    tokenizer,
+    trunc_budget_tokens: int = TRUNCATION_BUDGET_TOKENS,
+) -> list[FunctionExample]:
+    try:
+        tree = ast.parse(file_text)
+    except SyntaxError:
+        return []
+
+    examples: list[FunctionExample] = []
+    for node in _collect_function_nodes(tree):
+        ex = _extract_function_example_from_node(
+            file_text=file_text,
+            node=node,
+            tokenizer=tokenizer,
+            trunc_budget_tokens=trunc_budget_tokens,
+        )
+        if ex is None:
+            continue
+        if ex.ground_truth_body.strip() == "":
+            continue
+        examples.append(ex)
+    return examples
+
+
+def build_function_examples_from_instances(
+    instances_for_file: list[dict],
+    tokenizer,
+    trunc_budget_tokens: int = TRUNCATION_BUDGET_TOKENS,
+) -> list[FunctionExample]:
+    rows = sorted(instances_for_file, key=lambda r: r.get("instance_id", ""))
+    out: list[FunctionExample] = []
+    for row in rows:
+        context_text = masked_file_context_from_span(
+            full_file=row["full_file"],
+            start_line=int(row["start_line"]),
+            end_line=int(row["end_line"]),
+            masked_function=row["masked_function"],
+            tokenizer=tokenizer,
+            trunc_budget_tokens=trunc_budget_tokens,
+        )
+        out.append(
+            FunctionExample(
+                function_name=row["function_name"],
+                masked_function=row["masked_function"],
+                ground_truth_body=row["ground_truth_body"],
+                context_text=context_text,
+                source="instance_fallback",
+            )
+        )
+    return out
+
+
+def _apply_chat_template_for_training(
+    tokenizer,
+    system_prompt: str,
+    user_prompt: str,
+) -> str:
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    return tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=ENABLE_THINKING,
+    )
+
+
+def build_supervised_records_from_examples(
+    examples: list[FunctionExample],
+    tokenizer,
+    max_sequence_tokens: int | None,
+) -> tuple[list[dict], dict]:
+    records: list[dict] = []
+    stats = {
+        "n_examples": len(examples),
+        "n_records": 0,
+        "n_truncated": 0,
+        "mean_prompt_tokens": 0.0,
+        "mean_target_tokens": 0.0,
+    }
+
+    prompt_lens = []
+    target_lens = []
+
+    for ex in examples:
+        system_prompt, user_prompt = make_chat_prompt(
+            masked_function=ex.masked_function,
+            context_text=ex.context_text,
+            function_name=ex.function_name,
+        )
+        prompt_text = _apply_chat_template_for_training(
+            tokenizer=tokenizer,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+        prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
+        target_ids = tokenizer.encode(ex.ground_truth_body, add_special_tokens=False)
+        if not target_ids:
+            continue
+
+        if max_sequence_tokens is not None:
+            total_len = len(prompt_ids) + len(target_ids)
+            if total_len > max_sequence_tokens:
+                overflow = total_len - max_sequence_tokens
+                if overflow < len(prompt_ids):
+                    prompt_ids = prompt_ids[overflow:]
+                else:
+                    trim_target = overflow - len(prompt_ids)
+                    prompt_ids = []
+                    keep_target = max(1, len(target_ids) - trim_target)
+                    target_ids = target_ids[:keep_target]
+                stats["n_truncated"] += 1
+
+        input_ids = prompt_ids + target_ids
+        labels = ([-100] * len(prompt_ids)) + target_ids
+        records.append(
+            {
+                "input_ids": input_ids,
+                "attention_mask": [1] * len(input_ids),
+                "labels": labels,
+            }
+        )
+        prompt_lens.append(len(prompt_ids))
+        target_lens.append(len(target_ids))
+
+    stats["n_records"] = len(records)
+    if prompt_lens:
+        stats["mean_prompt_tokens"] = float(np.mean(prompt_lens))
+    if target_lens:
+        stats["mean_target_tokens"] = float(np.mean(target_lens))
+    return records, stats
+
+
+def inspect_first_supervised_example(
+    examples: list[FunctionExample],
+    tokenizer,
+    max_sequence_tokens: int | None,
+) -> dict | None:
+    if not examples:
+        return None
+
+    records, _ = build_supervised_records_from_examples(
+        examples=[examples[0]],
+        tokenizer=tokenizer,
+        max_sequence_tokens=max_sequence_tokens,
+    )
+    if not records:
+        return None
+
+    rec = records[0]
+    labels = rec["labels"]
+    supervised_tokens = sum(1 for x in labels if x != -100)
+    masked_tokens = sum(1 for x in labels if x == -100)
+    return {
+        "function_name": examples[0].function_name,
+        "source": examples[0].source,
+        "masked_function": examples[0].masked_function,
+        "target_body": examples[0].ground_truth_body,
+        "decoded_input": tokenizer.decode(rec["input_ids"], skip_special_tokens=True),
+        "supervised_token_count": supervised_tokens,
+        "masked_prompt_token_count": masked_tokens,
+        "total_input_tokens": len(rec["input_ids"]),
+    }
 
 
 def make_chunk_dataset_records(

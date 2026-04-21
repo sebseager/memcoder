@@ -32,7 +32,7 @@ LORA_DROPOUT = 0.05
 LORA_TARGET_MODULES = ["q_proj", "v_proj", "up_proj", "down_proj"]
 
 # Oracle training defaults
-ORACLE_CHUNK_SIZE = 512
+ORACLE_CHUNK_SIZE = 3072
 ORACLE_BATCH_SIZE = 1
 ORACLE_GRAD_ACCUM = 8
 ORACLE_LR = 2e-4
