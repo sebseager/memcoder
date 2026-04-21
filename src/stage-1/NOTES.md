@@ -80,3 +80,51 @@ bash scripts/run_stage1.sh --mode pilot
 
 - Additional note:
   - A bitsandbytes CUDA backend FutureWarning remains from upstream package internals; this is not a project-code warning path.
+
+## Entry 2026-04-21 5
+
+- Re-ran pilot after fixes:
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src
+source .venv/bin/activate
+cd stage-1
+bash scripts/run_stage1.sh --mode pilot
+```
+
+- Pilot execution status:
+  - oracle training: completed for 4/4 pilot file adapters (resumed from checkpoints on rerun).
+  - generation: completed for conditions B/C/D on 4/4 pilot instances.
+  - evaluation + analysis: completed and plots generated.
+  - capability interference: completed for pilot adapters.
+
+- Pilot metrics (proxy):
+  - B: pass@1 proxy = 0.000, BLEU-4 = 0.008
+  - C: pass@1 proxy = 0.000, BLEU-4 = 0.093
+  - D: pass@1 proxy = 0.000, BLEU-4 = 0.008
+
+- Additional bug fix after rerun:
+  - condition D generation succeeded after sanitizing dynamic adapter names.
+  - capability script needed the same adapter-name sanitization and an indentation fix.
+
+- Warning cleanup status:
+  - resolved deprecation warning from `torch_dtype` by switching to `dtype`.
+  - resolved gradient-checkpointing `use_reentrant` warning with explicit non-reentrant settings.
+  - resolved generation-config argument warning by normalizing model generation defaults in `helpers.py`.
+  - remaining warning: bitsandbytes backend FutureWarning from third-party package internals.
+
+## Entry 2026-04-21 6
+
+- Re-ran capability interference after final warning cleanup to restore pilot-consistent `latest` outputs:
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src
+source .venv/bin/activate
+cd stage-1
+python scripts/capability_interference.py --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct --max-adapters 4
+```
+
+- Result:
+  - baseline probe score: 90%
+  - adapter scores: all 90% (0% drop each)
+  - flagged adapters (>15% drop): 0

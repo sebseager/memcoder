@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -109,7 +110,8 @@ def main() -> int:
             )
             active = "default"
         else:
-            new_name = f"adapter_{file_key}"
+            safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", file_key)
+            new_name = f"adapter_{safe_name}"
             peft_model.load_adapter(str(adir), adapter_name=new_name)
             peft_model.set_adapter(new_name)
             if active and active in peft_model.peft_config:

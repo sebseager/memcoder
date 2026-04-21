@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
@@ -70,7 +71,8 @@ def maybe_load_adapter(model, adapter_state: dict, adapter_path: Path):
         adapter_state["active"] = "default"
         return peft_model, "loaded_initial"
 
-    new_name = f"adapter_{adapter_path.name}"
+    safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", adapter_path.name)
+    new_name = f"adapter_{safe_name}"
     peft_model.load_adapter(str(adapter_path), adapter_name=new_name)
     peft_model.set_adapter(new_name)
     if active and active in peft_model.peft_config:

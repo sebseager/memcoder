@@ -134,6 +134,12 @@ def load_model_and_tokenizer(model_id: str = MODEL_ID, use_4bit: bool = True):
             device_map="auto" if torch.cuda.is_available() else None,
         )
 
+    # Avoid warning spam under greedy decoding by restoring neutral defaults.
+    if getattr(model, "generation_config", None) is not None:
+        model.generation_config.temperature = 1.0
+        model.generation_config.top_p = 1.0
+        model.generation_config.top_k = 50
+
     return model, tokenizer
 
 
