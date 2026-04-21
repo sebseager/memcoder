@@ -17,6 +17,7 @@ EVAL_DIR = RESULTS_DIR / "eval_reports"
 ANALYSIS_DIR = RESULTS_DIR / "analysis"
 LOSS_CURVES_DIR = RESULTS_DIR / "loss_curves"
 SWEBENCH_DIR = RESULTS_DIR / "swebench"
+CAPABILITY_DIR = RESULTS_DIR / "capability_checks"
 
 # exp_0 outputs
 SUBSETS_PATH = EXP0_DIR / "results" / "subsets.json"
@@ -47,16 +48,20 @@ ORACLE_CHUNK_SIZE = 512  # tokens per training chunk
 ORACLE_MIN_EPOCHS = 3
 ORACLE_MAX_EPOCHS = 20
 ORACLE_PATIENCE = 3  # early-stop patience (epochs without improvement)
-ORACLE_LOSS_THRESHOLD = 0.01  # min loss delta to count as improvement
+ORACLE_LOSS_THRESHOLD = 0.02  # min loss delta to count as improvement
 ORACLE_BATCH_SIZE = 1
 ORACLE_GRAD_ACCUM = 4
 
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
-MAX_NEW_TOKENS = 4096
-TEMPERATURE = 0.0  # greedy for reproducibility (SEED controls init only)
-TOP_P = 1.0
+MAX_NEW_TOKENS = 8192
+GENERATION_RESERVE_TOKENS = 2048  # keep headroom for output during prompt packing
+GENERATION_MAX_ATTEMPTS = 3
+GENERATION_TOKEN_SCHEDULE_BD = [1024, 2048, 4096]
+GENERATION_TOKEN_SCHEDULE_C = [1024, 2048, 8192]
+TEMPERATURE = 0.2  # low-temp sampling; reproducible with fixed SEED
+TOP_P = 0.95
 
 # ---------------------------------------------------------------------------
 # Conditions

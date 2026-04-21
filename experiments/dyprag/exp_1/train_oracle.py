@@ -38,6 +38,7 @@ from config import (
     ORACLE_LORA_DIR,
     ORACLE_LR,
     ORACLE_MAX_EPOCHS,
+    ORACLE_MIN_EPOCHS,
     ORACLE_PATIENCE,
     SEED,
 )
@@ -49,7 +50,21 @@ from helpers import (
     load_swebench_dataset,
     load_token_counts,
     make_lora_config,
+    prepare_model_for_lora_training,
 )
+
+
+class MinEpochEarlyStoppingCallback(EarlyStoppingCallback):
+    """Early stopping that waits for a minimum number of epochs first."""
+
+    def __init__(self, min_epochs: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.min_epochs = min_epochs
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if state.epoch is not None and state.epoch < self.min_epochs:
+            return control
+        return super().on_evaluate(args, state, control, metrics=metrics, **kwargs)
 
 
 def make_chunk_dataset(
@@ -118,6 +133,7 @@ def train_one_oracle(
     if isinstance(model, PeftModel):
         model = cycle_lora(model)
     else:
+        model = prepare_model_for_lora_training(model)
         model = get_peft_model(model, make_lora_config())
 
     # Scale max steps with file size
@@ -156,7 +172,8 @@ def train_one_oracle(
     callbacks = []
     if n_chunks >= 5:
         callbacks.append(
-            EarlyStoppingCallback(
+            MinEpochEarlyStoppingCallback(
+                min_epochs=ORACLE_MIN_EPOCHS,
                 early_stopping_patience=ORACLE_PATIENCE,
                 early_stopping_threshold=0.01,
             )

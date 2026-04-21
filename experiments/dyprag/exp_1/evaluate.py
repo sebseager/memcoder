@@ -10,6 +10,7 @@ Usage:
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -26,6 +27,22 @@ def main():
     )
     parser.add_argument(
         "--timeout", type=int, default=900, help="Per-instance timeout in seconds"
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Optional explicit run id (default: exp1_condition_<COND>)",
+    )
+    parser.add_argument(
+        "--force-rebuild",
+        action="store_true",
+        help="Force image rebuild in SWE-bench harness",
+    )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Clean harness artifacts aggressively after run",
     )
     args = parser.parse_args()
 
@@ -44,83 +61,103 @@ def main():
     print(f"Evaluating condition {args.condition}: {len(instance_ids)} instances")
 
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
-    report_dir = EVAL_DIR / f"condition_{args.condition}"
-    report_dir.mkdir(parents=True, exist_ok=True)
+    run_id = args.run_id or f"exp1_condition_{args.condition}"
 
     from swebench.harness.run_evaluation import main as run_eval
 
-    run_eval(
+    report_path = run_eval(
         dataset_name=SWEBENCH_DATASET,
         split=SWEBENCH_SPLIT,
         instance_ids=instance_ids,
         predictions_path=str(predictions_path),
         max_workers=args.max_workers,
-        force_rebuild=False,
+        force_rebuild=args.force_rebuild,
         cache_level="env",
-        clean=False,
+        clean=args.clean,
         open_file_limit=4096,
-        run_id=f"exp1_condition_{args.condition}",
+        run_id=run_id,
         timeout=args.timeout,
         namespace=None,
         rewrite_reports=False,
         modal=False,
-        report_dir=str(report_dir),
+        report_dir=".",
     )
 
-    print(f"\nEvaluation reports saved to {report_dir}")
-
-    # Parse and summarize results
-    summarize_eval(report_dir, args.condition, instance_ids)
-
-
-def summarize_eval(report_dir: Path, condition: str, instance_ids: list[str]):
-    """Parse swebench report JSON and print a summary."""
-    # swebench writes reports as JSON files
-    report_files = list(report_dir.rglob("*.json"))
-    if not report_files:
-        print("  No report files found yet.")
+    if report_path is None:
+        print("\nWARNING: SWE-bench returned no report path.")
         return
 
-    resolved = []
-    failed = []
-    errored = []
+    report_path = Path(report_path)
+    if not report_path.is_absolute():
+        report_path = Path.cwd() / report_path
+    if not report_path.exists():
+        print(f"\nERROR: expected report file not found: {report_path}")
+        sys.exit(1)
 
-    for rf in report_files:
-        with open(rf) as f:
-            report = json.load(f)
+    report_copy_run = EVAL_DIR / f"condition_{args.condition}.{run_id}.report.json"
+    shutil.copy2(report_path, report_copy_run)
 
-        # swebench report format varies; handle both old and new
-        if isinstance(report, dict):
-            for iid, result in report.items():
-                if isinstance(result, dict):
-                    if result.get("resolved", False):
-                        resolved.append(iid)
-                    else:
-                        failed.append(iid)
-                elif isinstance(result, str):
-                    if result == "RESOLVED":
-                        resolved.append(iid)
-                    else:
-                        failed.append(iid)
+    # Also update a stable "latest" location for this condition.
+    report_copy_latest = EVAL_DIR / f"condition_{args.condition}.report.json"
+    shutil.copy2(report_path, report_copy_latest)
+    print(f"\nRun report saved to {report_copy_run}")
 
-    total = len(instance_ids)
-    n_resolved = len(set(resolved))
+    summarize_eval(report_copy_run, args.condition, instance_ids, run_id)
+
+
+def summarize_eval(
+    report_path: Path,
+    condition: str,
+    instance_ids: list[str],
+    run_id: str,
+):
+    """Normalize SWE-bench report and persist a stable summary."""
+    with open(report_path) as f:
+        report = json.load(f)
+
+    total_target = len(instance_ids)
+    resolved_ids = sorted(set(report.get("resolved_ids", [])))
+    unresolved_ids = sorted(set(report.get("unresolved_ids", [])))
+    error_ids = sorted(set(report.get("error_ids", [])))
+    empty_patch_ids = sorted(set(report.get("empty_patch_ids", [])))
+    completed_ids = sorted(set(report.get("completed_ids", [])))
+
+    n_resolved = len(resolved_ids)
+    resolved_rate = n_resolved / total_target if total_target else 0.0
+
     print(f"\n=== Condition {condition} Results ===")
-    print(f"  Total instances: {total}")
-    print(f"  Resolved: {n_resolved} ({n_resolved / total * 100:.1f}%)")
-    print(f"  Failed: {len(set(failed))}")
+    print(f"  Target instances: {total_target}")
+    print(f"  Completed instances: {len(completed_ids)}")
+    print(f"  Resolved: {n_resolved} ({resolved_rate * 100:.1f}%)")
+    print(f"  Unresolved: {len(unresolved_ids)}")
+    print(f"  Empty patch: {len(empty_patch_ids)}")
+    print(f"  Errors: {len(error_ids)}")
 
     # Save summary
     summary = {
         "condition": condition,
-        "total": total,
-        "resolved": sorted(set(resolved)),
+        "run_id": run_id,
+        "report_path": str(report_path),
+        "total_target_instances": total_target,
+        "target_instance_ids": instance_ids,
+        "completed_instances": len(completed_ids),
+        "completed_ids": completed_ids,
+        "resolved": resolved_ids,
+        "unresolved": unresolved_ids,
+        "errors": error_ids,
+        "empty_patch": empty_patch_ids,
         "resolved_count": n_resolved,
-        "resolve_rate": n_resolved / total if total > 0 else 0,
+        "resolve_rate": resolved_rate,
     }
-    summary_path = report_dir / "summary.json"
-    with open(summary_path, "w") as f:
+    summary_path_run = EVAL_DIR / f"condition_{condition}.{run_id}.summary.json"
+    with open(summary_path_run, "w") as f:
         json.dump(summary, f, indent=2)
+
+    summary_path_latest = EVAL_DIR / f"condition_{condition}.summary.json"
+    with open(summary_path_latest, "w") as f:
+        json.dump(summary, f, indent=2)
+
+    print(f"Summary saved to {summary_path_run}")
 
 
 if __name__ == "__main__":

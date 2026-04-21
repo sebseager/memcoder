@@ -6,6 +6,7 @@ Keeps train_oracle.py and generate_patches.py DRY.
 
 import json
 import re
+from functools import lru_cache
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -20,9 +21,11 @@ from config import (
     MODEL_ID,
     SEED,
     SUBSETS_PATH,
+    SWEBENCH_DATASET,
+    SWEBENCH_SPLIT,
     TOKEN_COUNTS_PATH,
 )
-from peft import LoraConfig, PeftModel
+from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # ---------------------------------------------------------------------------
@@ -54,18 +57,19 @@ def load_swebench_instance(instance_id: str) -> dict:
     """Load a single SWE-Bench Lite instance from HuggingFace."""
     from datasets import load_dataset
 
-    ds = load_dataset("princeton-nlp/SWE-bench_Lite", split="test")
+    ds = load_dataset(SWEBENCH_DATASET, split=SWEBENCH_SPLIT)
     for row in ds:
         if row["instance_id"] == instance_id:
             return row
     raise KeyError(f"Instance {instance_id} not in SWE-bench Lite test split")
 
 
+@lru_cache(maxsize=1)
 def load_swebench_dataset() -> dict:
     """Load full SWE-Bench Lite test split as {instance_id: row}."""
     from datasets import load_dataset
 
-    ds = load_dataset("princeton-nlp/SWE-bench_Lite", split="test")
+    ds = load_dataset(SWEBENCH_DATASET, split=SWEBENCH_SPLIT)
     return {row["instance_id"]: row for row in ds}
 
 
@@ -150,6 +154,13 @@ def load_base_model(device_map="auto"):
         torch_dtype=torch.bfloat16,
     )
     return model, tokenizer
+
+
+def prepare_model_for_lora_training(model):
+    """Apply PEFT's recommended preparation for k-bit LoRA training."""
+    model = prepare_model_for_kbit_training(model)
+    model.config.use_cache = False
+    return model
 
 
 def make_lora_config():

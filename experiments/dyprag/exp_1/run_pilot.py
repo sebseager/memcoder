@@ -113,12 +113,13 @@ def main():
     parser.add_argument("--select-only", action="store_true")
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
+    parser.add_argument("--skip-capability-check", action="store_true")
     parser.add_argument("--n-pilot", type=int, default=12)
     args = parser.parse_args()
 
     # Step 0: Select pilot instances
     if PILOT_IDS_FILE.exists():
-        pilot_ids = PILOT_IDS_FILE.read_text().strip().split("\n")
+        pilot_ids = [x for x in PILOT_IDS_FILE.read_text().splitlines() if x.strip()]
         print(
             f"Using existing pilot IDs from {PILOT_IDS_FILE} ({len(pilot_ids)} instances)"
         )
@@ -138,6 +139,13 @@ def main():
         run_step(
             [python, "train_oracle.py", "--ids-file", str(PILOT_IDS_FILE)],
             "Train oracle LoRAs for pilot instances",
+        )
+
+    # Step 1b: Capability interference check (README parallel check)
+    if not args.skip_capability_check:
+        run_step(
+            [python, "capability_interference.py", "--ids-file", str(PILOT_IDS_FILE)],
+            "Run capability interference check on trained oracle LoRAs",
         )
 
     # Step 2: Generate patches for all conditions

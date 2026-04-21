@@ -32,12 +32,11 @@ from generate_patches import parse_search_replace_blocks, search_replace_to_diff
 from helpers import (
     get_file_content_for_instance,
     load_base_model,
-    load_subsets,
     load_swebench_dataset,
     load_token_counts,
     truncate_to_budget,
 )
-from prompts import SYSTEM_PROMPT, make_user_prompt
+from prompts import SYSTEM_PROMPT_SEARCH_REPLACE, make_user_prompt
 from train_oracle import train_one_oracle
 
 TINY_DIR = Path(__file__).resolve().parent / "results" / "tiny"
@@ -79,7 +78,6 @@ def main():
     )
     args = parser.parse_args()
 
-    subsets = load_subsets()
     token_counts = load_token_counts()
     swebench_data = load_swebench_dataset()
 
@@ -93,6 +91,8 @@ def main():
         print(f"  {iid}")
 
     TINY_DIR.mkdir(parents=True, exist_ok=True)
+    base_model = None
+    tokenizer = None
 
     # ------------------------------------------------------------------
     # Step 1: Train oracle LoRAs
@@ -132,12 +132,22 @@ def main():
             else:
                 print(f"  OK: no stacking warnings (instance {i + 1})")
 
+            train_loss = meta.get("final_train_loss")
+            eval_loss = meta.get("best_eval_loss")
             print(
-                f"  train loss={meta.get('final_train_loss', '?'):.4f}, "
-                f"eval loss={meta.get('best_eval_loss', '?'):.4f}"
+                f"  train loss={train_loss:.4f}"
+                if isinstance(train_loss, (int, float))
+                else "  train loss=NA"
+            )
+            print(
+                f"  eval loss={eval_loss:.4f}"
+                if isinstance(eval_loss, (int, float))
+                else "  eval loss=NA"
             )
 
-        del base_model
+        # Reuse the same base weights for generation to avoid a second large load.
+        if hasattr(base_model, "unload"):
+            base_model = base_model.unload()
         torch.cuda.empty_cache()
     else:
         print("\n--- Step 1: Skipping training (--skip-train) ---")
@@ -146,7 +156,8 @@ def main():
     # Step 2: Generate for conditions B and D
     # ------------------------------------------------------------------
     print("\n--- Step 2: Generate patches (B and D) ---")
-    base_model, tokenizer = load_base_model()
+    if base_model is None or tokenizer is None:
+        base_model, tokenizer = load_base_model()
 
     results = {}
     peft_model = None
@@ -204,7 +215,9 @@ def main():
                 model.eval()
 
             t0 = time.time()
-            raw = generate_one(model, tokenizer, SYSTEM_PROMPT, user_prompt)
+            raw = generate_one(
+                model, tokenizer, SYSTEM_PROMPT_SEARCH_REPLACE, user_prompt
+            )
             elapsed = time.time() - t0
 
             # Parse SEARCH/REPLACE blocks and convert to diff
@@ -234,12 +247,16 @@ def main():
     # Step 3: Compare B vs D
     # ------------------------------------------------------------------
     print("\n--- Step 3: B vs D comparison ---")
-    for i, iid in enumerate(test_ids):
-        b_out = results["B"][i]["raw_output"] if i < len(results["B"]) else ""
-        d_out = results["D"][i]["raw_output"] if i < len(results["D"]) else ""
+    b_map = {r["instance_id"]: r for r in results["B"]}
+    d_map = {r["instance_id"]: r for r in results["D"]}
+    for iid in test_ids:
+        b_row = b_map.get(iid, {})
+        d_row = d_map.get(iid, {})
+        b_out = b_row.get("raw_output", "")
+        d_out = d_row.get("raw_output", "")
         same = b_out == d_out
-        b_diff = results["B"][i].get("diff", "") if i < len(results["B"]) else ""
-        d_diff = results["D"][i].get("diff", "") if i < len(results["D"]) else ""
+        b_diff = b_row.get("diff", "")
+        d_diff = d_row.get("diff", "")
         print(f"  {iid}:")
         print(
             f"    B: {len(b_out)} chars raw, {len(b_diff)} chars diff  |  "
