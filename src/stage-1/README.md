@@ -32,20 +32,18 @@ source .venv/bin/activate
 - scripts/evaluate_completions.py: computes pass@1 proxy and BLEU.
 - scripts/analyze_stage1.py: recovery-ratio analysis + bootstrap CI + gap-stratified summaries + plots.
 - scripts/capability_interference.py: probe-based adapter interference check.
-- scripts/run_stage1.sh: pilot/full orchestration.
+- scripts/run_stage1.sh: tiny/small/full orchestration.
 
-## Typical Tiny Pilot Run
+## Tiny Run
 
 ```bash
 cd /home/seb/Developer/Classes/continual-learning/src
 source .venv/bin/activate
 cd stage-1
-bash scripts/run_stage1.sh --mode pilot
+bash scripts/run_stage1.sh --mode tiny
 ```
 
-`pilot` is an alias for `tiny`.
-
-## Small Pilot Run
+## Small Run
 
 ```bash
 cd /home/seb/Developer/Classes/continual-learning/src

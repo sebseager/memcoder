@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="pilot"
+MODE="tiny"
 MODEL_ID=""
 SEED=42
 TRUNC_BUDGET=2048
@@ -80,10 +80,6 @@ fi
 source .venv/bin/activate
 cd "$STAGE_DIR"
 
-if [[ "$MODE" == "pilot" ]]; then
-  MODE="tiny"
-fi
-
 if [[ "$MODE" == "tiny" ]]; then
   MAX_INSTANCES=4
   TRAIN_MAX_EPOCHS=2
@@ -109,7 +105,7 @@ elif [[ "$MODE" == "full" ]]; then
     MODEL_ID="Qwen/Qwen3-8B"
   fi
 else
-  echo "Invalid mode: $MODE (expected pilot|tiny|small|full)"
+  echo "Invalid mode: $MODE (expected tiny|small|full)"
   exit 1
 fi
 
@@ -145,14 +141,14 @@ python scripts/init_run_config.py \
   --temperature "$TEMPERATURE" \
   --top-p "$TOP_P"
 
-PILOT_INSTANCE_IDS_FILE=""
-PILOT_FILE_KEYS_FILE=""
+SUBSET_INSTANCE_IDS_FILE=""
+SUBSET_FILE_KEYS_FILE=""
 if [[ -n "$MAX_INSTANCES" ]]; then
-  PILOT_INSTANCE_IDS_FILE="${MODEL_LOGS_DIR}/${MODE}_instance_ids.txt"
-  PILOT_FILE_KEYS_FILE="${MODEL_LOGS_DIR}/${MODE}_file_keys.txt"
+  SUBSET_INSTANCE_IDS_FILE="${MODEL_LOGS_DIR}/${MODE}_instance_ids.txt"
+  SUBSET_FILE_KEYS_FILE="${MODEL_LOGS_DIR}/${MODE}_file_keys.txt"
   export STAGE0_INSTANCES_JSONL="$SRC_DIR/stage-0/outputs/instances.jsonl"
-  export PILOT_INSTANCE_IDS_FILE
-  export PILOT_FILE_KEYS_FILE
+  export SUBSET_INSTANCE_IDS_FILE
+  export SUBSET_FILE_KEYS_FILE
   export MAX_INSTANCES
   python - <<'PY'
 import json
@@ -161,8 +157,8 @@ import re
 from pathlib import Path
 
 src = Path(os.environ["STAGE0_INSTANCES_JSONL"])
-ids_path = Path(os.environ["PILOT_INSTANCE_IDS_FILE"])
-keys_path = Path(os.environ["PILOT_FILE_KEYS_FILE"])
+ids_path = Path(os.environ["SUBSET_INSTANCE_IDS_FILE"])
+keys_path = Path(os.environ["SUBSET_FILE_KEYS_FILE"])
 max_instances = int(os.environ["MAX_INSTANCES"])
 
 rows = []
@@ -172,13 +168,13 @@ with src.open("r", encoding="utf-8") as f:
         if line:
             rows.append(json.loads(line))
 
-pilot = rows[:max_instances]
+subset = rows[:max_instances]
 
-ids_path.write_text("\n".join(r["instance_id"] for r in pilot) + "\n", encoding="utf-8")
+ids_path.write_text("\n".join(r["instance_id"] for r in subset) + "\n", encoding="utf-8")
 
 seen = set()
 keys = []
-for r in pilot:
+for r in subset:
     raw = f"{r['repo']}__{r['file_path']}"
     key = re.sub(r"[^A-Za-z0-9_.-]", "_", raw)
     if key not in seen:
@@ -186,8 +182,8 @@ for r in pilot:
         keys.append(key)
 
 keys_path.write_text("\n".join(keys) + "\n", encoding="utf-8")
-print(f"Pilot instances: {len(pilot)}")
-print(f"Pilot unique file keys: {len(keys)}")
+print(f"Subset instances: {len(subset)}")
+print(f"Subset unique file keys: {len(keys)}")
 PY
 fi
 
@@ -202,8 +198,8 @@ TRAIN_ARGS=(
   --behavioral-epochs "$BEHAVIORAL_EPOCHS"
   --behavioral-lr-mult "$BEHAVIORAL_LR_MULT"
 )
-if [[ -n "$PILOT_FILE_KEYS_FILE" ]]; then
-  TRAIN_ARGS+=(--file-keys-file "$PILOT_FILE_KEYS_FILE")
+if [[ -n "$SUBSET_FILE_KEYS_FILE" ]]; then
+  TRAIN_ARGS+=(--file-keys-file "$SUBSET_FILE_KEYS_FILE")
 fi
 python scripts/train_oracle.py "${TRAIN_ARGS[@]}"
 
@@ -215,8 +211,8 @@ GEN_ARGS=(
   --temperature "$TEMPERATURE"
   --top-p "$TOP_P"
 )
-if [[ -n "$PILOT_INSTANCE_IDS_FILE" ]]; then
-  GEN_ARGS+=(--instance-ids-file "$PILOT_INSTANCE_IDS_FILE")
+if [[ -n "$SUBSET_INSTANCE_IDS_FILE" ]]; then
+  GEN_ARGS+=(--instance-ids-file "$SUBSET_INSTANCE_IDS_FILE")
 elif [[ -n "$MAX_INSTANCES" ]]; then
   GEN_ARGS+=(--max-instances "$MAX_INSTANCES")
 fi
@@ -234,8 +230,8 @@ CAP_ARGS=(--model-id "$MODEL_ID" --seed "$SEED")
 if [[ -n "$CAP_MAX_ADAPTERS" ]]; then
   CAP_ARGS+=(--max-adapters "$CAP_MAX_ADAPTERS")
 fi
-if [[ -n "$PILOT_FILE_KEYS_FILE" ]]; then
-  CAP_ARGS+=(--file-keys-file "$PILOT_FILE_KEYS_FILE")
+if [[ -n "$SUBSET_FILE_KEYS_FILE" ]]; then
+  CAP_ARGS+=(--file-keys-file "$SUBSET_FILE_KEYS_FILE")
 fi
 python scripts/capability_interference.py "${CAP_ARGS[@]}"
 

@@ -58,7 +58,7 @@ uv pip install 'torch>=2.7.0' transformers peft datasets accelerate bitsandbytes
 cd /home/seb/Developer/Classes/continual-learning/src
 source .venv/bin/activate
 cd stage-1
-bash scripts/run_stage1.sh --mode pilot
+bash scripts/run_stage1.sh --mode tiny
 ```
 
 - Pilot findings:
@@ -89,7 +89,7 @@ bash scripts/run_stage1.sh --mode pilot
 cd /home/seb/Developer/Classes/continual-learning/src
 source .venv/bin/activate
 cd stage-1
-bash scripts/run_stage1.sh --mode pilot
+bash scripts/run_stage1.sh --mode tiny
 ```
 
 - Pilot execution status:
@@ -172,7 +172,7 @@ python scripts/capability_interference.py --model-id Qwen/Qwen2.5-Coder-1.5B-Ins
     - skips adapters whose base model mismatches requested model id.
   - `scripts/run_stage1.sh`
     - added uv bootstrap if `src/.venv` missing.
-    - mode support now includes `tiny`, `small`, `full` (`pilot` kept as alias for `tiny`).
+    - mode support now includes `tiny`, `small`, `full`.
     - subset alignment generalized beyond pilot (shared subset files for training/generation/capability).
     - capability check now receives subset file-key filter.
 
@@ -414,3 +414,34 @@ python scripts/init_run_config.py --model-id Qwen/Qwen3-4B --mode small --seed 4
 
 - Observation:
   - run config now writes to `outputs/small.qwen-qwen3-4b/run_config.json`, confirming slug format is `mode<dot><model_slug>`.
+
+## Entry 2026-04-21 17
+
+- Objective: remove `pilot` mode alias entirely and keep only `tiny`, `small`, `full` in Stage 1.
+
+- Changes made:
+  - `scripts/run_stage1.sh`
+    - default mode changed from `pilot` to `tiny`.
+    - removed alias branch mapping `pilot -> tiny`.
+    - invalid-mode message now lists only `tiny|small|full`.
+    - renamed subset helper vars from `PILOT_*` to `SUBSET_*`.
+    - subset log prints now use neutral wording (`Subset ...`).
+  - `README.md`
+    - updated orchestration description to tiny/small/full.
+    - updated tiny example command to `--mode tiny`.
+    - removed alias statement.
+  - `NOTES.md`
+    - updated historical command snippets to use `--mode tiny`.
+    - updated mode-support note to remove alias language.
+
+- Validation run:
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src/stage-1
+bash -n scripts/run_stage1.sh
+python -m py_compile scripts/*.py
+```
+
+- Result:
+  - syntax checks passed.
+  - grep check confirms mode handling now lists only `tiny|small|full`.
