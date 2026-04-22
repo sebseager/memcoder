@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -89,8 +90,23 @@ def model_id_to_slug(model_id: str) -> str:
     return slug or "model"
 
 
-def get_stage1_paths(model_id: str = MODEL_ID) -> Stage1Paths:
-    model_root = OUTPUTS_ROOT_DIR / model_id_to_slug(model_id)
+def mode_to_slug(mode: str) -> str:
+    slug = re.sub(r"[^a-z0-9._-]+", "-", mode.strip().lower()).strip("-")
+    return slug
+
+
+def build_output_slug(model_id: str, mode: str | None = None) -> str:
+    model_slug = model_id_to_slug(model_id)
+    if mode is None:
+        mode = os.environ.get("STAGE1_MODE", "")
+    mode_slug = mode_to_slug(mode)
+    if mode_slug:
+        return f"{mode_slug}.{model_slug}"
+    return model_slug
+
+
+def get_stage1_paths(model_id: str = MODEL_ID, mode: str | None = None) -> Stage1Paths:
+    model_root = OUTPUTS_ROOT_DIR / build_output_slug(model_id, mode=mode)
     return Stage1Paths(
         root=model_root,
         oracle_lora=model_root / "oracle_loras",

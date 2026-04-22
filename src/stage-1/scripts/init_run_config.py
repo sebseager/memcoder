@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    paths = get_stage1_paths(args.model_id)
+    paths = get_stage1_paths(args.model_id, mode=args.mode)
     paths.root.mkdir(parents=True, exist_ok=True)
 
     run_config = build_run_config(

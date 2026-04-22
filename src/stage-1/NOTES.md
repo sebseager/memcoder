@@ -386,3 +386,31 @@ python -m py_compile scripts/*.py
 - Conclusion:
   - BRIDGE Step 1 pre-flight implementation is now in place in Stage 1 code.
   - Next execution step is the planned `small` run on `Qwen/Qwen3-4B` via `run_stage1.sh` to populate model-scoped B/C/D outputs and run the qualitative/quantitative gates.
+
+## Entry 2026-04-21 16
+
+- Objective: change Stage 1 output slug format from `<model-slug>` to `<mode>.<model-slug>`.
+
+- Changes made:
+  - `scripts/config.py`
+    - added `mode_to_slug(...)` and `build_output_slug(...)`.
+    - updated `get_stage1_paths(...)` to resolve output root as `outputs/<mode>.<model-slug>` when mode is provided or exported via `STAGE1_MODE`.
+  - `scripts/init_run_config.py`
+    - now passes `--mode` into `get_stage1_paths(...)` so run config writes to the same mode-scoped root.
+  - `scripts/run_stage1.sh`
+    - exports `STAGE1_MODE="$MODE"` for downstream Python scripts.
+    - updates shell slug construction to `mode.model_slug`.
+  - `README.md`
+    - output path docs updated to `<mode>.<model-slug>`.
+
+- Validation command:
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src
+source .venv/bin/activate
+cd stage-1
+python scripts/init_run_config.py --model-id Qwen/Qwen3-4B --mode small --seed 42
+```
+
+- Observation:
+  - run config now writes to `outputs/small.qwen-qwen3-4b/run_config.json`, confirming slug format is `mode<dot><model_slug>`.

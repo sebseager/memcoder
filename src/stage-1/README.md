@@ -56,13 +56,13 @@ bash scripts/run_stage1.sh --mode small
 
 ## Outputs
 
-Outputs are now model-scoped to avoid cross-model contamination:
+Outputs are now mode + model scoped to avoid cross-run contamination:
 
-- outputs/<model-slug>/run_config.json
-- outputs/<model-slug>/oracle_loras/
-- outputs/<model-slug>/completions/
-- outputs/<model-slug>/evaluation/
-- outputs/<model-slug>/analysis/
-- outputs/<model-slug>/capability/
-- outputs/<model-slug>/plots/
-- outputs/<model-slug>/logs/
+- outputs/<mode>.<model-slug>/run_config.json
+- outputs/<mode>.<model-slug>/oracle_loras/
+- outputs/<mode>.<model-slug>/completions/
+- outputs/<mode>.<model-slug>/evaluation/
+- outputs/<mode>.<model-slug>/analysis/
+- outputs/<mode>.<model-slug>/capability/
+- outputs/<mode>.<model-slug>/plots/
+- outputs/<mode>.<model-slug>/logs/

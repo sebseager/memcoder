@@ -114,14 +114,18 @@ else
 fi
 
 echo "Running Stage 1 mode=$MODE model=$MODEL_ID"
+export STAGE1_MODE="$MODE"
 
-MODEL_SLUG="$(python - <<'PY' "$MODEL_ID"
+MODEL_SLUG="$(python - <<'PY' "$MODE" "$MODEL_ID"
 import re
 import sys
 
-model_id = sys.argv[1]
-slug = re.sub(r"[^a-z0-9._-]+", "-", model_id.strip().lower()).strip("-")
-print(slug or "model")
+mode = sys.argv[1]
+model_id = sys.argv[2]
+mode_slug = re.sub(r"[^a-z0-9._-]+", "-", mode.strip().lower()).strip("-")
+model_slug = re.sub(r"[^a-z0-9._-]+", "-", model_id.strip().lower()).strip("-")
+model_slug = model_slug or "model"
+print(f"{mode_slug}.{model_slug}" if mode_slug else model_slug)
 PY
 )"
 MODEL_OUTPUT_DIR="outputs/${MODEL_SLUG}"
