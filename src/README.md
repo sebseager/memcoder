@@ -2,20 +2,28 @@
 
 ---
 
-### Stage 0 — Dataset Construction (Days 1–3)
+Stage 0 — Dataset Construction (Days 1–3)
 
-**Goal:** Build a contamination-safe completion dataset using RepoBench's task structure but fresh data.
+[REWRITTEN FROM EARLIER VERSION -- NOW USES SWEBENCH INSTEAD OF GITHUB SCRAPING]
 
-1. Query GitHub API for Python repos with first commit after November 2024, 50–500 stars, at least 20 Python files, actively maintained (last push within 60 days). Target 15–20 repos.
+Goal: Build a contamination-safe completion dataset from SWE-bench instances with pre-verified, executable test harnesses.
 
-2. For each repo, use tree-sitter to extract function-level completion instances. Keep only functions that satisfy all three of:
-   - Body references names defined elsewhere in the same file (class attributes, module-level constants, other functions) — this ensures truncation actually hurts
-   - Body is 10–80 lines (short enough to be a clean target, long enough to be non-trivial)
-   - The file containing it exceeds your truncation budget (2048 tokens) when fully read — this is the core experimental condition
+Source instances from SWE-bench Verified (not Lite). Filter to Python-only instances where the gold patch touches exactly one file — this keeps the completion target unambiguous and avoids multi-file entanglement confounding your LoRA attribution. Target 80–120 instances after filtering.
+Contamination cut. Drop any instance whose repo first-commit date falls before Qwen3-8B's estimated training cutoff (Oct 28, 2024). If this leaves no or few repos, stop and ask me what to do. Produce the contamination figure: plot cutoff as a horizontal line against issue dates. All retained instances should sit above it. Save this for the paper.
+Construct the completion instances. For each retained SWE-bench instance, the pre-patch state of the touched file is your input; the gold patch body gives you the ground-truth completion. Specifically:
 
-3. For each qualifying function, record: the full file, the masked version (signature only), the ground-truth body, and the cross-file context (other files imported). Target 80–120 instances total across your repos.
+Check out the repo at the pre-patch commit using the SWE-bench instance metadata
+Use tree-sitter to locate the function(s) modified by the gold patch within the touched file
+Keep only functions satisfying all three: body references names defined elsewhere in the same file (class attributes, module-level constants, other functions); body is 10–80 lines; the containing file exceeds 2048 tokens when fully read
+Record: the full pre-patch file, the masked version (signature only), the ground-truth body from the gold patch, and the cross-file context (imported files)
 
-4. Produce the contamination figure: plot Qwen3-8B's estimated cutoff as a horizontal line against each repo's first-commit date. All repos should sit above the line. Save this — it goes in the paper.
+
+Verify test harness executability upfront, before any model runs. For each instance, use the SWE-bench Docker harness to confirm that: (a) the pre-patch state produces a failing FAIL_TO_PASS test, and (b) applying the gold patch flips it to passing. Discard any instance where either check fails — environment issues, flaky tests, or gold patch errors will silently corrupt your results later and you want zero ambiguity in what passing means. This is the key advantage over scraping GitHub directly: you are curating from a set that has already been through human verification, and you are re-verifying executability yourself before committing to the instance.
+Define your evaluation contract now, once. Pass@1 means: complete the masked function, apply it as a patch to the pre-patch repo state using the same patch format SWE-bench uses, run the FAIL_TO_PASS tests via the Docker harness, record binary pass/fail. BLEU-4 is not a fallback metric here — if an instance lacks a runnable harness after Step 4, discard it rather than falling back to BLEU. Execution-based signal only. This contract carries through Stages 1–3 unchanged.
+Record instance metadata for later use: repo name, file path, pre-patch commit SHA, token count of the full file, FAIL_TO_PASS test IDs, and whether cross-file context was needed for the gold patch. The token count feeds directly into Stage 1's truncation analysis.
+
+
+The rest of the plan flows cleanly from this: Stage 1's conditions B/C/D run the same Docker harness, Stage 3 adds condition E, and the recovery ratio (E − B) / (C − B) is computed over binary pass/fail — which makes the primary claim much harder to dismiss. BLEU is a secondary metric only. The "close but wrong" failure mode you're worried about is exactly what execution-based eval catches that BLEU doesn't.
 
 ---
 
