@@ -66,14 +66,6 @@ def parse_args() -> argparse.Namespace:
         help="Keep only repos where first commit is after the cutoff",
     )
     parser.add_argument(
-        "--disable-relaxed-fallback",
-        action="store_true",
-        help=(
-            "Deprecated no-op retained for CLI compatibility; discovery now always "
-            "selects strictly by hard filters plus ranking"
-        ),
-    )
-    parser.add_argument(
         "--max-dependency-files",
         type=int,
         default=8,
@@ -540,8 +532,6 @@ def build_local_candidate_record(
     )
 
     record["passes_strict_filters"] = passes_strict
-    # Kept for backward compatibility with existing artifacts.
-    record["passes_relaxed_filters"] = passes_strict
     record["quality_score"] = quality_score(record)
     return record
 
@@ -575,19 +565,6 @@ def discover_local_fallback_candidates(
         if record is not None:
             records.append(record)
     return records
-
-
-def count_python_files(
-    session: requests.Session, owner: str, repo: str, ref: str
-) -> int:
-    url = f"{GITHUB_API}/repos/{owner}/{repo}/git/trees/{ref}"
-    payload, _ = request_json(session, url, params={"recursive": "1"})
-    entries = payload.get("tree", [])
-    return sum(
-        1
-        for entry in entries
-        if entry.get("path", "").endswith(".py") and entry.get("type") == "blob"
-    )
 
 
 def latest_commit_sha(
@@ -826,8 +803,6 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             )
 
             record["passes_strict_filters"] = passes_strict
-            # Kept for backward compatibility with existing artifacts.
-            record["passes_relaxed_filters"] = passes_strict
             record["quality_score"] = quality_score(record)
 
             raw_candidates.append(record)
@@ -867,7 +842,6 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
         reverse=True,
     )
     selected: list[dict[str, Any]] = strict_sorted[: cfg.target_repo_count]
-    selection_mode = "strict"
 
     for record in selected:
         record["selection_tier"] = "strict"
@@ -894,8 +868,6 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
         "stats": {
             "raw_candidate_count": len(raw_candidates),
             "strict_qualified_count": len(strict_qualified),
-            # Kept for backward compatibility with existing artifacts.
-            "relaxed_qualified_count": len(strict_qualified),
             "selected_count": len(selected),
             "strict_selected_count": strict_selected_count,
             "selected_with_service_dependency_flags": risky_selected_count,
@@ -903,8 +875,6 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_hard_excluded_candidate_count": runtime_hard_excluded_count,
             "runtime_profile_entries": len(runtime_profile),
             "local_fallback_candidate_count": len(local_fallback_candidates),
-            "selection_mode": selection_mode,
-            "fallback_used": False,
             "selected_meets_min_repo_target": len(selected) >= cfg.min_repo_count,
         },
         "selected_repos": selected,
@@ -918,11 +888,7 @@ def main() -> None:
     result = discover(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print(
-        "Wrote "
-        f"{len(result['selected_repos'])} selected repos to {args.output} "
-        f"(mode={result['stats']['selection_mode']})"
-    )
+    print(f"Wrote {len(result['selected_repos'])} selected repos to {args.output}")
 
 
 if __name__ == "__main__":
