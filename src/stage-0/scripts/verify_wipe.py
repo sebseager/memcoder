@@ -2,14 +2,9 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
-import os
-import re
 import subprocess
-import sys
 import time
-import warnings
 from collections import defaultdict
 from pathlib import Path
 
@@ -24,18 +19,6 @@ from config import (
     ensure_stage0_dirs,
 )
 from patch_utils import combine_patches
-
-try:
-    from requests.exceptions import RequestsDependencyWarning
-except Exception:  # noqa: BLE001
-    RequestsDependencyWarning = Warning
-
-warnings.filterwarnings("ignore", category=RequestsDependencyWarning)
-warnings.filterwarnings(
-    "ignore",
-    message=r"urllib3 .* doesn't match a supported version!",
-    category=Warning,
-)
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,52 +66,11 @@ def read_report(run_id: str, model_name: str, instance_id: str) -> dict | None:
     return payload.get(instance_id)
 
 
-def resolve_run_evaluation_entrypoint() -> str:
-    spec = importlib.util.find_spec("swebench.harness.run_evaluation")
-    if spec is None or not spec.origin:
-        raise RuntimeError(
-            "Could not locate swebench.harness.run_evaluation entrypoint"
-        )
-    return spec.origin
-
-
-def build_harness_env() -> dict[str, str]:
-    env = os.environ.copy()
-    # Keep harness output focused on execution status and test results.
-    env["PYTHONWARNINGS"] = "ignore"
-    env["HF_HUB_VERBOSITY"] = "error"
-    env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-    env["TRANSFORMERS_VERBOSITY"] = "error"
-    env["DATASETS_VERBOSITY"] = "error"
-    env["TOKENIZERS_PARALLELISM"] = "false"
-    env["NO_COLOR"] = "1"
-    return env
-
-
-NOISE_PATTERNS = [
-    re.compile(r"RequestsDependencyWarning"),
-    re.compile(r"-\s+httpx\s+-\s+INFO\s+-\s+HTTP Request:"),
-    re.compile(r"warnings\.warn\(\"urllib3"),
-]
-
-
-def emit_harness_output(stdout_text: str) -> None:
-    for raw_line in stdout_text.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        if any(pattern.search(line) for pattern in NOISE_PATTERNS):
-            continue
-        print(line)
-
-
 def main() -> None:
     args = parse_args()
     ensure_stage0_dirs()
 
     attempts = read_jsonl(Path(args.attempts_jsonl))
-    run_eval_entrypoint = resolve_run_evaluation_entrypoint()
-    harness_env = build_harness_env()
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in attempts:
         grouped[row["instance_id"]].append(row)
@@ -192,8 +134,9 @@ def main() -> None:
             write_jsonl(pred_path, predictions)
 
             cmd = [
-                sys.executable,
-                run_eval_entrypoint,
+                "python",
+                "-m",
+                "swebench.harness.run_evaluation",
                 "--dataset_name",
                 args.dataset_name,
                 "--predictions_path",
@@ -212,16 +155,7 @@ def main() -> None:
                 str(args.max_workers),
             ]
 
-            proc = subprocess.run(
-                cmd,
-                check=False,
-                env=harness_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            if proc.stdout:
-                emit_harness_output(proc.stdout)
+            proc = subprocess.run(cmd, check=False)
             run_exit = proc.returncode
 
             for attempt in batch_attempts:
