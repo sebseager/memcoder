@@ -16,10 +16,13 @@ INSTANCES_DIR = OUTPUTS_DIR / "instances"
 class Stage0Config:
     min_stars: int = 20
     max_stars: int | None = None
-    min_python_files: int = 20
+    min_python_files: int = 10
+    max_python_files: int = 300
+    max_repo_size_kb: int = 30_000
     target_repo_count: int = 20
     min_repo_count: int = 15
     first_commit_cutoff: date = date(2024, 10, 28)
+    blacklisted_repos: tuple[str, ...] = ("jimmc414/Kosmos",)
     env_python_version: str = "3.12"
     baseline_runtime_limit_seconds: float = 120.0
     baseline_error_limit: int = 5
@@ -49,9 +52,12 @@ def config_as_json_dict(cfg: Stage0Config) -> dict[str, Any]:
         "min_stars": cfg.min_stars,
         "max_stars": cfg.max_stars,
         "min_python_files": cfg.min_python_files,
+        "max_python_files": cfg.max_python_files,
+        "max_repo_size_kb": cfg.max_repo_size_kb,
         "target_repo_count": cfg.target_repo_count,
         "min_repo_count": cfg.min_repo_count,
         "first_commit_cutoff": cfg.first_commit_cutoff.isoformat(),
+        "blacklisted_repos": list(cfg.blacklisted_repos),
         "env_python_version": cfg.env_python_version,
         "baseline_runtime_limit_seconds": cfg.baseline_runtime_limit_seconds,
         "baseline_error_limit": cfg.baseline_error_limit,
