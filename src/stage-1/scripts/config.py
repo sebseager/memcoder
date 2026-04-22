@@ -12,9 +12,6 @@ STAGE0_DIR = SRC_DIR / "stage-0"
 # Inputs from Stage 0
 INSTANCES_JSONL = STAGE0_DIR / "outputs" / "instances.jsonl"
 INSTANCES_ARTIFACTS_DIR = STAGE0_DIR / "outputs" / "instances"
-PREBUILT_IMAGE_MANIFEST = (
-    STAGE0_DIR / "outputs" / "prebuilt_images" / "image_manifest.json"
-)
 
 # Outputs
 OUTPUTS_ROOT_DIR = STAGE1_DIR / "outputs"
@@ -49,9 +46,6 @@ ORACLE_MIN_EPOCHS = 2
 ORACLE_MAX_EPOCHS = 8
 ORACLE_PATIENCE = 2
 ORACLE_MIN_CHUNK_TOKENS = 64
-BEHAVIORAL_PROBES = 5
-BEHAVIORAL_EPOCHS = 1
-BEHAVIORAL_LR_MULT = 0.5
 
 # Generation defaults
 TRUNCATION_BUDGET_TOKENS = 2048

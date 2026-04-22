@@ -3,9 +3,6 @@ from __future__ import annotations
 import argparse
 
 from config import (
-    BEHAVIORAL_EPOCHS,
-    BEHAVIORAL_LR_MULT,
-    BEHAVIORAL_PROBES,
     MAX_NEW_TOKENS,
     MODEL_ID,
     ORACLE_CHUNK_SIZE,
@@ -24,9 +21,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--trunc-budget", type=int, default=TRUNCATION_BUDGET_TOKENS)
     p.add_argument("--chunk-size", type=int, default=ORACLE_CHUNK_SIZE)
-    p.add_argument("--behavioral-probes", type=int, default=BEHAVIORAL_PROBES)
-    p.add_argument("--behavioral-epochs", type=int, default=BEHAVIORAL_EPOCHS)
-    p.add_argument("--behavioral-lr-mult", type=float, default=BEHAVIORAL_LR_MULT)
+    p.add_argument("--behavioral-probes", type=int, default=0)
+    p.add_argument("--behavioral-epochs", type=int, default=1)
+    p.add_argument("--behavioral-lr-mult", type=float, default=0.5)
     p.add_argument("--max-new-tokens", type=int, default=MAX_NEW_TOKENS)
     p.add_argument("--temperature", type=float, default=TEMPERATURE)
     p.add_argument("--top-p", type=float, default=TOP_P)

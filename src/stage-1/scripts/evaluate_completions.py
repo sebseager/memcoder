@@ -5,8 +5,6 @@ import ast
 import json
 import math
 import re
-import shlex
-import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -20,7 +18,6 @@ from config import (
     INSTANCES_JSONL,
     LOW_GAP_BLEU_THRESHOLD,
     MODEL_ID,
-    PREBUILT_IMAGE_MANIFEST,
     STAGE0_DIR,
     get_stage1_paths,
 )
@@ -194,10 +191,6 @@ def module_candidates_for_file(file_path: str) -> list[str]:
     return sorted(x for x in candidates if x)
 
 
-def normalize_repo_key(repo_name: str) -> str:
-    return repo_name.strip().lower().replace("__", "/")
-
-
 class PassAtOneExecutor:
     def __init__(
         self,
@@ -207,25 +200,16 @@ class PassAtOneExecutor:
         instances: dict[str, InstanceMeta],
         test_timeout_seconds: int,
         max_relevant_tests: int,
-        docker_image_manifest: Path | None,
     ) -> None:
         self.mode = mode
         self.repos_root = repos_root
         self.instances = instances
         self.test_timeout_seconds = max(1, int(test_timeout_seconds))
         self.max_relevant_tests = max(1, int(max_relevant_tests))
-        self.docker_image_manifest = docker_image_manifest
 
         self._repo_tests_cache: dict[str, list[str]] = {}
         self._test_text_cache: dict[tuple[str, str], str] = {}
         self._selection_cache: dict[tuple[str, str, str], list[str]] = {}
-        self._docker_image_local_cache: dict[str, bool] = {}
-
-        self._docker_available = shutil.which("docker") is not None
-        (
-            self._docker_repo_to_images,
-            self._docker_recommended_image_by_repo,
-        ) = self._load_docker_manifest(docker_image_manifest)
 
     def _fallback(self, exact_match: int, status: str) -> PassAtOneResult:
         return PassAtOneResult(
@@ -234,51 +218,6 @@ class PassAtOneExecutor:
             status=status,
             selected_test_count=0,
         )
-
-    def _load_docker_manifest(
-        self,
-        manifest_path: Path | None,
-    ) -> tuple[dict[str, list[str]], dict[str, str]]:
-        repo_to_images: dict[str, list[str]] = {}
-        recommended: dict[str, str] = {}
-
-        if manifest_path is None or not manifest_path.exists():
-            return repo_to_images, recommended
-
-        try:
-            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return repo_to_images, recommended
-
-        if isinstance(payload.get("repo_to_images"), dict):
-            for repo, tags in payload["repo_to_images"].items():
-                key = normalize_repo_key(str(repo))
-                if not key:
-                    continue
-                norm_tags = [str(tag) for tag in tags if isinstance(tag, str)]
-                if norm_tags:
-                    repo_to_images[key] = norm_tags
-
-        if isinstance(payload.get("images"), list):
-            for item in payload["images"]:
-                if not isinstance(item, dict):
-                    continue
-                repo = normalize_repo_key(str(item.get("github_repo", "")))
-                tag = str(item.get("image_tag", ""))
-                if not repo or not tag:
-                    continue
-                repo_to_images.setdefault(repo, [])
-                if tag not in repo_to_images[repo]:
-                    repo_to_images[repo].append(tag)
-
-        if isinstance(payload.get("recommended_image_tag_by_repo"), dict):
-            for repo, tag in payload["recommended_image_tag_by_repo"].items():
-                repo_key = normalize_repo_key(str(repo))
-                tag_value = str(tag)
-                if repo_key and tag_value:
-                    recommended[repo_key] = tag_value
-
-        return repo_to_images, recommended
 
     def _list_repo_tests(self, repo_name: str) -> list[str]:
         cached = self._repo_tests_cache.get(repo_name)
@@ -367,170 +306,10 @@ class PassAtOneExecutor:
             if score > 0:
                 scored.append((score, rel_path))
 
-        if scored:
-            scored.sort(key=lambda x: (-x[0], x[1]))
-            selected = [rel for _, rel in scored[: self.max_relevant_tests]]
-        else:
-            # If heuristic scoring misses everything, still run a bounded smoke subset.
-            selected = tests[: self.max_relevant_tests]
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        selected = [rel for _, rel in scored[: self.max_relevant_tests]]
         self._selection_cache[cache_key] = selected
         return selected
-
-    def _resolve_docker_image_tag(self, repo_name: str) -> str:
-        repo_key = normalize_repo_key(repo_name)
-        if not repo_key:
-            return ""
-
-        recommended = self._docker_recommended_image_by_repo.get(repo_key)
-        if recommended:
-            return recommended
-
-        tags = self._docker_repo_to_images.get(repo_key, [])
-        if not tags:
-            return ""
-        return tags[0]
-
-    def _docker_image_exists_locally(self, image_tag: str) -> bool:
-        cached = self._docker_image_local_cache.get(image_tag)
-        if cached is not None:
-            return cached
-
-        proc = subprocess.run(
-            ["docker", "image", "inspect", image_tag],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        exists = proc.returncode == 0
-        self._docker_image_local_cache[image_tag] = exists
-        return exists
-
-    def _run_host_pytest(
-        self,
-        *,
-        repo_root: Path,
-        selected_tests: list[str],
-        exact_match: int,
-    ) -> PassAtOneResult:
-        try:
-            proc = subprocess.run(
-                [sys.executable, "-m", "pytest", "-q", "-x", *selected_tests],
-                cwd=repo_root,
-                text=True,
-                capture_output=True,
-                timeout=self.test_timeout_seconds,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return PassAtOneResult(
-                pass_at_1=0,
-                source="executed",
-                status="timeout",
-                selected_test_count=len(selected_tests),
-            )
-
-        if proc.returncode == 0:
-            return PassAtOneResult(
-                pass_at_1=1,
-                source="executed",
-                status="passed",
-                selected_test_count=len(selected_tests),
-            )
-        if proc.returncode == 1:
-            return PassAtOneResult(
-                pass_at_1=0,
-                source="executed",
-                status="failed",
-                selected_test_count=len(selected_tests),
-            )
-        if proc.returncode == 5:
-            return self._fallback(exact_match, "no_tests_collected")
-        return self._fallback(exact_match, f"pytest_error_{proc.returncode}")
-
-    def _run_docker_pytest(
-        self,
-        *,
-        repo_name: str,
-        repo_root: Path,
-        selected_tests: list[str],
-        exact_match: int,
-    ) -> PassAtOneResult:
-        if not self._docker_available:
-            return self._fallback(exact_match, "docker_cli_unavailable")
-
-        if (
-            self.docker_image_manifest is None
-            or not self.docker_image_manifest.exists()
-        ):
-            return self._fallback(exact_match, "missing_docker_image_manifest")
-
-        image_tag = self._resolve_docker_image_tag(repo_name)
-        if not image_tag:
-            return self._fallback(exact_match, "missing_repo_image_mapping")
-
-        if not self._docker_image_exists_locally(image_tag):
-            return self._fallback(exact_match, "docker_image_not_local")
-
-        selected_tests_quoted = " ".join(shlex.quote(test) for test in selected_tests)
-        cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "--network",
-            "none",
-            "-v",
-            f"{repo_root.resolve()}:/testbed",
-            "-w",
-            "/testbed",
-            image_tag,
-            "/bin/bash",
-            "-lc",
-            (
-                "if [ -f /opt/miniconda3/bin/activate ]; then "
-                "source /opt/miniconda3/bin/activate && "
-                "conda activate testbed >/dev/null 2>&1 || true; "
-                "fi; "
-                f"python -m pytest -q -x {selected_tests_quoted}"
-            ),
-        ]
-
-        try:
-            proc = subprocess.run(
-                cmd,
-                text=True,
-                capture_output=True,
-                timeout=self.test_timeout_seconds,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return PassAtOneResult(
-                pass_at_1=0,
-                source="executed",
-                status="docker_timeout",
-                selected_test_count=len(selected_tests),
-            )
-
-        if proc.returncode == 0:
-            return PassAtOneResult(
-                pass_at_1=1,
-                source="executed",
-                status="passed",
-                selected_test_count=len(selected_tests),
-            )
-        if proc.returncode == 1:
-            return PassAtOneResult(
-                pass_at_1=0,
-                source="executed",
-                status="failed",
-                selected_test_count=len(selected_tests),
-            )
-        if proc.returncode == 5:
-            return self._fallback(exact_match, "no_tests_collected")
-        if proc.returncode >= 125:
-            return self._fallback(
-                exact_match, f"docker_runtime_error_{proc.returncode}"
-            )
-        return self._fallback(exact_match, f"pytest_error_{proc.returncode}")
 
     def _build_patched_function(
         self,
@@ -578,9 +357,6 @@ class PassAtOneExecutor:
                 selected_test_count=0,
             )
 
-        if self.mode not in {"pytest_heuristic", "docker_pytest"}:
-            return self._fallback(exact_match, "unsupported_pass_mode")
-
         if not syntax_valid:
             return PassAtOneResult(
                 pass_at_1=0,
@@ -625,23 +401,42 @@ class PassAtOneExecutor:
 
         target_file.write_text(patched_text, encoding="utf-8")
         try:
-            if self.mode == "docker_pytest":
-                result = self._run_docker_pytest(
-                    repo_name=repo_name,
-                    repo_root=repo_root,
-                    selected_tests=selected_tests,
-                    exact_match=exact_match,
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", "pytest", "-q", "-x", *selected_tests],
+                    cwd=repo_root,
+                    text=True,
+                    capture_output=True,
+                    timeout=self.test_timeout_seconds,
+                    check=False,
                 )
-            else:
-                result = self._run_host_pytest(
-                    repo_root=repo_root,
-                    selected_tests=selected_tests,
-                    exact_match=exact_match,
+            except subprocess.TimeoutExpired:
+                return PassAtOneResult(
+                    pass_at_1=0,
+                    source="executed",
+                    status="timeout",
+                    selected_test_count=len(selected_tests),
                 )
         finally:
             target_file.write_text(original_text, encoding="utf-8")
 
-        return result
+        if proc.returncode == 0:
+            return PassAtOneResult(
+                pass_at_1=1,
+                source="executed",
+                status="passed",
+                selected_test_count=len(selected_tests),
+            )
+        if proc.returncode == 1:
+            return PassAtOneResult(
+                pass_at_1=0,
+                source="executed",
+                status="failed",
+                selected_test_count=len(selected_tests),
+            )
+        if proc.returncode == 5:
+            return self._fallback(exact_match, "no_tests_collected")
+        return self._fallback(exact_match, f"pytest_error_{proc.returncode}")
 
 
 def evaluate_condition(
@@ -743,12 +538,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model-id", default=MODEL_ID)
     p.add_argument(
         "--pass-at-1-mode",
-        choices=["docker_pytest", "pytest_heuristic", "exact_only"],
-        default="docker_pytest",
-        help=(
-            "How to compute pass@1: dockerized pytest execution, host pytest heuristic, "
-            "or exact-match-only fallback."
-        ),
+        choices=["pytest_heuristic", "exact_only"],
+        default="pytest_heuristic",
+        help="How to compute pass@1: targeted pytest execution or exact-match-only fallback.",
     )
     p.add_argument(
         "--test-timeout-seconds",
@@ -773,12 +565,6 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=STAGE0_DIR / "data" / "repos",
         help="Root directory containing cloned Stage 0 repos.",
-    )
-    p.add_argument(
-        "--docker-image-manifest",
-        type=Path,
-        default=PREBUILT_IMAGE_MANIFEST,
-        help="Path to the Stage 0 prebuilt image manifest.",
     )
     p.add_argument("--low-gap-threshold", type=float, default=LOW_GAP_BLEU_THRESHOLD)
     p.add_argument(
@@ -844,7 +630,6 @@ def main() -> int:
         instances=instance_meta,
         test_timeout_seconds=args.test_timeout_seconds,
         max_relevant_tests=args.max_relevant_tests,
-        docker_image_manifest=args.docker_image_manifest,
     )
 
     conds = CONDITIONS if args.condition == "all" else [args.condition]

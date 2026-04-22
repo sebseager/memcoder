@@ -6,17 +6,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT_ROOT = ROOT.parents[1]
 DATA_DIR = ROOT / "data"
 REPOS_DIR = DATA_DIR / "repos"
 OUTPUTS_DIR = ROOT / "outputs"
 INSTANCES_DIR = OUTPUTS_DIR / "instances"
-PREBUILT_IMAGES_DIR = OUTPUTS_DIR / "prebuilt_images"
-PREBUILT_IMAGE_INSTANCES_DIR = PREBUILT_IMAGES_DIR / "instances"
-PREBUILT_IMAGE_MANIFEST = PREBUILT_IMAGES_DIR / "image_manifest.json"
-
-EXPERIMENTS_DIR = PROJECT_ROOT / "experiments"
-EXPERIMENTS_BUILD_IMAGES_DIR = EXPERIMENTS_DIR / "logs" / "build_images" / "instances"
 
 
 @dataclass(frozen=True)
@@ -64,12 +57,5 @@ def config_as_json_dict(cfg: Stage0Config) -> dict[str, Any]:
 
 
 def ensure_stage_dirs() -> None:
-    for path in (
-        DATA_DIR,
-        REPOS_DIR,
-        OUTPUTS_DIR,
-        INSTANCES_DIR,
-        PREBUILT_IMAGES_DIR,
-        PREBUILT_IMAGE_INSTANCES_DIR,
-    ):
+    for path in (DATA_DIR, REPOS_DIR, OUTPUTS_DIR, INSTANCES_DIR):
         path.mkdir(parents=True, exist_ok=True)
