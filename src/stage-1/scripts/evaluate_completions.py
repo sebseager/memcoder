@@ -126,7 +126,21 @@ def syntax_is_valid(masked_function: str, body: str) -> bool:
         ast.parse(src)
         return True
     except SyntaxError:
-        return False
+        pass
+
+    # Methods/classes can carry leading indentation in `masked_function`.
+    # Parse again in a wrapper scope so valid indented signatures aren't
+    # mislabeled as syntax-invalid due to top-level "unexpected indent".
+    first_line = signature.splitlines()[0] if signature else ""
+    if first_line.startswith((" ", "\t")):
+        wrapped_src = "class _Stage1SyntaxWrapper:\n" + src + "\n"
+        try:
+            ast.parse(wrapped_src)
+            return True
+        except SyntaxError:
+            return False
+
+    return False
 
 
 def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:

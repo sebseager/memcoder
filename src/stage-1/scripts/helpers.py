@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import random
 import re
 from dataclasses import dataclass
@@ -461,7 +462,19 @@ def generate_text(
     return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
 
-def normalize_body_prediction(raw_text: str) -> str:
+def _target_body_indent(masked_function: str | None) -> str:
+    if not masked_function:
+        return "    "
+    lines = masked_function.splitlines()
+    if not lines:
+        return "    "
+    last = lines[-1]
+    if last.strip() == "pass":
+        return _line_indent(last) or "    "
+    return "    "
+
+
+def normalize_body_prediction(raw_text: str, masked_function: str | None = None) -> str:
     text = raw_text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n", "", text)
@@ -476,16 +489,25 @@ def normalize_body_prediction(raw_text: str) -> str:
     while lines and lines[0].strip().lower().startswith(("assistant", "here is")):
         lines = lines[1:]
 
-    # Ensure body indentation exists.
+    # Reindent to the body level implied by the masked function while preserving
+    # relative indentation within the generated snippet.
+    target_indent = _target_body_indent(masked_function)
+    indents = [_line_indent(line) for line in lines if line.strip()]
+    common_indent = ""
+    if indents:
+        common_indent = indents[0]
+        for indent in indents[1:]:
+            common_indent = os.path.commonprefix([common_indent, indent])
+
     norm = []
     for line in lines:
         if not line.strip():
             norm.append("")
             continue
-        if line.startswith("    "):
-            norm.append(line.rstrip())
-        else:
-            norm.append(f"    {line.rstrip()}")
+        trimmed = line
+        if common_indent and line.startswith(common_indent):
+            trimmed = line[len(common_indent) :]
+        norm.append(f"{target_indent}{trimmed.rstrip()}")
     return "\n".join(norm).rstrip()
 
 

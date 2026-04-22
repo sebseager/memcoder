@@ -188,7 +188,10 @@ def main() -> int:
             temperature=args.temperature,
             top_p=args.top_p,
         )
-        pred_body = normalize_body_prediction(raw)
+        pred_body = normalize_body_prediction(
+            raw,
+            masked_function=inst["masked_function"],
+        )
         raw_token_ids = tokenizer.encode(raw, add_special_tokens=False)
         generated_token_count = len(raw_token_ids)
         first_5_ids = raw_token_ids[:5]
