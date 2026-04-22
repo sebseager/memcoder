@@ -3,8 +3,14 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
+import shutil
+import subprocess
+import time
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import UTC, datetime
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +19,6 @@ from config import (
     DEFAULT_CONFIG,
     INSTANCES_DIR,
     OUTPUTS_DIR,
-    REPOS_DIR,
     config_as_json_dict,
     ensure_stage_dirs,
 )
@@ -23,6 +28,12 @@ from tree_sitter_languages import get_parser
 ENCODING = tiktoken.get_encoding("cl100k_base")
 PARSER = get_parser("python")
 SKIP_PATH_PARTS = {".git", ".venv", "venv", "node_modules", "__pycache__"}
+SUMMARY_COUNT_PATTERNS = {
+    "passed": re.compile(r"(?P<count>\d+)\s+passed"),
+    "failed": re.compile(r"(?P<count>\d+)\s+failed"),
+    "errors": re.compile(r"(?P<count>\d+)\s+error"),
+    "skipped": re.compile(r"(?P<count>\d+)\s+skipped"),
+}
 
 
 class AssignedNameCollector(ast.NodeVisitor):
@@ -99,6 +110,16 @@ def parse_args() -> argparse.Namespace:
         default=OUTPUTS_DIR / "repo_candidates.json",
     )
     parser.add_argument(
+        "--env-setup",
+        type=Path,
+        default=OUTPUTS_DIR / "env_setup.json",
+    )
+    parser.add_argument(
+        "--test-coverage",
+        type=Path,
+        default=OUTPUTS_DIR / "test_coverage.json",
+    )
+    parser.add_argument(
         "--output-jsonl",
         type=Path,
         default=OUTPUTS_DIR / "instances.jsonl",
@@ -113,6 +134,24 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Optional cap to process fewer cloned repos",
+    )
+    parser.add_argument(
+        "--max-candidates-per-repo",
+        type=int,
+        default=DEFAULT_CONFIG.max_candidates_per_repo,
+        help="Cap expensive per-function testability checks per repo (0 means no cap)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, min(cpu_count(), 4)),
+        help="Number of repo-level workers for expensive testability checks",
+    )
+    parser.add_argument(
+        "--pytest-timeout-seconds",
+        type=int,
+        default=240,
+        help="Hard timeout per pytest invocation during candidate scoring",
     )
     return parser.parse_args()
 
@@ -191,7 +230,7 @@ def references_file_internal_symbol(
 
 def signature_and_body_from_node(
     file_text: str, node: Node
-) -> tuple[str, str, int] | None:
+) -> tuple[str, str, int, int, int, str] | None:
     body_node = node.child_by_field_name("body")
     if body_node is None:
         return None
@@ -220,7 +259,7 @@ def signature_and_body_from_node(
     body = "\n".join(body_lines).rstrip()
     masked = f"{signature}\n{indent}pass"
     body_line_count = len(body_lines)
-    return masked, body, body_line_count
+    return masked, body, body_line_count, body_start_line, end_line, indent
 
 
 def resolve_module_to_files(repo_root: Path, module: str) -> list[str]:
@@ -236,9 +275,17 @@ def resolve_module_to_files(repo_root: Path, module: str) -> list[str]:
 
 
 def analyze_file(
-    repo_name: str, repo_root: Path, file_path: Path, file_index: int
+    repo_name: str,
+    repo_local_name: str,
+    repo_root: Path,
+    file_path: Path,
+    file_index: int,
 ) -> list[dict[str, Any]]:
-    text = file_path.read_text(encoding="utf-8", errors="ignore")
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+
     if token_count(text) <= DEFAULT_CONFIG.truncation_token_budget:
         return []
 
@@ -280,7 +327,9 @@ def analyze_file(
         extracted = signature_and_body_from_node(text, node)
         if extracted is None:
             continue
-        masked, body, body_lines = extracted
+        masked, body, body_lines, body_start_line, body_end_line, body_indent = (
+            extracted
+        )
 
         if (
             body_lines < DEFAULT_CONFIG.min_body_lines
@@ -294,15 +343,19 @@ def analyze_file(
         if not has_external_refs:
             continue
 
-        instance_id = f"{repo_name}__{file_index:04d}__{fn_counter:03d}"
+        instance_id = f"{repo_local_name}__{file_index:04d}__{fn_counter:03d}"
         results.append(
             {
                 "instance_id": instance_id,
                 "repo": repo_name,
+                "repo_local_name": repo_local_name,
                 "file_path": relative_path,
                 "function_name": fn_name,
                 "start_line": fn_start,
                 "end_line": fn_end,
+                "body_start_line": body_start_line,
+                "body_end_line": body_end_line,
+                "body_indent": body_indent,
                 "body_line_count": body_lines,
                 "file_token_count": token_count(text),
                 "referenced_file_symbols": ref_names,
@@ -316,8 +369,352 @@ def analyze_file(
     return results
 
 
+def parse_summary_counts(stdout: str, stderr: str) -> dict[str, int]:
+    blob = f"{stdout}\n{stderr}"
+    counts: dict[str, int] = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
+    for key, pattern in SUMMARY_COUNT_PATTERNS.items():
+        match = pattern.search(blob)
+        if match:
+            counts[key] = int(match.group("count"))
+    return counts
+
+
+def testcase_node_id(test_case: ET.Element) -> str:
+    name = test_case.attrib.get("name", "unknown")
+    file_path = test_case.attrib.get("file")
+    class_name = test_case.attrib.get("classname")
+    if file_path:
+        return f"{file_path}::{name}"
+    if class_name:
+        return f"{class_name}::{name}"
+    return name
+
+
+def parse_junit_report(report_path: Path) -> dict[str, Any]:
+    if not report_path.exists():
+        return {
+            "passed_tests": [],
+            "failed_tests": [],
+            "error_tests": [],
+            "skipped_tests": [],
+            "all_tests": [],
+            "outcome_by_test": {},
+            "had_report": False,
+        }
+
+    tree = ET.parse(report_path)
+    root = tree.getroot()
+
+    passed: set[str] = set()
+    failed: set[str] = set()
+    errored: set[str] = set()
+    skipped: set[str] = set()
+    outcome_by_test: dict[str, str] = {}
+
+    for test_case in root.iter("testcase"):
+        node_id = testcase_node_id(test_case)
+        has_failure = any(child.tag.endswith("failure") for child in test_case)
+        has_error = any(child.tag.endswith("error") for child in test_case)
+        has_skipped = any(child.tag.endswith("skipped") for child in test_case)
+
+        if has_error:
+            errored.add(node_id)
+            outcome_by_test[node_id] = "error"
+        elif has_failure:
+            failed.add(node_id)
+            outcome_by_test[node_id] = "failed"
+        elif has_skipped:
+            skipped.add(node_id)
+            outcome_by_test[node_id] = "skipped"
+        else:
+            passed.add(node_id)
+            outcome_by_test[node_id] = "passed"
+
+    all_tests = sorted(passed | failed | errored | skipped)
+    return {
+        "passed_tests": sorted(passed),
+        "failed_tests": sorted(failed),
+        "error_tests": sorted(errored),
+        "skipped_tests": sorted(skipped),
+        "all_tests": all_tests,
+        "outcome_by_test": outcome_by_test,
+        "had_report": True,
+    }
+
+
+def run_repo_pytest(
+    repo_root: Path,
+    pytest_bin: Path,
+    junit_path: Path,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    if junit_path.exists():
+        junit_path.unlink()
+
+    command = [
+        str(pytest_bin),
+        "--tb=no",
+        "-q",
+        "--timeout=30",
+        "--ignore=tests/integration",
+        "--ignore=tests/e2e",
+        "-x",
+        f"--junitxml={junit_path}",
+    ]
+
+    started = time.monotonic()
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+        exit_code = int(completed.returncode)
+        stdout = completed.stdout
+        stderr = completed.stderr
+        timed_out = False
+    except subprocess.TimeoutExpired as exc:
+        exit_code = 124
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        timed_out = True
+
+    runtime_seconds = time.monotonic() - started
+
+    parsed = parse_junit_report(junit_path)
+    passed_tests = parsed["passed_tests"]
+    failed_tests = parsed["failed_tests"]
+    error_tests = parsed["error_tests"]
+    skipped_tests = parsed["skipped_tests"]
+    all_tests = parsed["all_tests"]
+    outcome_by_test = parsed["outcome_by_test"]
+    used_summary_fallback = False
+
+    if not parsed["had_report"]:
+        summary_counts = parse_summary_counts(stdout, stderr)
+        used_summary_fallback = True
+        pass_count = summary_counts["passed"]
+        fail_count = summary_counts["failed"]
+        error_count = summary_counts["errors"]
+        skipped_count = summary_counts["skipped"]
+    else:
+        pass_count = len(passed_tests)
+        fail_count = len(failed_tests)
+        error_count = len(error_tests)
+        skipped_count = len(skipped_tests)
+
+    return {
+        "exit_code": exit_code,
+        "runtime_seconds": round(runtime_seconds, 3),
+        "timed_out": timed_out,
+        "passed_tests": passed_tests,
+        "failed_tests": failed_tests,
+        "error_tests": error_tests,
+        "skipped_tests": skipped_tests,
+        "all_tests": all_tests,
+        "outcome_by_test": outcome_by_test,
+        "pass_count": pass_count,
+        "fail_count": fail_count,
+        "error_count": error_count,
+        "skipped_count": skipped_count,
+        "used_summary_fallback": used_summary_fallback,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
+    }
+
+
+def replace_body_lines(
+    full_text: str,
+    body_start_line: int,
+    body_end_line: int,
+    replacement_lines: list[str],
+) -> str:
+    lines = full_text.splitlines()
+    prefix = lines[: body_start_line - 1]
+    suffix = lines[body_end_line:]
+    rebuilt = prefix + replacement_lines + suffix
+    rebuilt_text = "\n".join(rebuilt)
+    if full_text.endswith("\n"):
+        rebuilt_text += "\n"
+    return rebuilt_text
+
+
+def evaluate_candidate_testability(
+    repo_task: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    repo_root = Path(repo_task["repo_path"])
+    pytest_bin = Path(repo_task["pytest_bin"])
+    target_file = repo_root / candidate["file_path"]
+    report_dir = repo_root / ".stage0_candidate_reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    original_text = candidate["full_file"]
+    masked_body_line = f"{candidate['body_indent']}pass"
+    masked_text = replace_body_lines(
+        original_text,
+        candidate["body_start_line"],
+        candidate["body_end_line"],
+        [masked_body_line],
+    )
+    ground_truth_text = replace_body_lines(
+        original_text,
+        candidate["body_start_line"],
+        candidate["body_end_line"],
+        candidate["ground_truth_body"].splitlines(),
+    )
+
+    masked_report = report_dir / f"{candidate['instance_id']}_masked.xml"
+    restored_report = report_dir / f"{candidate['instance_id']}_gt.xml"
+
+    masked_result: dict[str, Any] = {}
+    restored_result: dict[str, Any] = {}
+    try:
+        target_file.write_text(masked_text, encoding="utf-8")
+        masked_result = run_repo_pytest(
+            repo_root,
+            pytest_bin,
+            masked_report,
+            timeout_seconds=int(repo_task["pytest_timeout_seconds"]),
+        )
+
+        target_file.write_text(ground_truth_text, encoding="utf-8")
+        restored_result = run_repo_pytest(
+            repo_root,
+            pytest_bin,
+            restored_report,
+            timeout_seconds=int(repo_task["pytest_timeout_seconds"]),
+        )
+    finally:
+        target_file.write_text(original_text, encoding="utf-8")
+
+    excluded_tests = set(repo_task["baseline_excluded_tests"])
+    before_pass = set(masked_result.get("passed_tests", [])) - excluded_tests
+    after_pass = set(restored_result.get("passed_tests", [])) - excluded_tests
+    gt_patch_test_delta = len(after_pass - before_pass)
+
+    all_tests = (
+        set(masked_result.get("all_tests", []))
+        | set(restored_result.get("all_tests", []))
+    ) - excluded_tests
+    masked_outcomes = masked_result.get("outcome_by_test", {})
+    restored_outcomes = restored_result.get("outcome_by_test", {})
+    affected_tests = sorted(
+        test_id
+        for test_id in all_tests
+        if masked_outcomes.get(test_id, "not_run")
+        != restored_outcomes.get(test_id, "not_run")
+    )
+
+    testable = gt_patch_test_delta > 0
+    if masked_result.get("exit_code") == 2 or restored_result.get("exit_code") == 2:
+        testable = False
+
+    candidate = dict(candidate)
+    candidate.update(
+        {
+            "affected_tests": affected_tests,
+            "gt_patch_test_delta": gt_patch_test_delta,
+            "testable": testable,
+            "masked_test_exit_code": masked_result.get("exit_code"),
+            "masked_test_runtime_seconds": masked_result.get("runtime_seconds"),
+            "restored_test_exit_code": restored_result.get("exit_code"),
+            "restored_test_runtime_seconds": restored_result.get("runtime_seconds"),
+            "baseline_pass_count": repo_task["baseline_pass_count"],
+            "baseline_fail_count": repo_task["baseline_fail_count"],
+            "baseline_runtime_seconds": repo_task["baseline_runtime_seconds"],
+            "env_python": f"{DEFAULT_CONFIG.env_python_version}.x",
+            "env_install_method": repo_task["env_install_method"],
+            "repo_weight": repo_task.get("repo_weight", 1.0),
+            "selection_tier": repo_task.get("selection_tier", "strict"),
+        }
+    )
+    return candidate
+
+
+def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
+    repo_name = repo_task["full_name"]
+    repo_local_name = repo_task["local_name"]
+    repo_root = Path(repo_task["repo_path"])
+
+    if not repo_root.exists():
+        return {
+            "repo": repo_name,
+            "repo_local_name": repo_local_name,
+            "error": f"Repo not found: {repo_root}",
+            "candidate_count": 0,
+            "evaluated_count": 0,
+            "testable_count": 0,
+            "instances": [],
+        }
+
+    pytest_bin = Path(repo_task["pytest_bin"])
+    if not pytest_bin.exists():
+        return {
+            "repo": repo_name,
+            "repo_local_name": repo_local_name,
+            "error": f"Missing pytest executable at {pytest_bin}",
+            "candidate_count": 0,
+            "evaluated_count": 0,
+            "testable_count": 0,
+            "instances": [],
+        }
+
+    py_files = iter_python_files(repo_root)
+    candidates: list[dict[str, Any]] = []
+    for idx, py_file in enumerate(py_files, start=1):
+        try:
+            file_instances = analyze_file(
+                repo_name,
+                repo_local_name,
+                repo_root,
+                py_file,
+                idx,
+            )
+        except Exception:  # noqa: BLE001
+            continue
+        candidates.extend(file_instances)
+
+    candidates.sort(
+        key=lambda item: (item["body_line_count"], item["file_token_count"]),
+        reverse=True,
+    )
+
+    max_candidates = int(repo_task.get("max_candidates_per_repo", 0))
+    if max_candidates > 0:
+        candidates = candidates[:max_candidates]
+
+    testable_instances: list[dict[str, Any]] = []
+    for candidate in candidates:
+        try:
+            evaluated = evaluate_candidate_testability(repo_task, candidate)
+        except Exception as exc:  # noqa: BLE001
+            candidate_with_error = dict(candidate)
+            candidate_with_error["testable"] = False
+            candidate_with_error["candidate_error"] = str(exc)
+            evaluated = candidate_with_error
+
+        if evaluated.get("testable", False):
+            testable_instances.append(evaluated)
+
+    return {
+        "repo": repo_name,
+        "repo_local_name": repo_local_name,
+        "error": None,
+        "candidate_count": len(candidates),
+        "evaluated_count": len(candidates),
+        "testable_count": len(testable_instances),
+        "instances": testable_instances,
+    }
+
+
 def round_robin_select(
-    candidates: list[dict[str, Any]], max_instances: int
+    candidates: list[dict[str, Any]],
+    max_instances: int,
+    repo_weights: dict[str, float],
 ) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in candidates:
@@ -325,11 +722,18 @@ def round_robin_select(
 
     for repo in grouped:
         grouped[repo].sort(
-            key=lambda x: (x["body_line_count"], x["file_token_count"]), reverse=True
+            key=lambda x: (
+                x.get("gt_patch_test_delta", 0),
+                x["body_line_count"],
+                x["file_token_count"],
+            ),
+            reverse=True,
         )
 
     selected: list[dict[str, Any]] = []
-    repos = sorted(grouped.keys())
+    repos = sorted(
+        grouped.keys(), key=lambda repo: repo_weights.get(repo, 1.0), reverse=True
+    )
 
     while len(selected) < max_instances:
         made_progress = False
@@ -343,6 +747,26 @@ def round_robin_select(
             break
 
     return selected
+
+
+def reset_instance_artifacts_dir() -> None:
+    if INSTANCES_DIR.exists():
+        shutil.rmtree(INSTANCES_DIR)
+    INSTANCES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snapshot_repo_commit(repo_root: Path) -> str | None:
+    try:
+        commit = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+    eval_commit_path = repo_root / ".eval-commit"
+    eval_commit_path.write_text(f"{commit}\n", encoding="utf-8")
+    return commit
 
 
 def write_instance_artifacts(instances: list[dict[str, Any]]) -> None:
@@ -370,34 +794,115 @@ def main() -> None:
     args = parse_args()
     ensure_stage_dirs()
 
-    payload = json.loads(args.candidates.read_text(encoding="utf-8"))
-    repos = payload.get("selected_repos", [])
-    if args.max_repos > 0:
-        repos = repos[: args.max_repos]
+    candidates_payload = json.loads(args.candidates.read_text(encoding="utf-8"))
+    selected_repo_meta = {
+        item["full_name"]: item for item in candidates_payload.get("selected_repos", [])
+    }
 
-    all_candidates: list[dict[str, Any]] = []
+    env_payload = json.loads(args.env_setup.read_text(encoding="utf-8"))
+    env_map = {
+        item["full_name"]: item for item in env_payload.get("qualified_repos", [])
+    }
 
-    for repo_meta in repos:
-        repo_name = repo_meta["full_name"]
-        local_name = repo_name.replace("/", "__")
-        repo_root = REPOS_DIR / local_name
-        if not repo_root.exists():
-            print(f"Skipping {repo_name}: repo not cloned at {repo_root}")
+    coverage_payload = json.loads(args.test_coverage.read_text(encoding="utf-8"))
+    coverage_repos = coverage_payload.get("qualified_repos", [])
+
+    repo_tasks: list[dict[str, Any]] = []
+    for coverage_meta in coverage_repos:
+        full_name = coverage_meta["full_name"]
+        env_meta = env_map.get(full_name)
+        if env_meta is None:
             continue
 
-        py_files = iter_python_files(repo_root)
-        print(f"Analyzing {repo_name}: {len(py_files)} python files")
-        for idx, py_file in enumerate(py_files, start=1):
-            try:
-                file_instances = analyze_file(repo_name, repo_root, py_file, idx)
-            except Exception as exc:  # noqa: BLE001
-                print(f"Error analyzing {py_file}: {exc}")
-                continue
-            all_candidates.extend(file_instances)
+        repo_path = Path(env_meta["repo_path"])
+        venv_path = Path(env_meta["venv_path"])
+        pytest_bin = venv_path / "bin" / "pytest"
 
-    selected_instances = round_robin_select(
-        all_candidates, DEFAULT_CONFIG.target_max_instances
+        baseline_failed = coverage_meta.get("baseline_failed_tests", [])
+        baseline_error = coverage_meta.get("baseline_error_tests", [])
+        baseline_excluded = sorted(set(baseline_failed) | set(baseline_error))
+
+        local_name = full_name.replace("/", "__")
+        repo_tasks.append(
+            {
+                "full_name": full_name,
+                "local_name": local_name,
+                "repo_path": str(repo_path),
+                "pytest_bin": str(pytest_bin),
+                "env_install_method": env_meta.get("env_install_method"),
+                "baseline_pass_count": int(coverage_meta.get("baseline_pass_count", 0)),
+                "baseline_fail_count": int(coverage_meta.get("baseline_fail_count", 0)),
+                "baseline_runtime_seconds": float(
+                    coverage_meta.get("baseline_runtime_seconds", 0.0)
+                ),
+                "baseline_excluded_tests": baseline_excluded,
+                "repo_weight": float(coverage_meta.get("repo_weight", 1.0)),
+                "selection_tier": coverage_meta.get("selection_tier", "strict"),
+                "max_candidates_per_repo": args.max_candidates_per_repo,
+                "pytest_timeout_seconds": args.pytest_timeout_seconds,
+                "service_dependency_flags": selected_repo_meta.get(full_name, {}).get(
+                    "service_dependency_flags", []
+                ),
+            }
+        )
+
+    if args.max_repos > 0:
+        repo_tasks = repo_tasks[: args.max_repos]
+
+    if not repo_tasks:
+        raise RuntimeError(
+            "No repos available for instance building. Run discover, clone, "
+            "setup_repo_env, and score_test_coverage first."
+        )
+
+    print(
+        f"Running repo-level instance extraction on {len(repo_tasks)} repos "
+        f"with workers={args.workers}"
     )
+
+    if args.workers <= 1:
+        repo_results = [process_repo(task) for task in repo_tasks]
+    else:
+        with Pool(processes=args.workers) as pool:
+            repo_results = pool.map(process_repo, repo_tasks)
+
+    all_testable_candidates: list[dict[str, Any]] = []
+    repo_candidate_counts: dict[str, int] = {}
+    repo_testable_counts: dict[str, int] = {}
+    repo_errors: dict[str, str] = {}
+
+    for repo_result in repo_results:
+        repo_name = repo_result["repo"]
+        repo_candidate_counts[repo_name] = int(repo_result["candidate_count"])
+        repo_testable_counts[repo_name] = int(repo_result["testable_count"])
+        if repo_result.get("error"):
+            repo_errors[repo_name] = str(repo_result["error"])
+            continue
+        all_testable_candidates.extend(repo_result["instances"])
+
+    repo_weight_map = {
+        task["full_name"]: float(task.get("repo_weight", 1.0)) for task in repo_tasks
+    }
+    selected_instances = round_robin_select(
+        all_testable_candidates,
+        DEFAULT_CONFIG.target_max_instances,
+        repo_weight_map,
+    )
+
+    selected_repo_names = {item["repo"] for item in selected_instances}
+    repo_commits: dict[str, str] = {}
+    for task in repo_tasks:
+        repo_name = task["full_name"]
+        if repo_name not in selected_repo_names:
+            continue
+        commit = snapshot_repo_commit(Path(task["repo_path"]))
+        if commit:
+            repo_commits[repo_name] = commit
+
+    for item in selected_instances:
+        item["repo_commit"] = repo_commits.get(item["repo"])
+
+    reset_instance_artifacts_dir()
     write_instance_artifacts(selected_instances)
 
     args.output_jsonl.parent.mkdir(parents=True, exist_ok=True)
@@ -412,19 +917,30 @@ def main() -> None:
     summary = {
         "generated_at": datetime.now(UTC).isoformat(),
         "config": config_as_json_dict(DEFAULT_CONFIG),
-        "candidate_instance_count": len(all_candidates),
+        "candidate_instance_count": int(sum(repo_candidate_counts.values())),
+        "testable_candidate_count": len(all_testable_candidates),
         "selected_instance_count": len(selected_instances),
         "meets_target_min_instances": len(selected_instances)
         >= DEFAULT_CONFIG.target_min_instances,
+        "repo_candidate_counts": dict(sorted(repo_candidate_counts.items())),
+        "repo_testable_counts": dict(sorted(repo_testable_counts.items())),
+        "repo_errors": dict(sorted(repo_errors.items())),
+        "repo_commits": dict(sorted(repo_commits.items())),
         "selected_instances_by_repo": dict(sorted(by_repo.items())),
         "output_jsonl": str(args.output_jsonl),
         "instance_artifacts_dir": str(INSTANCES_DIR),
+        "inputs": {
+            "candidates": str(args.candidates),
+            "env_setup": str(args.env_setup),
+            "test_coverage": str(args.test_coverage),
+        },
     }
     args.summary_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     print(
         "Built instances: "
         f"candidates={summary['candidate_instance_count']} "
+        f"testable={summary['testable_candidate_count']} "
         f"selected={summary['selected_instance_count']} "
         f"target_min={DEFAULT_CONFIG.target_min_instances}"
     )

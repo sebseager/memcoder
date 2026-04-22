@@ -20,9 +20,15 @@ class Stage0Config:
     target_repo_count: int = 20
     min_repo_count: int = 15
     first_commit_cutoff: date = date(2024, 11, 1)
+    env_python_version: str = "3.12"
+    baseline_runtime_limit_seconds: float = 120.0
+    baseline_error_limit: int = 5
+    relaxed_baseline_runtime_limit_seconds: float = 180.0
+    relaxed_baseline_error_limit: int = 10
     truncation_token_budget: int = 2048
     min_body_lines: int = 10
     max_body_lines: int = 80
+    max_candidates_per_repo: int = 30
     target_min_instances: int = 80
     target_max_instances: int = 120
 
@@ -46,9 +52,15 @@ def config_as_json_dict(cfg: Stage0Config) -> dict[str, Any]:
         "target_repo_count": cfg.target_repo_count,
         "min_repo_count": cfg.min_repo_count,
         "first_commit_cutoff": cfg.first_commit_cutoff.isoformat(),
+        "env_python_version": cfg.env_python_version,
+        "baseline_runtime_limit_seconds": cfg.baseline_runtime_limit_seconds,
+        "baseline_error_limit": cfg.baseline_error_limit,
+        "relaxed_baseline_runtime_limit_seconds": cfg.relaxed_baseline_runtime_limit_seconds,
+        "relaxed_baseline_error_limit": cfg.relaxed_baseline_error_limit,
         "truncation_token_budget": cfg.truncation_token_budget,
         "min_body_lines": cfg.min_body_lines,
         "max_body_lines": cfg.max_body_lines,
+        "max_candidates_per_repo": cfg.max_candidates_per_repo,
         "target_min_instances": cfg.target_min_instances,
         "target_max_instances": cfg.target_max_instances,
         "active_within_days": cfg.active_within_days,
