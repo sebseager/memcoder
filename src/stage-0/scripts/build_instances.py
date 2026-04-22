@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
 import shutil
 import subprocess
 import time
+import traceback
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -37,6 +39,13 @@ SUMMARY_COUNT_PATTERNS = {
 }
 COMMON_SOURCE_ROOTS = {"src", "lib", "python", "package"}
 IGNORED_TEST_PREFIXES = ("tests/integration/", "tests/e2e/")
+
+
+def diagnostic_print(enabled: bool, message: str) -> None:
+    if not enabled:
+        return
+    now = datetime.now(UTC).strftime("%H:%M:%S")
+    print(f"[{now} pid={os.getpid()}] {message}", flush=True)
 
 
 class AssignedNameCollector(ast.NodeVisitor):
@@ -160,6 +169,17 @@ def parse_args() -> argparse.Namespace:
         "--no-progress",
         action="store_true",
         help="Disable tqdm progress bars",
+    )
+    parser.add_argument(
+        "--no-debug-prints",
+        action="store_true",
+        help="Disable diagnostic prints from repo/candidate execution",
+    )
+    parser.add_argument(
+        "--debug-every",
+        type=int,
+        default=25,
+        help="Emit candidate-level heartbeat every N candidates per repo",
     )
     return parser.parse_args()
 
@@ -653,6 +673,7 @@ def run_repo_pytest(
         "exit_code": exit_code,
         "runtime_seconds": round(runtime_seconds, 3),
         "timed_out": timed_out,
+        "command": command,
         "passed_tests": passed_tests,
         "failed_tests": failed_tests,
         "error_tests": error_tests,
@@ -691,6 +712,7 @@ def evaluate_candidate_testability(
     coverage_map: dict[str, list[str]],
     test_file_text_cache: dict[str, str],
 ) -> dict[str, Any]:
+    debug_enabled = bool(repo_task.get("debug_enabled", False))
     repo_root = Path(repo_task["repo_path"])
     pytest_bin = Path(repo_task["pytest_bin"])
     target_file = repo_root / candidate["file_path"]
@@ -782,6 +804,31 @@ def evaluate_candidate_testability(
     if masked_result.get("exit_code") == 2 or restored_result.get("exit_code") == 2:
         testable = False
 
+    masked_exit = int(masked_result.get("exit_code", -1))
+    restored_exit = int(restored_result.get("exit_code", -1))
+    masked_timed_out = bool(masked_result.get("timed_out", False))
+    restored_timed_out = bool(restored_result.get("timed_out", False))
+
+    if masked_timed_out or restored_timed_out:
+        diagnostic_print(
+            debug_enabled,
+            (
+                f"timeout repo={repo_task['local_name']} instance={candidate['instance_id']} "
+                f"masked_exit={masked_exit} restored_exit={restored_exit} "
+                f"tests={len(relevant_tests)}"
+            ),
+        )
+
+    if masked_exit not in {0, 1, 5} or restored_exit not in {0, 1, 5}:
+        diagnostic_print(
+            debug_enabled,
+            (
+                f"nonstandard-exit repo={repo_task['local_name']} instance={candidate['instance_id']} "
+                f"masked_exit={masked_exit} restored_exit={restored_exit} "
+                f"tests={len(relevant_tests)}"
+            ),
+        )
+
     candidate = dict(candidate)
     candidate.update(
         {
@@ -802,6 +849,14 @@ def evaluate_candidate_testability(
             "scoped_test_targets": relevant_tests,
             "scoped_test_count": len(relevant_tests),
             "function_name_filter": keyword_expression,
+            "masked_test_timed_out": masked_timed_out,
+            "restored_test_timed_out": restored_timed_out,
+            "masked_test_command": " ".join(
+                str(part) for part in masked_result.get("command", [])
+            ),
+            "restored_test_command": " ".join(
+                str(part) for part in restored_result.get("command", [])
+            ),
         }
     )
     return candidate
@@ -811,6 +866,11 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
     repo_name = repo_task["full_name"]
     repo_local_name = repo_task["local_name"]
     repo_root = Path(repo_task["repo_path"])
+    debug_enabled = bool(repo_task.get("debug_enabled", False))
+    debug_every = max(1, int(repo_task.get("debug_every", 25)))
+    process_started = time.monotonic()
+
+    diagnostic_print(debug_enabled, f"repo-start {repo_local_name}")
 
     if not repo_root.exists():
         return {
@@ -841,6 +901,14 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
 
     py_files = iter_python_files(repo_root)
     coverage_map, test_file_text_cache = build_file_to_test_mapping(repo_root, py_files)
+    diagnostic_print(
+        debug_enabled,
+        (
+            f"repo-indexed {repo_local_name} py_files={len(py_files)} "
+            f"mapped_sources={len(coverage_map)} mapped_tests={len(test_file_text_cache)}"
+        ),
+    )
+
     candidates: list[dict[str, Any]] = []
     for idx, py_file in enumerate(py_files, start=1):
         try:
@@ -864,7 +932,17 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
     if max_candidates > 0:
         candidates = candidates[:max_candidates]
 
+    diagnostic_print(
+        debug_enabled,
+        f"repo-candidates {repo_local_name} total={len(candidates)}",
+    )
+
     testable_instances: list[dict[str, Any]] = []
+    skipped_no_relevant = 0
+    candidate_exception_count = 0
+    timeout_count = 0
+    nonstandard_exit_count = 0
+
     candidate_iterable = candidates
     if repo_task.get("show_candidate_progress", False):
         candidate_iterable = tqdm(
@@ -875,7 +953,7 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
             dynamic_ncols=True,
         )
 
-    for candidate in candidate_iterable:
+    for idx, candidate in enumerate(candidate_iterable, start=1):
         try:
             evaluated = evaluate_candidate_testability(
                 repo_task,
@@ -887,10 +965,59 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
             candidate_with_error = dict(candidate)
             candidate_with_error["testable"] = False
             candidate_with_error["candidate_error"] = str(exc)
+            candidate_with_error["candidate_traceback"] = traceback.format_exc()
             evaluated = candidate_with_error
+            candidate_exception_count += 1
+            diagnostic_print(
+                debug_enabled,
+                (
+                    f"candidate-exception repo={repo_local_name} "
+                    f"instance={candidate.get('instance_id', 'unknown')} error={exc}"
+                ),
+            )
+            diagnostic_print(
+                debug_enabled,
+                candidate_with_error["candidate_traceback"].rstrip(),
+            )
+
+        if evaluated.get("skip_reason") == "no_relevant_tests_for_target_file":
+            skipped_no_relevant += 1
+
+        if evaluated.get("masked_test_timed_out") or evaluated.get(
+            "restored_test_timed_out"
+        ):
+            timeout_count += 1
+
+        masked_exit = evaluated.get("masked_test_exit_code")
+        restored_exit = evaluated.get("restored_test_exit_code")
+        if masked_exit is not None and restored_exit is not None:
+            if masked_exit not in {0, 1, 5} or restored_exit not in {0, 1, 5}:
+                nonstandard_exit_count += 1
 
         if evaluated.get("testable", False):
             testable_instances.append(evaluated)
+
+        if idx == 1 or idx == len(candidates) or idx % debug_every == 0:
+            diagnostic_print(
+                debug_enabled,
+                (
+                    f"candidate-progress repo={repo_local_name} "
+                    f"{idx}/{len(candidates)} testable={len(testable_instances)} "
+                    f"skipped_no_tests={skipped_no_relevant} "
+                    f"exceptions={candidate_exception_count} timeouts={timeout_count}"
+                ),
+            )
+
+    runtime_seconds = round(time.monotonic() - process_started, 3)
+    diagnostic_print(
+        debug_enabled,
+        (
+            f"repo-done {repo_local_name} candidates={len(candidates)} "
+            f"testable={len(testable_instances)} skipped_no_tests={skipped_no_relevant} "
+            f"exceptions={candidate_exception_count} timeouts={timeout_count} "
+            f"nonstandard_exits={nonstandard_exit_count} runtime_s={runtime_seconds}"
+        ),
+    )
 
     return {
         "repo": repo_name,
@@ -901,6 +1028,11 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
         "testable_count": len(testable_instances),
         "mapped_source_file_count": len(coverage_map),
         "mapped_test_file_count": len(test_file_text_cache),
+        "skipped_no_relevant_tests_count": skipped_no_relevant,
+        "candidate_exception_count": candidate_exception_count,
+        "candidate_timeout_count": timeout_count,
+        "candidate_nonstandard_exit_count": nonstandard_exit_count,
+        "runtime_seconds": runtime_seconds,
         "instances": testable_instances,
     }
 
@@ -988,6 +1120,7 @@ def main() -> None:
     args = parse_args()
     ensure_stage_dirs()
     progress_enabled = not args.no_progress
+    debug_enabled = not args.no_debug_prints
 
     candidates_payload = json.loads(args.candidates.read_text(encoding="utf-8"))
     selected_repo_meta = {
@@ -1036,6 +1169,8 @@ def main() -> None:
                 "max_candidates_per_repo": args.max_candidates_per_repo,
                 "pytest_timeout_seconds": args.pytest_timeout_seconds,
                 "show_candidate_progress": progress_enabled and args.workers <= 1,
+                "debug_enabled": debug_enabled,
+                "debug_every": args.debug_every,
                 "service_dependency_flags": selected_repo_meta.get(full_name, {}).get(
                     "service_dependency_flags", []
                 ),
@@ -1065,7 +1200,20 @@ def main() -> None:
                 desc="Repos",
                 dynamic_ncols=True,
             )
-        repo_results = [process_repo(task) for task in repo_iterable]
+        repo_results: list[dict[str, Any]] = []
+        for task in repo_iterable:
+            result = process_repo(task)
+            repo_results.append(result)
+            diagnostic_print(
+                debug_enabled,
+                (
+                    f"repo-result {result['repo_local_name']} "
+                    f"testable={result['testable_count']} "
+                    f"exceptions={result.get('candidate_exception_count', 0)} "
+                    f"timeouts={result.get('candidate_timeout_count', 0)} "
+                    f"runtime_s={result.get('runtime_seconds', 0.0)}"
+                ),
+            )
     else:
         with Pool(processes=args.workers) as pool:
             repo_iterable = pool.imap_unordered(process_repo, repo_tasks)
@@ -1076,7 +1224,19 @@ def main() -> None:
                     desc="Repos",
                     dynamic_ncols=True,
                 )
-            repo_results = list(repo_iterable)
+            repo_results = []
+            for result in repo_iterable:
+                repo_results.append(result)
+                diagnostic_print(
+                    debug_enabled,
+                    (
+                        f"repo-result {result['repo_local_name']} "
+                        f"testable={result['testable_count']} "
+                        f"exceptions={result.get('candidate_exception_count', 0)} "
+                        f"timeouts={result.get('candidate_timeout_count', 0)} "
+                        f"runtime_s={result.get('runtime_seconds', 0.0)}"
+                    ),
+                )
 
     all_testable_candidates: list[dict[str, Any]] = []
     repo_candidate_counts: dict[str, int] = {}
