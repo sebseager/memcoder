@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from pathlib import Path
 
 STAGE1_DIR = Path(__file__).resolve().parents[1]
@@ -11,14 +13,8 @@ INSTANCES_JSONL = STAGE0_DIR / "outputs" / "instances.jsonl"
 INSTANCES_ARTIFACTS_DIR = STAGE0_DIR / "outputs" / "instances"
 
 # Outputs
-OUTPUTS_DIR = STAGE1_DIR / "outputs"
-ORACLE_LORA_DIR = OUTPUTS_DIR / "oracle_loras"
-COMPLETIONS_DIR = OUTPUTS_DIR / "completions"
-EVAL_DIR = OUTPUTS_DIR / "evaluation"
-ANALYSIS_DIR = OUTPUTS_DIR / "analysis"
-CAPABILITY_DIR = OUTPUTS_DIR / "capability"
-PLOTS_DIR = OUTPUTS_DIR / "plots"
-LOGS_DIR = OUTPUTS_DIR / "logs"
+OUTPUTS_ROOT_DIR = STAGE1_DIR / "outputs"
+RUN_CONFIG_FILENAME = "run_config.json"
 
 # Model defaults
 MODEL_ID = "Qwen/Qwen3-8B"
@@ -29,7 +25,16 @@ SEED = 42
 LORA_RANK = 16
 LORA_ALPHA = 32
 LORA_DROPOUT = 0.05
-LORA_TARGET_MODULES = ["q_proj", "v_proj", "up_proj", "down_proj"]
+# Bridge Decision 1: FFN-only adapters, following DyPRAG's knowledge-localization rationale.
+LORA_TARGET_MODULES = ["up_proj", "down_proj"]
+LAYER_TARGETING_DECISION = "ffn_only"
+LAYER_TARGETING_JUSTIFICATION = (
+    "Use FFN-only LoRA targets for file-knowledge injection; attention layers are left "
+    "untouched to reduce behavioral side effects."
+)
+LAYER_TARGETING_REFERENCE = (
+    "DyPRAG prior uses FFN-focused adaptation for knowledge content storage."
+)
 
 # Oracle training defaults
 ORACLE_CHUNK_SIZE = 3072
@@ -60,3 +65,51 @@ CAPABILITY_DROP_THRESHOLD_PCT = 15.0
 
 # Evaluation bootstrap
 BOOTSTRAP_SAMPLES = 1000
+
+# Gap stratification thresholds (Bridge Step 1d)
+LOW_GAP_BLEU_THRESHOLD = 0.05
+HIGH_GAP_BLEU_THRESHOLD = 0.20
+
+
+@dataclass(frozen=True)
+class Stage1Paths:
+    root: Path
+    oracle_lora: Path
+    completions: Path
+    evaluation: Path
+    analysis: Path
+    capability: Path
+    plots: Path
+    logs: Path
+    run_config: Path
+
+
+def model_id_to_slug(model_id: str) -> str:
+    slug = re.sub(r"[^a-z0-9._-]+", "-", model_id.strip().lower()).strip("-")
+    return slug or "model"
+
+
+def get_stage1_paths(model_id: str = MODEL_ID) -> Stage1Paths:
+    model_root = OUTPUTS_ROOT_DIR / model_id_to_slug(model_id)
+    return Stage1Paths(
+        root=model_root,
+        oracle_lora=model_root / "oracle_loras",
+        completions=model_root / "completions",
+        evaluation=model_root / "evaluation",
+        analysis=model_root / "analysis",
+        capability=model_root / "capability",
+        plots=model_root / "plots",
+        logs=model_root / "logs",
+        run_config=model_root / RUN_CONFIG_FILENAME,
+    )
+
+
+# Backward-compatible default aliases.
+DEFAULT_PATHS = get_stage1_paths(MODEL_ID)
+ORACLE_LORA_DIR = DEFAULT_PATHS.oracle_lora
+COMPLETIONS_DIR = DEFAULT_PATHS.completions
+EVAL_DIR = DEFAULT_PATHS.evaluation
+ANALYSIS_DIR = DEFAULT_PATHS.analysis
+CAPABILITY_DIR = DEFAULT_PATHS.capability
+PLOTS_DIR = DEFAULT_PATHS.plots
+LOGS_DIR = DEFAULT_PATHS.logs

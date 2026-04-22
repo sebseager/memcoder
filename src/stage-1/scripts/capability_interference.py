@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pandas as pd
 from config import (
-    CAPABILITY_DIR,
     CAPABILITY_DROP_THRESHOLD_PCT,
     MODEL_ID,
-    ORACLE_LORA_DIR,
+    SEED,
+    get_stage1_paths,
 )
-from helpers import generate_text, load_model_and_tokenizer
+from helpers import generate_text, load_model_and_tokenizer, set_seed
 from peft import PeftModel
 
 PROBES = [
@@ -78,6 +78,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model-id", default=MODEL_ID)
     p.add_argument("--max-adapters", type=int, default=None)
     p.add_argument("--file-keys-file", default=None)
+    p.add_argument("--seed", type=int, default=SEED)
     return p.parse_args()
 
 
@@ -94,20 +95,29 @@ def adapter_base_model_id(adapter_dir: Path) -> str | None:
 
 def main() -> int:
     args = parse_args()
-    CAPABILITY_DIR.mkdir(parents=True, exist_ok=True)
+    set_seed(args.seed)
+    paths = get_stage1_paths(args.model_id)
+    paths.capability.mkdir(parents=True, exist_ok=True)
 
-    model, tokenizer = load_model_and_tokenizer(model_id=args.model_id, use_4bit=True)
+    model, tokenizer = load_model_and_tokenizer(
+        model_id=args.model_id,
+        use_4bit=True,
+        seed=args.seed,
+    )
     baseline_score, baseline_details = score_model(model, tokenizer)
     print(f"Baseline score: {baseline_score:.1%}")
 
-    adapter_dirs = sorted(
-        [
-            p
-            for p in ORACLE_LORA_DIR.iterdir()
-            if p.is_dir() and (p / "adapter_config.json").exists()
-        ],
-        key=lambda x: x.name,
-    )
+    if paths.oracle_lora.exists():
+        adapter_dirs = sorted(
+            [
+                p
+                for p in paths.oracle_lora.iterdir()
+                if p.is_dir() and (p / "adapter_config.json").exists()
+            ],
+            key=lambda x: x.name,
+        )
+    else:
+        adapter_dirs = []
 
     if args.file_keys_file:
         wanted = {
@@ -183,14 +193,15 @@ def main() -> int:
         "n_adapters": len(rows),
         "baseline_score": baseline_score,
         "threshold_pct": CAPABILITY_DROP_THRESHOLD_PCT,
+        "seed": args.seed,
         "n_flagged": sum(int(r["flag_drop_gt_threshold"]) for r in rows),
         "baseline_probe_details": baseline_details,
         "per_adapter": rows,
     }
 
-    with (CAPABILITY_DIR / "latest.json").open("w", encoding="utf-8") as f:
+    with (paths.capability / "latest.json").open("w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
-    with (CAPABILITY_DIR / f"capability_interference_{ts}.json").open(
+    with (paths.capability / f"capability_interference_{ts}.json").open(
         "w", encoding="utf-8"
     ) as f:
         json.dump(out, f, indent=2)
@@ -205,7 +216,7 @@ def main() -> int:
         }
         for r in rows
     ]
-    pd.DataFrame(flat).to_csv(CAPABILITY_DIR / "latest.csv", index=False)
+    pd.DataFrame(flat).to_csv(paths.capability / "latest.csv", index=False)
 
     print("Saved capability report")
     return 0

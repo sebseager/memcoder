@@ -7,14 +7,14 @@ import time
 from pathlib import Path
 
 from config import (
-    COMPLETIONS_DIR,
     CONDITIONS,
     MAX_NEW_TOKENS,
     MODEL_ID,
-    ORACLE_LORA_DIR,
+    SEED,
     TEMPERATURE,
     TOP_P,
     TRUNCATION_BUDGET_TOKENS,
+    get_stage1_paths,
 )
 from helpers import (
     generate_text,
@@ -24,6 +24,7 @@ from helpers import (
     make_file_key,
     normalize_body_prediction,
     select_instances,
+    set_seed,
     truncate_to_budget,
 )
 from peft import PeftModel
@@ -39,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--top-p", type=float, default=TOP_P)
     p.add_argument("--max-new-tokens", type=int, default=MAX_NEW_TOKENS)
     p.add_argument("--trunc-budget", type=int, default=TRUNCATION_BUDGET_TOKENS)
+    p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--force", action="store_true")
     return p.parse_args()
 
@@ -112,9 +114,11 @@ def maybe_load_adapter(
 
 def main() -> int:
     args = parse_args()
-    COMPLETIONS_DIR.mkdir(parents=True, exist_ok=True)
+    set_seed(args.seed)
+    paths = get_stage1_paths(args.model_id)
+    paths.completions.mkdir(parents=True, exist_ok=True)
 
-    out_jsonl = COMPLETIONS_DIR / f"condition_{args.condition}.jsonl"
+    out_jsonl = paths.completions / f"condition_{args.condition}.jsonl"
     if out_jsonl.exists() and not args.force:
         print(f"Output exists, use --force to overwrite: {out_jsonl}")
         return 1
@@ -124,7 +128,11 @@ def main() -> int:
     instances = select_instances(instances, args.max_instances)
     print(f"Generating condition {args.condition} for {len(instances)} instances")
 
-    model, tokenizer = load_model_and_tokenizer(model_id=args.model_id, use_4bit=True)
+    model, tokenizer = load_model_and_tokenizer(
+        model_id=args.model_id,
+        use_4bit=True,
+        seed=args.seed,
+    )
 
     adapter_state = {"peft": None, "active": None}
     rows = []
@@ -143,7 +151,7 @@ def main() -> int:
         adapter_status = "not_used"
         active_before_generate = "base_model"
         if args.condition == "D":
-            adapter_path = ORACLE_LORA_DIR / file_key
+            adapter_path = paths.oracle_lora / file_key
             model_for_run, adapter_status, active_before_generate = maybe_load_adapter(
                 model,
                 adapter_state,
@@ -229,8 +237,9 @@ def main() -> int:
         "n_instances_requested": len(instances),
         "n_rows_written": len(rows),
         "output_jsonl": str(out_jsonl),
+        "seed": args.seed,
     }
-    with (COMPLETIONS_DIR / f"condition_{args.condition}.meta.json").open(
+    with (paths.completions / f"condition_{args.condition}.meta.json").open(
         "w", encoding="utf-8"
     ) as f:
         json.dump(summary, f, indent=2)

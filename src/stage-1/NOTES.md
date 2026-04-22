@@ -314,3 +314,75 @@ bash scripts/run_stage1.sh --mode small
 - Current status:
   - Mean recovery is now directionally strong and D reaches C on pass@1 proxy at n=12.
   - Strict Gate 6 requirement (BLEU recovery CI lower bound > 0) is still not met with current sample size/noise.
+
+## Entry 2026-04-21 15
+
+- Objective: implement BRIDGE.md pre-flight requirements before Stage 2 transition.
+
+- Code changes implemented:
+  - `scripts/config.py`
+    - switched LoRA target modules to FFN-only (`up_proj`, `down_proj`) with explicit decision/justification/reference fields.
+    - added model-scoped output path helpers (`get_stage1_paths`) and run-config filename constants.
+    - added gap-stratification thresholds (`LOW_GAP_BLEU_THRESHOLD=0.05`, `HIGH_GAP_BLEU_THRESHOLD=0.20`).
+  - `scripts/helpers.py`
+    - added deterministic JSON helpers (`load_json`, `write_json`, `json_sha256`).
+    - added `build_run_config(...)` for run-level provenance.
+    - made `load_model_and_tokenizer(...)` explicitly seed-aware.
+    - extended `FunctionExample` with source line spans.
+    - added deterministic behavioral probe manifest builder (`build_behavioral_probe_manifest`) keyed by AST order.
+  - `scripts/train_oracle.py`
+    - migrated outputs to model-scoped directories.
+    - added `--seed` and propagated deterministic seeding through split/training args.
+    - behavioral second pass now uses deterministic AST-order probes (`examples[:N]`) instead of instance-ID ordering.
+    - writes `adapter_metadata.json` with saved probe manifest for each adapter.
+    - enforces probe-manifest mismatch guard: refuses retraining when saved probes conflict with current generation logic.
+    - adapter compatibility now checks `seed` and `behavioral_probe_manifest_sha256`.
+  - `scripts/generate_completions.py`
+    - migrated to model-scoped outputs and adapter directories.
+    - added `--seed` for generation determinism.
+  - `scripts/evaluate_completions.py`
+    - migrated to model-scoped outputs.
+    - added `--model-id`.
+    - added pre-analysis B->C gap computation and persisted `bleu_gap_bc` + `gap_stratum` (`low|medium|high|unknown`) to per-instance CSVs.
+  - `scripts/analyze_stage1.py`
+    - migrated to model-scoped outputs.
+    - added `--model-id` and seed-locked bootstrap.
+    - now reads model-specific `run_config.json` and embeds run config in analysis JSON, per-instance CSV columns, and plot metadata sidecars.
+    - added stratified recovery summaries by `gap_stratum` for pass and BLEU.
+  - `scripts/capability_interference.py`
+    - migrated to model-scoped outputs and adapter paths.
+    - added `--seed` and safe handling when no adapter directory exists.
+  - `scripts/init_run_config.py` (new)
+    - writes model-scoped `run_config.json` at run start.
+  - `scripts/identifier_overlap.py` (new)
+    - computes `novel_identifier_count`, `novel_identifier_rate`, and novel identifier lists for generated completions.
+    - writes JSONL/CSV/summary outputs under model-scoped analysis directory.
+  - `scripts/run_stage1.sh`
+    - now initializes run config at start.
+    - propagates seed and generation/truncation/behavioral parameters to all scripts.
+    - stores subset logs under model-scoped `outputs/<model-slug>/logs`.
+    - runs `identifier_overlap.py` after completion generation.
+    - final outputs now reported under model-scoped path.
+  - `README.md`
+    - updated script list and output layout to model-scoped format.
+
+- Commands run for validation:
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src
+source .venv/bin/activate
+cd stage-1
+python scripts/init_run_config.py --model-id Qwen/Qwen3-4B --mode small --seed 42 --behavioral-probes 5
+python scripts/train_oracle.py --model-id Qwen/Qwen3-4B --max-files 1 --dry-run --seed 42
+python -m py_compile scripts/*.py
+```
+
+- Validation observations:
+  - model-scoped run config creation succeeded (`outputs/qwen-qwen3-4b/run_config.json`).
+  - dry-run adapter indexing with new path plumbing succeeded.
+  - Python scripts compile cleanly.
+  - expected failure when trying to evaluate a model without model-scoped completion files yet (`Missing completions file`), which is correct given the new output contract.
+
+- Conclusion:
+  - BRIDGE Step 1 pre-flight implementation is now in place in Stage 1 code.
+  - Next execution step is the planned `small` run on `Qwen/Qwen3-4B` via `run_stage1.sh` to populate model-scoped B/C/D outputs and run the qualitative/quantitative gates.

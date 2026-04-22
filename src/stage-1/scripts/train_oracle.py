@@ -12,15 +12,17 @@ from config import (
     MODEL_ID,
     ORACLE_CHUNK_SIZE,
     ORACLE_GRAD_ACCUM,
-    ORACLE_LORA_DIR,
     ORACLE_LR,
     ORACLE_MAX_EPOCHS,
     ORACLE_MIN_EPOCHS,
     ORACLE_PATIENCE,
+    SEED,
     TRUNCATION_BUDGET_TOKENS,
+    get_stage1_paths,
 )
 from datasets import Dataset as HFDataset
 from helpers import (
+    build_behavioral_probe_manifest,
     build_file_records,
     build_function_examples_from_file,
     build_function_examples_from_instances,
@@ -28,12 +30,14 @@ from helpers import (
     cycle_lora_adapter,
     inspect_first_supervised_example,
     load_instances,
+    load_json,
     load_model_and_tokenizer,
     make_file_key,
     make_lora_config,
     prepare_model_for_oracle_training,
     select_file_records,
     set_seed,
+    write_json,
 )
 from peft import PeftModel, get_peft_model
 from transformers import (
@@ -99,7 +103,32 @@ def build_instances_by_file_key(instances: list[dict]) -> dict[str, list[dict]]:
     return by_key
 
 
-def existing_meta_compatible(meta: dict, args: argparse.Namespace) -> tuple[bool, str]:
+def build_examples_for_file(
+    *,
+    file_text: str,
+    instances_for_file: list[dict],
+    tokenizer,
+    trunc_budget: int,
+) -> list:
+    examples = build_function_examples_from_file(
+        file_text=file_text,
+        tokenizer=tokenizer,
+        trunc_budget_tokens=trunc_budget,
+    )
+    if examples:
+        return examples
+    return build_function_examples_from_instances(
+        instances_for_file=instances_for_file,
+        tokenizer=tokenizer,
+        trunc_budget_tokens=trunc_budget,
+    )
+
+
+def existing_meta_compatible(
+    meta: dict,
+    args: argparse.Namespace,
+    probe_manifest_sha256: str,
+) -> tuple[bool, str]:
     if meta.get("objective") != "supervised_prompt_completion_masked":
         return False, "objective_mismatch"
 
@@ -117,6 +146,8 @@ def existing_meta_compatible(meta: dict, args: argparse.Namespace) -> tuple[bool
         "enable_eval": bool(args.enable_eval),
         "behavioral_probes": args.behavioral_probes,
         "behavioral_epochs": args.behavioral_epochs,
+        "seed": args.seed,
+        "behavioral_probe_manifest_sha256": probe_manifest_sha256,
     }
 
     for key, expected in checks.items():
@@ -139,7 +170,8 @@ def train_one_file(
     model_id: str,
     file_key: str,
     file_text: str,
-    instances_for_file: list[dict],
+    examples: list,
+    probe_manifest: dict,
     out_dir: Path,
     chunk_size: int,
     trunc_budget: int,
@@ -153,22 +185,11 @@ def train_one_file(
     behavioral_probes: int,
     behavioral_epochs: int,
     behavioral_lr_mult: float,
+    seed: int,
 ):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    examples = build_function_examples_from_file(
-        file_text=file_text,
-        tokenizer=tokenizer,
-        trunc_budget_tokens=trunc_budget,
-    )
-    source = "ast"
-    if not examples:
-        examples = build_function_examples_from_instances(
-            instances_for_file=instances_for_file,
-            tokenizer=tokenizer,
-            trunc_budget_tokens=trunc_budget,
-        )
-        source = "instance_fallback"
+    source = examples[0].source if examples else "none"
 
     records, supervised_stats = build_supervised_records_from_examples(
         examples=examples,
@@ -193,12 +214,14 @@ def train_one_file(
             "behavioral_probes": behavioral_probes,
             "behavioral_epochs": behavioral_epochs,
             "behavioral_lr_mult": behavioral_lr_mult,
+            "behavioral_probe_manifest_sha256": probe_manifest.get("manifest_sha256"),
+            "seed": seed,
         }
         return meta, model
 
     ds = HFDataset.from_list(records)
     if enable_eval and len(ds) >= 5:
-        split = ds.train_test_split(test_size=0.2, seed=42)
+        split = ds.train_test_split(test_size=0.2, seed=seed)
         train_ds = split["train"]
         eval_ds = split["test"]
     else:
@@ -230,7 +253,7 @@ def train_one_file(
         load_best_model_at_end=enable_eval,
         metric_for_best_model="eval_loss" if enable_eval else None,
         greater_is_better=False if enable_eval else None,
-        seed=42,
+        seed=seed,
         report_to="none",
         remove_unused_columns=False,
         save_total_limit=1,
@@ -265,15 +288,7 @@ def train_one_file(
     behavioral_final_train_loss = None
     behavioral_train_loss_history = []
     if behavioral_probes > 0:
-        probe_rows = sorted(
-            instances_for_file,
-            key=lambda r: r.get("instance_id", ""),
-        )[:behavioral_probes]
-        probe_examples = build_function_examples_from_instances(
-            instances_for_file=probe_rows,
-            tokenizer=tokenizer,
-            trunc_budget_tokens=trunc_budget,
-        )
+        probe_examples = examples[:behavioral_probes]
         probe_records, probe_stats = build_supervised_records_from_examples(
             examples=probe_examples,
             tokenizer=tokenizer,
@@ -296,7 +311,7 @@ def train_one_file(
                 logging_steps=1,
                 eval_strategy="no",
                 save_strategy="no",
-                seed=42,
+                seed=seed,
                 report_to="none",
                 remove_unused_columns=False,
                 dataloader_pin_memory=False,
@@ -342,6 +357,7 @@ def train_one_file(
         "behavioral_probes": behavioral_probes,
         "behavioral_epochs": behavioral_epochs,
         "behavioral_lr_mult": behavioral_lr_mult,
+        "behavioral_probe_manifest_sha256": probe_manifest.get("manifest_sha256"),
         "behavioral_status": behavioral_status,
         "behavioral_records": behavioral_records,
         "behavioral_truncated_records": behavioral_truncated_records,
@@ -354,6 +370,7 @@ def train_one_file(
         "mean_prompt_tokens": supervised_stats["mean_prompt_tokens"],
         "mean_target_tokens": supervised_stats["mean_target_tokens"],
         "example_source": source,
+        "seed": seed,
         "n_train_records": len(train_ds),
         "n_eval_records": 0 if eval_ds is None else len(eval_ds),
         "global_step": trainer.state.global_step,
@@ -366,6 +383,14 @@ def train_one_file(
 
     with (out_dir / "training_meta.json").open("w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
+
+    adapter_meta = {
+        "file_key": file_key,
+        "model_id": model_id,
+        "objective": "supervised_prompt_completion_masked",
+        "behavioral_probe_manifest": probe_manifest,
+    }
+    write_json(out_dir / "adapter_metadata.json", adapter_meta)
 
     del trainer
     if torch.cuda.is_available():
@@ -421,13 +446,37 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Build one supervised example for this file key and print inspection JSON.",
     )
+    p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--force", action="store_true")
     return p.parse_args()
 
 
+def assert_saved_probe_manifest_compatible(
+    adapter_dir: Path,
+    current_probe_manifest: dict,
+) -> None:
+    adapter_meta = load_json(adapter_dir / "adapter_metadata.json")
+    if not isinstance(adapter_meta, dict):
+        return
+
+    saved_manifest = adapter_meta.get("behavioral_probe_manifest")
+    if not isinstance(saved_manifest, dict):
+        return
+
+    saved_sha = saved_manifest.get("manifest_sha256")
+    current_sha = current_probe_manifest.get("manifest_sha256")
+    if saved_sha and current_sha and saved_sha != current_sha:
+        raise RuntimeError(
+            "Refusing retrain due to behavioral probe manifest mismatch "
+            f"for adapter {adapter_dir.name}. Delete the adapter directory intentionally "
+            "before retraining to avoid mixing probe-generation logic."
+        )
+
+
 def main() -> int:
     args = parse_args()
-    set_seed()
+    set_seed(args.seed)
+    paths = get_stage1_paths(args.model_id)
 
     instances = load_instances()
     file_records = build_file_records(instances)
@@ -446,7 +495,7 @@ def main() -> int:
 
     file_records = select_file_records(file_records, args.max_files)
 
-    ORACLE_LORA_DIR.mkdir(parents=True, exist_ok=True)
+    paths.oracle_lora.mkdir(parents=True, exist_ok=True)
 
     index = [
         {
@@ -456,14 +505,18 @@ def main() -> int:
         }
         for fr in file_records
     ]
-    with (ORACLE_LORA_DIR / "file_index.json").open("w", encoding="utf-8") as f:
+    with (paths.oracle_lora / "file_index.json").open("w", encoding="utf-8") as f:
         json.dump(index, f, indent=2)
 
     print(f"Target file adapters: {len(file_records)}")
     if args.dry_run:
         return 0
 
-    model, tokenizer = load_model_and_tokenizer(model_id=args.model_id, use_4bit=True)
+    model, tokenizer = load_model_and_tokenizer(
+        model_id=args.model_id,
+        use_4bit=True,
+        seed=args.seed,
+    )
 
     if args.inspect_only_file_key:
         target = next(
@@ -474,17 +527,12 @@ def main() -> int:
             print(f"Unknown file key: {args.inspect_only_file_key}")
             return 1
 
-        examples = build_function_examples_from_file(
+        examples = build_examples_for_file(
             file_text=target.full_file,
+            instances_for_file=instances_by_key.get(target.file_key, []),
             tokenizer=tokenizer,
-            trunc_budget_tokens=args.trunc_budget,
+            trunc_budget=args.trunc_budget,
         )
-        if not examples:
-            examples = build_function_examples_from_instances(
-                instances_for_file=instances_by_key.get(target.file_key, []),
-                tokenizer=tokenizer,
-                trunc_budget_tokens=args.trunc_budget,
-            )
 
         inspection = inspect_first_supervised_example(
             examples=examples,
@@ -501,13 +549,29 @@ def main() -> int:
     rows = []
     for i, fr in enumerate(file_records):
         print(f"[{i + 1}/{len(file_records)}] {fr.file_key}")
-        out_dir = ORACLE_LORA_DIR / fr.file_key
+        out_dir = paths.oracle_lora / fr.file_key
+        examples = build_examples_for_file(
+            file_text=fr.full_file,
+            instances_for_file=instances_by_key.get(fr.file_key, []),
+            tokenizer=tokenizer,
+            trunc_budget=args.trunc_budget,
+        )
+        probe_manifest = build_behavioral_probe_manifest(
+            examples=examples,
+            n_probes=args.behavioral_probes,
+        )
+        assert_saved_probe_manifest_compatible(out_dir, probe_manifest)
+
         meta_path = out_dir / "training_meta.json"
         if meta_path.exists() and not args.force:
             with meta_path.open("r", encoding="utf-8") as f:
                 existing_meta = json.load(f)
 
-            compatible, reason = existing_meta_compatible(existing_meta, args)
+            compatible, reason = existing_meta_compatible(
+                existing_meta,
+                args,
+                probe_manifest_sha256=probe_manifest.get("manifest_sha256", ""),
+            )
             if compatible:
                 print("  skip existing compatible adapter")
                 rows.append(existing_meta)
@@ -523,7 +587,8 @@ def main() -> int:
             model_id=args.model_id,
             file_key=fr.file_key,
             file_text=fr.full_file,
-            instances_for_file=instances_by_key.get(fr.file_key, []),
+            examples=examples,
+            probe_manifest=probe_manifest,
             out_dir=out_dir,
             chunk_size=args.chunk_size,
             trunc_budget=args.trunc_budget,
@@ -537,11 +602,12 @@ def main() -> int:
             behavioral_probes=args.behavioral_probes,
             behavioral_epochs=args.behavioral_epochs,
             behavioral_lr_mult=args.behavioral_lr_mult,
+            seed=args.seed,
         )
         meta["wall_time_s"] = time.time() - t0
         rows.append(meta)
 
-    with (ORACLE_LORA_DIR / "training_summary.json").open("w", encoding="utf-8") as f:
+    with (paths.oracle_lora / "training_summary.json").open("w", encoding="utf-8") as f:
         json.dump(rows, f, indent=2)
 
     trained = [r for r in rows if r.get("status") == "trained"]

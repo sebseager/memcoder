@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import random
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +14,9 @@ import torch
 from config import (
     ENABLE_THINKING,
     INSTANCES_JSONL,
+    LAYER_TARGETING_DECISION,
+    LAYER_TARGETING_JUSTIFICATION,
+    LAYER_TARGETING_REFERENCE,
     LORA_ALPHA,
     LORA_DROPOUT,
     LORA_RANK,
@@ -40,6 +45,8 @@ class FunctionExample:
     ground_truth_body: str
     context_text: str
     source: str
+    start_line: int | None = None
+    end_line: int | None = None
 
 
 def set_seed(seed: int = SEED) -> None:
@@ -48,6 +55,63 @@ def set_seed(seed: int = SEED) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def json_sha256(payload: dict | list) -> str:
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def write_json(path: Path, payload: dict | list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def load_json(path: Path) -> dict | list | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def build_run_config(
+    *,
+    seed: int,
+    model_id: str,
+    truncation_budget_tokens: int,
+    oracle_chunk_size: int,
+    behavioral_probes: int,
+    behavioral_epochs: int,
+    behavioral_lr_mult: float,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    notes: dict | None = None,
+) -> dict:
+    config = {
+        "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "seed": seed,
+        "model_id": model_id,
+        "truncation_budget_tokens": truncation_budget_tokens,
+        "oracle_chunk_size": oracle_chunk_size,
+        "behavioral_probes": behavioral_probes,
+        "behavioral_epochs": behavioral_epochs,
+        "behavioral_lr_mult": behavioral_lr_mult,
+        "max_new_tokens": max_new_tokens,
+        "temperature": temperature,
+        "top_p": top_p,
+        "layer_targets": LORA_TARGET_MODULES,
+        "layer_targeting": {
+            "decision": LAYER_TARGETING_DECISION,
+            "justification": LAYER_TARGETING_JUSTIFICATION,
+            "reference": LAYER_TARGETING_REFERENCE,
+        },
+    }
+    if notes:
+        config["notes"] = notes
+    return config
 
 
 def load_instances(instances_path: Path = INSTANCES_JSONL) -> list[dict]:
@@ -130,8 +194,12 @@ def make_lora_config() -> LoraConfig:
     )
 
 
-def load_model_and_tokenizer(model_id: str = MODEL_ID, use_4bit: bool = True):
-    set_seed(SEED)
+def load_model_and_tokenizer(
+    model_id: str = MODEL_ID,
+    use_4bit: bool = True,
+    seed: int = SEED,
+):
+    set_seed(seed)
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -373,6 +441,8 @@ def _extract_function_example_from_node(
         ground_truth_body=ground_truth_body,
         context_text=context_text,
         source="ast",
+        start_line=start_line,
+        end_line=end_line,
     )
 
 
@@ -425,9 +495,46 @@ def build_function_examples_from_instances(
                 ground_truth_body=row["ground_truth_body"],
                 context_text=context_text,
                 source="instance_fallback",
+                start_line=int(row.get("start_line", 0))
+                if row.get("start_line")
+                else None,
+                end_line=int(row.get("end_line", 0)) if row.get("end_line") else None,
             )
         )
     return out
+
+
+def build_behavioral_probe_manifest(
+    examples: list[FunctionExample],
+    n_probes: int,
+) -> dict:
+    selected = examples[: max(0, n_probes)]
+    probes = []
+    for idx, ex in enumerate(selected):
+        probes.append(
+            {
+                "probe_index": idx,
+                "function_name": ex.function_name,
+                "source": ex.source,
+                "start_line": ex.start_line,
+                "end_line": ex.end_line,
+                "masked_function_sha256": hashlib.sha256(
+                    ex.masked_function.encode("utf-8")
+                ).hexdigest(),
+                "ground_truth_body_sha256": hashlib.sha256(
+                    ex.ground_truth_body.encode("utf-8")
+                ).hexdigest(),
+            }
+        )
+
+    manifest = {
+        "generator": "ast_order_first_n",
+        "n_requested": int(n_probes),
+        "n_selected": len(probes),
+        "probes": probes,
+    }
+    manifest["manifest_sha256"] = json_sha256(manifest)
+    return manifest
 
 
 def _apply_chat_template_for_training(

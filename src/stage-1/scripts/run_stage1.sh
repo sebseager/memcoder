@@ -3,6 +3,15 @@ set -euo pipefail
 
 MODE="pilot"
 MODEL_ID=""
+SEED=42
+TRUNC_BUDGET=2048
+MAX_NEW_TOKENS=1024
+TEMPERATURE=0.0
+TOP_P=1.0
+BEHAVIORAL_PROBES=0
+BEHAVIORAL_EPOCHS=1
+BEHAVIORAL_LR_MULT=0.5
+ORACLE_CHUNK_SIZE=3072
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -12,6 +21,38 @@ while [[ $# -gt 0 ]]; do
       ;;
     --model-id)
       MODEL_ID="$2"
+      shift 2
+      ;;
+    --seed)
+      SEED="$2"
+      shift 2
+      ;;
+    --trunc-budget)
+      TRUNC_BUDGET="$2"
+      shift 2
+      ;;
+    --max-new-tokens)
+      MAX_NEW_TOKENS="$2"
+      shift 2
+      ;;
+    --temperature)
+      TEMPERATURE="$2"
+      shift 2
+      ;;
+    --top-p)
+      TOP_P="$2"
+      shift 2
+      ;;
+    --behavioral-probes)
+      BEHAVIORAL_PROBES="$2"
+      shift 2
+      ;;
+    --behavioral-epochs)
+      BEHAVIORAL_EPOCHS="$2"
+      shift 2
+      ;;
+    --behavioral-lr-mult)
+      BEHAVIORAL_LR_MULT="$2"
       shift 2
       ;;
     *)
@@ -74,12 +115,37 @@ fi
 
 echo "Running Stage 1 mode=$MODE model=$MODEL_ID"
 
+MODEL_SLUG="$(python - <<'PY' "$MODEL_ID"
+import re
+import sys
+
+model_id = sys.argv[1]
+slug = re.sub(r"[^a-z0-9._-]+", "-", model_id.strip().lower()).strip("-")
+print(slug or "model")
+PY
+)"
+MODEL_OUTPUT_DIR="outputs/${MODEL_SLUG}"
+MODEL_LOGS_DIR="${MODEL_OUTPUT_DIR}/logs"
+mkdir -p "$MODEL_LOGS_DIR"
+
+python scripts/init_run_config.py \
+  --mode "$MODE" \
+  --model-id "$MODEL_ID" \
+  --seed "$SEED" \
+  --trunc-budget "$TRUNC_BUDGET" \
+  --chunk-size "$ORACLE_CHUNK_SIZE" \
+  --behavioral-probes "$BEHAVIORAL_PROBES" \
+  --behavioral-epochs "$BEHAVIORAL_EPOCHS" \
+  --behavioral-lr-mult "$BEHAVIORAL_LR_MULT" \
+  --max-new-tokens "$MAX_NEW_TOKENS" \
+  --temperature "$TEMPERATURE" \
+  --top-p "$TOP_P"
+
 PILOT_INSTANCE_IDS_FILE=""
 PILOT_FILE_KEYS_FILE=""
 if [[ -n "$MAX_INSTANCES" ]]; then
-  mkdir -p outputs/logs
-  PILOT_INSTANCE_IDS_FILE="outputs/logs/${MODE}_instance_ids.txt"
-  PILOT_FILE_KEYS_FILE="outputs/logs/${MODE}_file_keys.txt"
+  PILOT_INSTANCE_IDS_FILE="${MODEL_LOGS_DIR}/${MODE}_instance_ids.txt"
+  PILOT_FILE_KEYS_FILE="${MODEL_LOGS_DIR}/${MODE}_file_keys.txt"
   export STAGE0_INSTANCES_JSONL="$SRC_DIR/stage-0/outputs/instances.jsonl"
   export PILOT_INSTANCE_IDS_FILE
   export PILOT_FILE_KEYS_FILE
@@ -121,13 +187,30 @@ print(f"Pilot unique file keys: {len(keys)}")
 PY
 fi
 
-TRAIN_ARGS=(--model-id "$MODEL_ID" --max-epochs "$TRAIN_MAX_EPOCHS" --min-epochs "$TRAIN_MIN_EPOCHS")
+TRAIN_ARGS=(
+  --model-id "$MODEL_ID"
+  --seed "$SEED"
+  --trunc-budget "$TRUNC_BUDGET"
+  --chunk-size "$ORACLE_CHUNK_SIZE"
+  --max-epochs "$TRAIN_MAX_EPOCHS"
+  --min-epochs "$TRAIN_MIN_EPOCHS"
+  --behavioral-probes "$BEHAVIORAL_PROBES"
+  --behavioral-epochs "$BEHAVIORAL_EPOCHS"
+  --behavioral-lr-mult "$BEHAVIORAL_LR_MULT"
+)
 if [[ -n "$PILOT_FILE_KEYS_FILE" ]]; then
   TRAIN_ARGS+=(--file-keys-file "$PILOT_FILE_KEYS_FILE")
 fi
 python scripts/train_oracle.py "${TRAIN_ARGS[@]}"
 
-GEN_ARGS=(--model-id "$MODEL_ID")
+GEN_ARGS=(
+  --model-id "$MODEL_ID"
+  --seed "$SEED"
+  --trunc-budget "$TRUNC_BUDGET"
+  --max-new-tokens "$MAX_NEW_TOKENS"
+  --temperature "$TEMPERATURE"
+  --top-p "$TOP_P"
+)
 if [[ -n "$PILOT_INSTANCE_IDS_FILE" ]]; then
   GEN_ARGS+=(--instance-ids-file "$PILOT_INSTANCE_IDS_FILE")
 elif [[ -n "$MAX_INSTANCES" ]]; then
@@ -138,10 +221,12 @@ python scripts/generate_completions.py --condition B "${GEN_ARGS[@]}" --force
 python scripts/generate_completions.py --condition C "${GEN_ARGS[@]}" --force
 python scripts/generate_completions.py --condition D "${GEN_ARGS[@]}" --force
 
-python scripts/evaluate_completions.py --condition all
-python scripts/analyze_stage1.py
+python scripts/identifier_overlap.py --model-id "$MODEL_ID" --trunc-budget "$TRUNC_BUDGET" --condition D
 
-CAP_ARGS=(--model-id "$MODEL_ID")
+python scripts/evaluate_completions.py --condition all --model-id "$MODEL_ID"
+python scripts/analyze_stage1.py --model-id "$MODEL_ID" --seed "$SEED"
+
+CAP_ARGS=(--model-id "$MODEL_ID" --seed "$SEED")
 if [[ -n "$CAP_MAX_ADAPTERS" ]]; then
   CAP_ARGS+=(--max-adapters "$CAP_MAX_ADAPTERS")
 fi
@@ -150,4 +235,4 @@ if [[ -n "$PILOT_FILE_KEYS_FILE" ]]; then
 fi
 python scripts/capability_interference.py "${CAP_ARGS[@]}"
 
-echo "Stage 1 run complete. Outputs in stage-1/outputs"
+echo "Stage 1 run complete. Outputs in stage-1/${MODEL_OUTPUT_DIR}"
