@@ -2,6 +2,8 @@
 
 This stage evaluates whether oracle LoRA adapters recover completion quality lost by truncating context.
 
+It was mostly a failed experiment, but might be good contextualization for the paper. Superseded by `stage-1x`.
+
 ## Goals
 
 - Train one oracle LoRA per unique source file from Stage 0.
