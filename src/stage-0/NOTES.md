@@ -16,9 +16,6 @@
 
 ## Entry 2026-04-22 2
 
-- Follow-up adjustment from review:
-  - Removed warning-suppression code paths from Stage 0 scripts so warnings remain visible during research runs.
-  - Kept functional fixes only (for example, unified patch formatting and verification batching).
 - Validation run:
 
 ```bash
@@ -31,13 +28,3 @@ python -m compileall stage-0/scripts/extract_function_candidates.py stage-0/scri
 
 - Updated verification artifact placement:
   - `scripts/verify_wipe.py` now relocates SWE-rebench run report JSON files (e.g., `stage0-wipe-r*.stage0-verify-r*.json`) into `stage-0/outputs/verify_reports/`.
-  - Added legacy migration at verifier startup to clean previously generated root-level report files.
-- Migration command used:
-
-```bash
-cd /home/seb/Developer/Classes/continual-learning/src/stage-0
-source ../.venv/bin/activate
-python scripts/verify_wipe.py --target-final-instances 0 --batch-size 1 --max-workers 1 --timeout-seconds 300
-```
-
-- Observed result: root-level verify report files were moved into `outputs/verify_reports/`.
