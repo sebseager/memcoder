@@ -445,3 +445,59 @@ python -m py_compile scripts/*.py
 - Result:
   - syntax checks passed.
   - grep check confirms mode handling now lists only `tiny|small|full`.
+
+## Entry 2026-04-22 1
+
+Switched Stage 1 onto the new Stage-0 artifact-based contract and the SWE-rebench harness for pass@1.
+
+### Context
+
+- Stage 0 finished with `stage1_instances.jsonl` (17 rows). Each row contains span metadata (`start_line`, `end_line`, `function_name`), harness metadata (`docker_image`, `test_cmd`), and disk-backed artifact paths (`full_file_artifact`, `masked_file_artifact`, `ground_truth_artifact`, `function_source_artifact`, `mask_patch_artifact`) rather than inlining file text.
+- Previously Stage 1 computed `pass@1` with a local pytest heuristic on a cached repo checkout. That's gone; we now submit unified patches to `swebench.harness.run_evaluation`, matching Stage-0's `verify_wipe` wiring.
+
+### Confirmed Stage-0 outputs are sufficient
+
+- `stage-0/outputs/06_final_summary.json`: `final_instance_count=17`, all gold-verified.
+- `stage-0/outputs/stage1_instances.jsonl`: 17 rows; every row has `docker_image`, `test_cmd`, artifact paths, and `verification.{wipe,gold}` reports.
+- `stage-0/outputs/05_gold_passed_verified_instances.jsonl`: 17 rows, 1:1 with stage1_instances by `instance_id`, carries `gold_patch` inline (5-6 KB per row). Used as the auxiliary lookup for gold patches at eval time.
+
+### Stage-1 changes
+
+- `scripts/helpers.py`
+  - Made `import torch`, `import peft`, `import transformers` lazy inside the functions that need them. The pure-Python utilities (artifact hydration, AST masked-function extraction, supervised record construction) are now importable without the ML stack so we can smoke-test without torch.
+  - Added `hydrate_instance_row(row)` (hydrates `full_file`, `masked_file`, `ground_truth_body`, `function_source` from artifact paths) and made `load_instances()` call it.
+  - Rewrote `_extract_masked_function_text` to derive the masked function text from `function_source` (not `masked_file`). Stage-0's masked file preserves the docstring; the Stage-1 training contract from `_extract_function_example_from_node` treats `masked_function = signature-only + pass` with the docstring living in `ground_truth_body`. Parsing `function_source` gives us the correct body-start line. The function now dedents the source before AST parsing so methods inside a class parse cleanly.
+  - Round-trip verification: replaced ground-truth body back into the full file for all 17 instances; every reconstructed file matches the original byte-for-byte.
+
+- `scripts/evaluate_completions.py`
+  - Replaced the local `PassAtOneExecutor` (pytest heuristic) with `HarnessExecutor` that calls `python -m swebench.harness.run_evaluation` as a subprocess, writes a batched predictions JSONL, and parses per-instance reports from `logs/run_evaluation/<run_id>/<model_name>/<iid>/report.json`. Tunables mirror `stage-0/scripts/verify_wipe.py` (`--harness-{dataset-name,namespace,cache-level,timeout-seconds,max-workers,run-id-prefix,docker-config-mode}`).
+  - Added helpers: `build_signature_plus_body`, `patch_full_file_with_prediction` (splices a predicted body into `full_file[start_line-1:end_line]`), `build_unified_patch` (difflib unified diff with `a/`, `b/` prefixes, matching Stage-0), and `combine_patches` (concatenate diffs with blank-line separator, same shape as `stage-0/patch_utils.combine_patches`).
+  - Submissions to the harness are `combine_patches(gold_patch, prediction_patch)`. Rationale: the target function is selected in Stage 0 from a file that the gold patch does NOT touch (`extract_function_candidates.py` line 181-182 skips `touched_files`). So `gold_patch` and `prediction_patch` apply to disjoint files and concatenation is safe. With a perfect prediction the prediction_patch is empty and the submission equals `gold_patch` alone, which Stage 0 has already verified `resolved=True`. With a broken prediction, we flip one function body in a file the gold patch didn't touch, so any test failure is attributable to our completion.
+  - `InstanceMeta` now carries `gold_patch`; `load_instance_meta` takes `gold_patches_jsonl` (defaults to `STAGE0_DIR/outputs/05_gold_passed_verified_instances.jsonl`) and builds the lookup.
+  - Added `--gold-patches-jsonl` CLI flag and plumbed it through `main()`.
+  - Dropped the `--stage0-repos-dir` dependency entirely.
+
+- `scripts/run_stage1.sh`
+  - Replaced the `pytest`-availability env check with `import swebench` and `docker` checks when `PASS_AT_1_MODE=swebench_harness`.
+  - Defaults: `PASS_AT_1_MODE=swebench_harness`, `HARNESS_MAX_WORKERS=2`, `HARNESS_TIMEOUT_SECONDS=1800` (same as `stage-0/scripts/run_stage0.sh`).
+  - No other structural changes; `train_oracle.py`, `generate_completions.py`, `identifier_overlap.py`, `capability_interference.py`, and `analyze_stage1.py` all keep working against the hydrated dict layout (they read `full_file`, `masked_function`, `ground_truth_body`, etc., which `hydrate_instance_row` populates).
+
+### Smoke tests performed
+
+- `python -m py_compile stage-1/scripts/*.py` → OK.
+- Hydrated all 17 instances via `evaluate_completions.load_instance_meta`; every row has `full_file`, `masked_function`, `docker_image`, `gold_patch`.
+- Ground-truth round-trip: `patch_full_file_with_prediction(..., predicted_body=ground_truth_body)` produces a file byte-identical to `full_file` for all 17 instances → `build_unified_patch` returns an empty diff → `combine_patches(gold_patch, "")` equals `gold_patch` alone. So a perfect prediction submits exactly what Stage-0's gold verification submitted.
+- Bad-prediction test: using `"    return None"` produced a 60-line diff over the target file, and `combine_patches(gold_patch, bad_patch)` correctly interleaved both hunks (gold over `optimade/client/client.py`; bad over `optimade/server/routers/utils.py`).
+- `evaluate_completions.py --help` now lists the new `--gold-patches-jsonl` flag and all harness tunables.
+- Remaining module-level imports (`torch`, `peft`) in `generate_completions.py`, `train_oracle.py`, `capability_interference.py` still require the ML stack -- those are the scripts that actually load models and will succeed once `torch` is reinstalled in `src/.venv`.
+
+### What I did NOT change
+
+- Stage 0 itself: no edits to any `src/stage-0/scripts/*.py` or to `stage1_instances.jsonl`. The gold patches needed at eval time are read from `stage-0/outputs/05_gold_passed_verified_instances.jsonl`, which Stage 0 already wrote.
+- `config.py`: kept `LORA_TARGET_MODULES`, seed locking, output path model-scoping, etc. from the Bridge step -- none of those needed to change to adopt the harness.
+
+### Open items / watch-outs for the next run
+
+- First harness invocation per condition will pull ~17 Docker images (already used in Stage 0, so usually cached).
+- `HARNESS_MAX_WORKERS=2` is conservative; bump if GPU-bound gen time is the bottleneck and Docker concurrency is safe on the host.
+- A noop prediction patch combined with no gold patch falls back to `status="noop_patch"` and `pass@1=0` to avoid spurious positives. With 17/17 gold patches available this path shouldn't trigger in the full run.

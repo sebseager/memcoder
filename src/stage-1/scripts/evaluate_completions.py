@@ -140,7 +140,37 @@ def syntax_is_valid(masked_function: str, body: str) -> bool:
         return False
 
 
-def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
+def _load_gold_patch_lookup(gold_jsonl: Path) -> dict[str, str]:
+    """Return ``instance_id -> gold_patch`` from Stage-0's upstream jsonl."""
+
+    if not gold_jsonl.exists():
+        print(
+            "Warning: gold patches file not found; harness will submit only the "
+            f"prediction patch (tests may fail for unrelated reasons): {gold_jsonl}"
+        )
+        return {}
+
+    lookup: dict[str, str] = {}
+    with gold_jsonl.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            iid = rec.get("instance_id")
+            gp = rec.get("gold_patch")
+            if isinstance(iid, str) and isinstance(gp, str) and gp.strip():
+                lookup[iid] = gp
+    return lookup
+
+
+def load_instance_meta(
+    instances_jsonl: Path,
+    gold_patches_jsonl: Path | None = None,
+) -> dict[str, InstanceMeta]:
     if not instances_jsonl.exists():
         print(
             "Warning: instances file not found, "
@@ -151,6 +181,10 @@ def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
     # Hydrate artifact-backed rows by delegating to the shared helper, which loads
     # full_file / masked_file / masked_function from disk.
     from helpers import hydrate_instance_row  # local import to avoid torch at import
+
+    gold_lookup = _load_gold_patch_lookup(
+        gold_patches_jsonl if gold_patches_jsonl is not None else DEFAULT_GOLD_PATCHES_JSONL
+    )
 
     out: dict[str, InstanceMeta] = {}
     with instances_jsonl.open("r", encoding="utf-8") as f:
@@ -186,6 +220,7 @@ def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
                 full_file=str(rec.get("full_file", "")),
                 docker_image=str(rec.get("docker_image", "")),
                 test_cmd=str(rec.get("test_cmd", "")),
+                gold_patch=gold_lookup.get(instance_id, ""),
             )
     return out
 
@@ -229,6 +264,18 @@ def build_unified_patch(file_path: str, original_text: str, new_text: str) -> st
     )
     patch = "\n".join(diff).strip()
     return patch + "\n" if patch else ""
+
+
+def combine_patches(*patches: str) -> str:
+    """Concatenate unified diffs. Safe because Stage-0 only retains candidate
+    functions whose file is NOT touched by the gold patch, so the patches
+    always apply to disjoint files.
+    """
+
+    chunks = [p.strip() for p in patches if p and p.strip()]
+    if not chunks:
+        return ""
+    return "\n\n".join(chunks).strip() + "\n"
 
 
 def _build_harness_env(mode: str, stage1_root: Path) -> dict[str, str]:
@@ -374,11 +421,19 @@ class HarnessExecutor:
                 masked_function=meta.masked_function,
                 predicted_body=predicted,
             )
-            patch_text = build_unified_patch(meta.file_path, meta.full_file, patched)
-            if not patch_text.strip():
-                # No-op patch: prediction exactly matches base file (unexpected, but
-                # treat as "resolved by base_commit", i.e. the test suite is already
-                # green without any change).
+            prediction_patch = build_unified_patch(
+                meta.file_path, meta.full_file, patched
+            )
+            # Mirror Stage-0 verify_wipe: always include the gold_patch so that
+            # unrelated bugs are fixed before tests run. Our prediction_patch
+            # touches only the target function in a file the gold patch does
+            # not modify, so concatenation is safe.
+            submission_patch = combine_patches(meta.gold_patch, prediction_patch)
+            if not submission_patch.strip():
+                # No-op patch: prediction exactly matches base file AND there is
+                # no gold_patch available -- nothing to apply, so the harness
+                # would run base_commit tests. Treat as "executed but not
+                # resolved" to avoid spurious positives.
                 results[iid] = PassAtOneResult(
                     pass_at_1=0,
                     source="executed",
@@ -390,7 +445,7 @@ class HarnessExecutor:
                 {
                     "instance_id": iid,
                     "model_name_or_path": f"stage1-{condition.lower()}",
-                    "model_patch": patch_text,
+                    "model_patch": submission_patch,
                 }
             )
             instance_ids.append(iid)
@@ -618,6 +673,16 @@ def parse_args() -> argparse.Namespace:
         default=INSTANCES_JSONL,
         help="Path to Stage 0 stage1_instances.jsonl with span metadata.",
     )
+    p.add_argument(
+        "--gold-patches-jsonl",
+        type=Path,
+        default=DEFAULT_GOLD_PATCHES_JSONL,
+        help=(
+            "Path to Stage 0 jsonl that keeps inline gold_patch per instance. "
+            "Needed so the harness receives gold_patch+prediction_patch "
+            "(analogous to Stage-0 verify_wipe)."
+        ),
+    )
     # Harness tunables (mirror stage-0/scripts/verify_wipe.py).
     p.add_argument("--harness-dataset-name", default=DEFAULT_HARNESS_DATASET)
     p.add_argument("--harness-namespace", default=DEFAULT_HARNESS_NAMESPACE)
@@ -693,7 +758,9 @@ def main() -> int:
     paths = get_stage1_paths(args.model_id)
     paths.evaluation.mkdir(parents=True, exist_ok=True)
 
-    instance_meta = load_instance_meta(args.instances_jsonl)
+    instance_meta = load_instance_meta(
+        args.instances_jsonl, gold_patches_jsonl=args.gold_patches_jsonl
+    )
 
     harness_predictions_dir = paths.evaluation / "harness_predictions"
     harness_reports_dir = paths.evaluation / "harness_reports"

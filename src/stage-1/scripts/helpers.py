@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import torch
 from config import (
     ENABLE_THINKING,
     INSTANCES_JSONL,
@@ -26,8 +25,12 @@ from config import (
     SEED,
     TRUNCATION_BUDGET_TOKENS,
 )
-from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+# Torch / transformers / peft are imported lazily inside the functions that
+# actually need them. This keeps the pure-Python utilities in this module
+# (artifact hydration, AST-based masked-function extraction, supervised
+# record construction, etc.) importable in environments that haven't yet
+# installed the heavy ML stack.
 
 
 @dataclass
@@ -50,6 +53,8 @@ class FunctionExample:
 
 
 def set_seed(seed: int = SEED) -> None:
+    import torch
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -321,7 +326,9 @@ def truncate_to_budget(text: str, tokenizer, budget_tokens: int) -> str:
     return merged
 
 
-def make_lora_config() -> LoraConfig:
+def make_lora_config():
+    from peft import LoraConfig
+
     return LoraConfig(
         r=LORA_RANK,
         lora_alpha=LORA_ALPHA,
@@ -337,6 +344,9 @@ def load_model_and_tokenizer(
     use_4bit: bool = True,
     seed: int = SEED,
 ):
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
     set_seed(seed)
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     if tokenizer.pad_token is None:
@@ -371,6 +381,8 @@ def load_model_and_tokenizer(
 
 
 def prepare_model_for_oracle_training(model):
+    from peft import prepare_model_for_kbit_training
+
     model = prepare_model_for_kbit_training(model)
     model.config.use_cache = False
     if hasattr(model, "gradient_checkpointing_enable"):
@@ -383,9 +395,7 @@ def prepare_model_for_oracle_training(model):
     return model
 
 
-def cycle_lora_adapter(
-    peft_model: PeftModel, adapter_name: str = "default"
-) -> PeftModel:
+def cycle_lora_adapter(peft_model, adapter_name: str = "default"):
     peft_model.delete_adapter(adapter_name)
     peft_model.add_adapter(adapter_name, make_lora_config())
     peft_model.set_adapter(adapter_name)
@@ -420,6 +430,8 @@ def generate_text(
     temperature: float,
     top_p: float,
 ) -> str:
+    import torch
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
