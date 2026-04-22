@@ -9,6 +9,9 @@ MAX_NEW_TOKENS=1024
 TEMPERATURE=0.0
 TOP_P=1.0
 ORACLE_CHUNK_SIZE=3072
+PASS_AT_1_MODE="swebench_harness"
+HARNESS_MAX_WORKERS=2
+HARNESS_TIMEOUT_SECONDS=1800
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +43,18 @@ while [[ $# -gt 0 ]]; do
       TOP_P="$2"
       shift 2
       ;;
+    --pass-at-1-mode)
+      PASS_AT_1_MODE="$2"
+      shift 2
+      ;;
+    --harness-max-workers)
+      HARNESS_MAX_WORKERS="$2"
+      shift 2
+      ;;
+    --harness-timeout-seconds)
+      HARNESS_TIMEOUT_SECONDS="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown arg: $1"
       exit 1
@@ -64,10 +79,16 @@ fi
 
 source .venv/bin/activate
 
-if ! python -c "import pytest" >/dev/null 2>&1; then
-  echo "Missing pytest in src/.venv (required for execution-based pass@1)."
-  echo "Install it with: source .venv/bin/activate && python -m pip install pytest"
-  exit 1
+if [[ "$PASS_AT_1_MODE" == "swebench_harness" ]]; then
+  if ! python -c "import swebench" >/dev/null 2>&1; then
+    echo "Missing swebench in src/.venv (required for harness-based pass@1)."
+    echo "Install with: source .venv/bin/activate && uv pip install 'swe-rebench @ ...'"
+    exit 1
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Missing docker binary on PATH (required for SWE-rebench harness evaluation)."
+    exit 1
+  fi
 fi
 
 cd "$STAGE_DIR"
@@ -209,7 +230,14 @@ python scripts/generate_completions.py --condition D "${GEN_ARGS[@]}" --force
 
 python scripts/identifier_overlap.py --model-id "$MODEL_ID" --trunc-budget "$TRUNC_BUDGET" --condition D
 
-python scripts/evaluate_completions.py --condition all --model-id "$MODEL_ID"
+EVAL_ARGS=(
+  --condition all
+  --model-id "$MODEL_ID"
+  --pass-at-1-mode "$PASS_AT_1_MODE"
+  --harness-max-workers "$HARNESS_MAX_WORKERS"
+  --harness-timeout-seconds "$HARNESS_TIMEOUT_SECONDS"
+)
+python scripts/evaluate_completions.py "${EVAL_ARGS[@]}"
 python scripts/analyze_stage1.py --model-id "$MODEL_ID" --seed "$SEED"
 
 CAP_ARGS=(--model-id "$MODEL_ID" --seed "$SEED")

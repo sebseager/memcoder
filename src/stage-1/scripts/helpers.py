@@ -114,6 +114,142 @@ def build_run_config(
     return config
 
 
+def _extract_masked_function_text(
+    function_source_text: str,
+    function_name: str,
+) -> str:
+    """Return the signature lines followed by a single ``pass`` body.
+
+    Stage 1's internal contract (see ``_extract_function_example_from_node``)
+    treats ``masked_function`` as the declaration lines only -- decorators plus
+    the (possibly multi-line) ``def`` through the colon -- with a single
+    ``pass`` body at the body's indent. Any docstring belongs to
+    ``ground_truth_body``.
+
+    Stage 0's ``masked_file_artifact`` preserves the docstring, so AST-parsing
+    that file would incorrectly include the docstring here and lead to a
+    duplicated docstring when we rebuild the function body during
+    evaluation. Parse ``function_source`` instead (it's the original
+    unmasked function text, starting at line 1 of ``function_source``).
+    """
+
+    import textwrap
+
+    # function_source may be indented (e.g. a method inside a class) because it
+    # is extracted verbatim from the original file. Dedent only for parsing; use
+    # the original text when slicing lines so indentation is preserved.
+    dedented = textwrap.dedent(function_source_text)
+    try:
+        tree = ast.parse(dedented)
+    except SyntaxError as exc:
+        raise ValueError(
+            f"function_source for {function_name!r} did not parse: {exc}"
+        ) from exc
+
+    target: ast.AST | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name == function_name:
+                target = node
+                break
+    if target is None:
+        # Fall back to the first function in the source; function_source is
+        # expected to contain a single function definition.
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                target = node
+                break
+    if target is None:
+        raise ValueError(
+            f"No function definition in function_source for {function_name!r}"
+        )
+
+    lines = function_source_text.splitlines()
+    body = getattr(target, "body", None)
+    if not body:
+        raise ValueError(
+            f"Function {function_name!r} has no body in function_source"
+        )
+    body_start_line = int(getattr(body[0], "lineno"))
+    start_line = int(getattr(target, "lineno"))
+    decorator_lines = [
+        int(getattr(d, "lineno", start_line))
+        for d in getattr(target, "decorator_list", [])
+    ]
+    if decorator_lines:
+        start_line = min([start_line] + decorator_lines)
+
+    signature_lines = lines[start_line - 1 : body_start_line - 1]
+    if not signature_lines:
+        raise ValueError(
+            f"Could not extract signature for {function_name!r}"
+        )
+
+    first_body_line = lines[body_start_line - 1] if body_start_line - 1 < len(lines) else ""
+    indent_match = re.match(r"^\s*", first_body_line)
+    body_indent = indent_match.group(0) if indent_match is not None else "    "
+    if not body_indent:
+        def_indent_match = re.match(r"^\s*", signature_lines[0])
+        body_indent = (def_indent_match.group(0) if def_indent_match else "") + "    "
+
+    return "\n".join(signature_lines).rstrip() + "\n" + body_indent + "pass"
+
+
+def _read_artifact_text(path_str: str | None) -> str:
+    if not path_str:
+        return ""
+    path = Path(path_str)
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def hydrate_instance_row(row: dict) -> dict:
+    """Inject full_file / masked_file / masked_function / ground_truth_body.
+
+    Stage 0 now emits artifacts on disk (`full_file_artifact`, `masked_file_artifact`,
+    `ground_truth_artifact`, `function_source_artifact`) rather than inlining file
+    text in the JSONL row. Older Stage 1 code assumes the inlined fields, so we
+    hydrate the row in-place when artifacts are present, preserving any already
+    inlined fields if they exist.
+    """
+
+    full_file = row.get("full_file")
+    if not full_file:
+        full_file = _read_artifact_text(row.get("full_file_artifact"))
+        if full_file:
+            row["full_file"] = full_file
+
+    masked_file = row.get("masked_file")
+    if not masked_file:
+        masked_file = _read_artifact_text(row.get("masked_file_artifact"))
+        if masked_file:
+            row["masked_file"] = masked_file
+
+    ground_truth = row.get("ground_truth_body")
+    if not ground_truth:
+        ground_truth = _read_artifact_text(row.get("ground_truth_artifact"))
+        if ground_truth:
+            row["ground_truth_body"] = ground_truth
+
+    function_source = row.get("function_source")
+    if not function_source:
+        function_source = _read_artifact_text(row.get("function_source_artifact"))
+        if function_source:
+            row["function_source"] = function_source
+
+    if not row.get("masked_function") and function_source and row.get("function_name"):
+        try:
+            row["masked_function"] = _extract_masked_function_text(
+                function_source_text=function_source,
+                function_name=str(row["function_name"]),
+            )
+        except ValueError:
+            row["masked_function"] = ""
+
+    return row
+
+
 def load_instances(instances_path: Path = INSTANCES_JSONL) -> list[dict]:
     rows = []
     with instances_path.open("r", encoding="utf-8") as f:
@@ -121,7 +257,9 @@ def load_instances(instances_path: Path = INSTANCES_JSONL) -> list[dict]:
             line = line.strip()
             if not line:
                 continue
-            rows.append(json.loads(line))
+            row = json.loads(line)
+            hydrate_instance_row(row)
+            rows.append(row)
     return rows
 
 

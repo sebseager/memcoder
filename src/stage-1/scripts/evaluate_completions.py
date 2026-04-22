@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import argparse
 import ast
-import importlib.util
+import difflib
 import json
 import math
-import re
+import os
 import subprocess
-import sys
+import time
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import pandas as pd
 from config import (
@@ -23,7 +23,22 @@ from config import (
     get_stage1_paths,
 )
 
-SKIP_PATH_PARTS = {".git", ".venv", "venv", "node_modules", "__pycache__"}
+# Defaults tuned to match Stage 0's verify_wipe configuration, which has already
+# proven stable on this dataset.
+DEFAULT_HARNESS_DATASET = "nebius/SWE-rebench-leaderboard"
+DEFAULT_HARNESS_NAMESPACE = "swerebench"
+DEFAULT_HARNESS_CACHE_LEVEL = "instance"
+DEFAULT_HARNESS_TIMEOUT_SECONDS = 1800
+DEFAULT_HARNESS_MAX_WORKERS = 2
+
+# Gold patches are not inlined in stage1_instances.jsonl (the Stage-0 final
+# artifact) but are required at eval time so we can submit `gold_patch +
+# prediction_patch` to the harness -- mirroring Stage-0's verify_wipe which
+# submits `gold_patch + mask_patch`. Stage-0 keeps them in
+# `05_gold_passed_verified_instances.jsonl` keyed by instance_id.
+DEFAULT_GOLD_PATCHES_JSONL = (
+    STAGE0_DIR / "outputs" / "05_gold_passed_verified_instances.jsonl"
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +50,10 @@ class InstanceMeta:
     start_line: int
     end_line: int
     masked_function: str
+    full_file: str
+    docker_image: str
+    test_cmd: str
+    gold_patch: str
 
 
 @dataclass(frozen=True)
@@ -42,7 +61,6 @@ class PassAtOneResult:
     pass_at_1: int
     source: str
     status: str
-    selected_test_count: int
 
 
 PER_INSTANCE_COLUMNS = [
@@ -54,7 +72,6 @@ PER_INSTANCE_COLUMNS = [
     "pass_at_1",
     "pass_at_1_source",
     "pass_at_1_status",
-    "selected_test_count",
     "bleu4",
     "syntax_valid",
     "generation_time_s",
@@ -126,9 +143,14 @@ def syntax_is_valid(masked_function: str, body: str) -> bool:
 def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
     if not instances_jsonl.exists():
         print(
-            f"Warning: instances file not found, execution pass@1 disabled: {instances_jsonl}"
+            "Warning: instances file not found, "
+            f"harness pass@1 disabled: {instances_jsonl}"
         )
         return {}
+
+    # Hydrate artifact-backed rows by delegating to the shared helper, which loads
+    # full_file / masked_file / masked_function from disk.
+    from helpers import hydrate_instance_row  # local import to avoid torch at import
 
     out: dict[str, InstanceMeta] = {}
     with instances_jsonl.open("r", encoding="utf-8") as f:
@@ -140,6 +162,8 @@ def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
+
+            hydrate_instance_row(rec)
 
             instance_id = rec.get("instance_id")
             start_line = rec.get("start_line")
@@ -159,394 +183,303 @@ def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
                 start_line=start_line,
                 end_line=end_line,
                 masked_function=str(rec.get("masked_function", "")),
+                full_file=str(rec.get("full_file", "")),
+                docker_image=str(rec.get("docker_image", "")),
+                test_cmd=str(rec.get("test_cmd", "")),
             )
     return out
 
 
-def repo_root_for_name(repos_root: Path, repo_name: str) -> Path:
-    return repos_root / repo_name.replace("/", "__")
+def build_signature_plus_body(masked_function: str, predicted_body: str) -> str:
+    signature = make_signature(masked_function)
+    body = predicted_body.rstrip()
+    if not body:
+        return signature
+    return signature + "\n" + body
 
 
-def is_test_file(relative_path: PurePosixPath) -> bool:
-    name = relative_path.name.lower()
-    if name.startswith("test_") or name.endswith("_test.py"):
-        return True
-    return "tests" in relative_path.parts
+def patch_full_file_with_prediction(
+    full_file: str,
+    start_line: int,
+    end_line: int,
+    masked_function: str,
+    predicted_body: str,
+) -> str:
+    lines = full_file.splitlines()
+    replacement = build_signature_plus_body(masked_function, predicted_body)
+    replacement_lines = replacement.splitlines()
+    start_idx = max(0, start_line - 1)
+    end_idx = min(len(lines), end_line)
+    patched_lines = lines[:start_idx] + replacement_lines + lines[end_idx:]
+    patched = "\n".join(patched_lines)
+    if full_file.endswith("\n"):
+        patched += "\n"
+    return patched
 
 
-def module_candidates_for_file(file_path: str) -> list[str]:
-    path = PurePosixPath(file_path)
-    parts = list(path.with_suffix("").parts)
-    if not parts:
-        return []
-    if parts[-1] == "__init__":
-        parts = parts[:-1]
-
-    candidates = set()
-    if parts:
-        candidates.add(".".join(parts))
-        candidates.add(parts[-1])
-    if len(parts) > 1 and parts[0] in {"src", "lib", "python"}:
-        candidates.add(".".join(parts[1:]))
-
-    return sorted(x for x in candidates if x)
+def build_unified_patch(file_path: str, original_text: str, new_text: str) -> str:
+    original_lines = original_text.splitlines()
+    new_lines = new_text.splitlines()
+    diff = difflib.unified_diff(
+        original_lines,
+        new_lines,
+        fromfile=f"a/{file_path}",
+        tofile=f"b/{file_path}",
+        lineterm="",
+    )
+    patch = "\n".join(diff).strip()
+    return patch + "\n" if patch else ""
 
 
-class PassAtOneExecutor:
+def _build_harness_env(mode: str, stage1_root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    if mode != "safe":
+        return env
+
+    safe_dir = stage1_root / ".docker-safe-config"
+    safe_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = safe_dir / "config.json"
+    payload: dict[str, dict] = {"auths": {}}
+    if cfg_path.exists():
+        try:
+            existing = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = {}
+        auths = existing.get("auths")
+        if isinstance(auths, dict):
+            payload["auths"] = auths
+    cfg_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    env["DOCKER_CONFIG"] = str(safe_dir)
+    return env
+
+
+def _move_report_to_outputs(
+    model_name: str, run_id: str, reports_dir: Path
+) -> str:
+    src_name = f"{model_name.replace('/', '__')}.{run_id}.json"
+    src_path = Path(src_name)
+    if not src_path.exists():
+        return ""
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    dst_path = reports_dir / src_path.name
+    if dst_path.exists():
+        dst_path.unlink()
+    src_path.replace(dst_path)
+    return str(dst_path)
+
+
+def _read_harness_report(run_id: str, model_name: str, instance_id: str) -> dict | None:
+    report_path = (
+        Path("logs")
+        / "run_evaluation"
+        / run_id
+        / model_name
+        / instance_id
+        / "report.json"
+    )
+    if not report_path.exists():
+        return None
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return payload.get(instance_id)
+
+
+class HarnessExecutor:
+    """Run SWE-rebench harness evaluations for a batch of predictions.
+
+    Each call submits one predictions JSONL covering all instances in the batch
+    and parses per-instance reports. This matches Stage 0's verify_wipe wiring
+    so we get the same pass/fail signal that made Stage 0 instances pre-verified.
+    """
+
     def __init__(
         self,
         *,
-        mode: str,
-        repos_root: Path,
-        instances: dict[str, InstanceMeta],
-        test_timeout_seconds: int,
-        max_relevant_tests: int,
+        enabled: bool,
+        stage1_root: Path,
+        predictions_dir: Path,
+        reports_dir: Path,
+        dataset_name: str,
+        namespace: str,
+        cache_level: str,
+        timeout_seconds: int,
+        max_workers: int,
+        run_id_prefix: str,
+        docker_config_mode: str,
     ) -> None:
-        self.mode = mode
-        self.repos_root = repos_root
-        self.instances = instances
-        self.test_timeout_seconds = max(1, int(test_timeout_seconds))
-        self.max_relevant_tests = max(1, int(max_relevant_tests))
-        self.pytest_available = importlib.util.find_spec("pytest") is not None
-        self._warned_missing_pytest = False
+        self.enabled = enabled
+        self.stage1_root = stage1_root
+        self.predictions_dir = predictions_dir
+        self.reports_dir = reports_dir
+        self.dataset_name = dataset_name
+        self.namespace = namespace
+        self.cache_level = cache_level
+        self.timeout_seconds = max(1, int(timeout_seconds))
+        self.max_workers = max(1, int(max_workers))
+        self.run_id_prefix = run_id_prefix
+        self.docker_config_mode = docker_config_mode
 
-        self._repo_tests_cache: dict[str, list[str]] = {}
-        self._test_text_cache: dict[tuple[str, str], str] = {}
-        self._selection_cache: dict[tuple[str, str, str], list[str]] = {}
-        self._baseline_result_cache: dict[tuple[str, tuple[str, ...]], int] = {}
-
-    def _fallback(
+    def evaluate_condition(
         self,
-        exact_match: int,
-        status: str,
-        selected_test_count: int = 0,
-    ) -> PassAtOneResult:
-        return PassAtOneResult(
-            pass_at_1=int(exact_match),
-            source="fallback_exact_match",
-            status=status,
-            selected_test_count=selected_test_count,
-        )
+        condition: str,
+        records: list[dict],
+        instances: dict[str, InstanceMeta],
+    ) -> dict[str, PassAtOneResult]:
+        if not self.enabled or not records:
+            return {}
 
-    def _run_pytest(
-        self,
-        *,
-        repo_root: Path,
-        selected_tests: list[str],
-    ) -> tuple[int, str]:
-        try:
-            proc = subprocess.run(
-                [sys.executable, "-m", "pytest", "-q", "-x", *selected_tests],
-                cwd=repo_root,
-                text=True,
-                capture_output=True,
-                timeout=self.test_timeout_seconds,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return -1, ""
+        self.predictions_dir.mkdir(parents=True, exist_ok=True)
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
 
-        combined_output = (proc.stdout or "") + "\n" + (proc.stderr or "")
-        return proc.returncode, combined_output
+        predictions: list[dict] = []
+        results: dict[str, PassAtOneResult] = {}
+        instance_ids: list[str] = []
+        patch_texts: dict[str, str] = {}
 
-    def _list_repo_tests(self, repo_name: str) -> list[str]:
-        cached = self._repo_tests_cache.get(repo_name)
-        if cached is not None:
-            return cached
-
-        repo_root = repo_root_for_name(self.repos_root, repo_name)
-        if not repo_root.exists():
-            self._repo_tests_cache[repo_name] = []
-            return []
-
-        tests: list[str] = []
-        for path in repo_root.rglob("*.py"):
-            if any(part in SKIP_PATH_PARTS for part in path.parts):
+        for rec in records:
+            iid = str(rec.get("instance_id", ""))
+            if not iid:
                 continue
-            if not path.is_file():
-                continue
-            rel = path.relative_to(repo_root).as_posix()
-            if is_test_file(PurePosixPath(rel)):
-                tests.append(rel)
-
-        tests.sort()
-        self._repo_tests_cache[repo_name] = tests
-        return tests
-
-    def _read_test_text(self, repo_name: str, rel_path: str) -> str:
-        key = (repo_name, rel_path)
-        cached = self._test_text_cache.get(key)
-        if cached is not None:
-            return cached
-
-        repo_root = repo_root_for_name(self.repos_root, repo_name)
-        test_path = repo_root / rel_path
-        try:
-            text = test_path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            text = ""
-        self._test_text_cache[key] = text
-        return text
-
-    def _select_relevant_tests(
-        self,
-        repo_name: str,
-        file_path: str,
-        function_name: str,
-    ) -> list[str]:
-        cache_key = (repo_name, file_path, function_name)
-        cached = self._selection_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        tests = self._list_repo_tests(repo_name)
-        if not tests:
-            self._selection_cache[cache_key] = []
-            return []
-
-        module_patterns = [
-            re.compile(
-                rf"(^|\n)\s*(from\s+{re.escape(module)}\s+import\b|import\s+{re.escape(module)}(\s|$|,|\.))",
-                flags=re.MULTILINE,
-            )
-            for module in module_candidates_for_file(file_path)
-        ]
-        function_pattern = (
-            re.compile(rf"\b{re.escape(function_name)}\b") if function_name else None
-        )
-        source_stem = PurePosixPath(file_path).stem
-        stem_pattern = (
-            re.compile(rf"\b{re.escape(source_stem)}\b") if source_stem else None
-        )
-
-        scored: list[tuple[int, str]] = []
-        for rel_path in tests:
-            text = self._read_test_text(repo_name, rel_path)
-            if not text:
-                continue
-
-            score = 0
-            if function_pattern is not None and function_pattern.search(text):
-                score += 2
-            if any(pattern.search(text) for pattern in module_patterns):
-                score += 3
-            if stem_pattern is not None and stem_pattern.search(text):
-                score += 1
-
-            if score > 0:
-                scored.append((score, rel_path))
-
-        scored.sort(key=lambda x: (-x[0], x[1]))
-
-        selected = [rel for _, rel in scored[: self.max_relevant_tests]]
-        if not selected:
-            source_path = PurePosixPath(file_path)
-            source_rel = source_path.as_posix()
-            if source_rel in tests and is_test_file(source_path):
-                selected = [source_rel]
-            else:
-                same_dir = [
-                    rel
-                    for rel in tests
-                    if PurePosixPath(rel).parent == source_path.parent
-                ]
-                if same_dir:
-                    selected = sorted(same_dir)[: self.max_relevant_tests]
-                elif source_stem:
-                    stem_matches = [
-                        rel
-                        for rel in tests
-                        if source_stem.lower() in PurePosixPath(rel).stem.lower()
-                    ]
-                    selected = sorted(stem_matches)[: self.max_relevant_tests]
-
-        self._selection_cache[cache_key] = selected
-        return selected
-
-    def _build_patched_function(
-        self,
-        masked_function: str,
-        predicted_body: str,
-    ) -> str:
-        signature = make_signature(masked_function)
-        body = predicted_body.rstrip()
-        if not body:
-            return signature
-        return signature + "\n" + body
-
-    def _patch_file_text(
-        self,
-        original_text: str,
-        start_line: int,
-        end_line: int,
-        masked_function: str,
-        predicted_body: str,
-    ) -> str:
-        lines = original_text.splitlines()
-        replacement = self._build_patched_function(masked_function, predicted_body)
-        replacement_lines = replacement.splitlines()
-
-        start_idx = max(0, start_line - 1)
-        end_idx = min(len(lines), end_line)
-        patched_lines = lines[:start_idx] + replacement_lines + lines[end_idx:]
-        patched = "\n".join(patched_lines)
-        if original_text.endswith("\n"):
-            patched += "\n"
-        return patched
-
-    def evaluate_record(
-        self,
-        rec: dict,
-        *,
-        exact_match: int,
-        syntax_valid: bool,
-    ) -> PassAtOneResult:
-        if self.mode == "exact_only":
-            return PassAtOneResult(
-                pass_at_1=int(exact_match),
-                source="exact_match_only",
-                status="mode_exact_only",
-                selected_test_count=0,
-            )
-
-        if not syntax_valid:
-            return PassAtOneResult(
-                pass_at_1=0,
-                source="executed",
-                status="syntax_invalid",
-                selected_test_count=0,
-            )
-
-        if not self.pytest_available:
-            if not self._warned_missing_pytest:
-                print(
-                    "Warning: pytest not installed in current interpreter; "
-                    "pass@1 falls back to exact match."
+            meta = instances.get(iid)
+            if meta is None:
+                results[iid] = PassAtOneResult(
+                    pass_at_1=0,
+                    source="fallback",
+                    status="missing_instance_meta",
                 )
-                self._warned_missing_pytest = True
-            return self._fallback(exact_match, "pytest_not_installed")
+                continue
+            if not meta.full_file:
+                results[iid] = PassAtOneResult(
+                    pass_at_1=0,
+                    source="fallback",
+                    status="missing_full_file",
+                )
+                continue
 
-        instance_id = str(rec.get("instance_id", ""))
-        meta = self.instances.get(instance_id)
-        if meta is None:
-            return self._fallback(exact_match, "missing_instance_meta")
+            predicted = str(rec.get("predicted_body", ""))
+            if not rec.get("_syntax_valid_", True):
+                results[iid] = PassAtOneResult(
+                    pass_at_1=0,
+                    source="executed",
+                    status="syntax_invalid",
+                )
+                continue
 
-        repo_name = str(rec.get("repo") or meta.repo)
-        repo_root = repo_root_for_name(self.repos_root, repo_name)
-        if not repo_root.exists():
-            return self._fallback(exact_match, "missing_repo_clone")
-
-        target_file = repo_root / meta.file_path
-        if not target_file.exists():
-            return self._fallback(exact_match, "missing_target_file")
-
-        selected_tests = self._select_relevant_tests(
-            repo_name=repo_name,
-            file_path=meta.file_path,
-            function_name=meta.function_name,
-        )
-        if not selected_tests:
-            return self._fallback(exact_match, "no_relevant_tests")
-
-        cache_key = (repo_name, tuple(selected_tests))
-        baseline_rc = self._baseline_result_cache.get(cache_key)
-        if baseline_rc is None:
-            baseline_rc, _ = self._run_pytest(
-                repo_root=repo_root,
-                selected_tests=selected_tests,
-            )
-            self._baseline_result_cache[cache_key] = baseline_rc
-
-        if baseline_rc == -1:
-            return self._fallback(
-                exact_match,
-                "baseline_timeout",
-                selected_test_count=len(selected_tests),
-            )
-        if baseline_rc == 5:
-            return self._fallback(
-                exact_match,
-                "baseline_no_tests_collected",
-                selected_test_count=len(selected_tests),
-            )
-        if baseline_rc != 0:
-            return self._fallback(
-                exact_match,
-                f"baseline_pytest_error_{baseline_rc}",
-                selected_test_count=len(selected_tests),
-            )
-
-        try:
-            original_text = target_file.read_text(encoding="utf-8", errors="ignore")
-            patched_text = self._patch_file_text(
-                original_text=original_text,
+            patched = patch_full_file_with_prediction(
+                full_file=meta.full_file,
                 start_line=meta.start_line,
                 end_line=meta.end_line,
                 masked_function=meta.masked_function,
-                predicted_body=str(rec.get("predicted_body", "")),
+                predicted_body=predicted,
             )
-        except OSError:
-            return self._fallback(exact_match, "io_error")
-
-        target_file.write_text(patched_text, encoding="utf-8")
-        try:
-            patched_rc, patched_output = self._run_pytest(
-                repo_root=repo_root,
-                selected_tests=selected_tests,
-            )
-            if patched_rc == -1:
-                return PassAtOneResult(
+            patch_text = build_unified_patch(meta.file_path, meta.full_file, patched)
+            if not patch_text.strip():
+                # No-op patch: prediction exactly matches base file (unexpected, but
+                # treat as "resolved by base_commit", i.e. the test suite is already
+                # green without any change).
+                results[iid] = PassAtOneResult(
                     pass_at_1=0,
                     source="executed",
-                    status="timeout",
-                    selected_test_count=len(selected_tests),
+                    status="noop_patch",
                 )
-        finally:
-            target_file.write_text(original_text, encoding="utf-8")
+                continue
 
-        if patched_rc == 0:
-            return PassAtOneResult(
-                pass_at_1=1,
-                source="executed",
-                status="passed",
-                selected_test_count=len(selected_tests),
+            predictions.append(
+                {
+                    "instance_id": iid,
+                    "model_name_or_path": f"stage1-{condition.lower()}",
+                    "model_patch": patch_text,
+                }
             )
-        if patched_rc == 1:
-            if "No module named pytest" in patched_output:
-                return self._fallback(
-                    exact_match,
-                    "pytest_not_installed",
-                    selected_test_count=len(selected_tests),
-                )
-            return PassAtOneResult(
-                pass_at_1=0,
-                source="executed",
-                status="failed",
-                selected_test_count=len(selected_tests),
-            )
-        if patched_rc == 5:
-            return self._fallback(
-                exact_match,
-                "no_tests_collected",
-                selected_test_count=len(selected_tests),
-            )
-        return self._fallback(
-            exact_match,
-            f"pytest_error_{patched_rc}",
-            selected_test_count=len(selected_tests),
+            instance_ids.append(iid)
+            patch_texts[iid] = patch_text
+
+        if not predictions:
+            return results
+
+        run_id = f"{self.run_id_prefix}-{condition.lower()}-{int(time.time())}"
+        model_name = f"stage1-{condition.lower()}"
+        pred_path = self.predictions_dir / f"{run_id}.jsonl"
+        with pred_path.open("w", encoding="utf-8") as f:
+            for row in predictions:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        cmd = [
+            "python",
+            "-m",
+            "swebench.harness.run_evaluation",
+            "--dataset_name",
+            self.dataset_name,
+            "--predictions_path",
+            str(pred_path),
+            "--instance_ids",
+            *instance_ids,
+            "--cache_level",
+            self.cache_level,
+            "--run_id",
+            run_id,
+            "--namespace",
+            self.namespace,
+            "--timeout",
+            str(self.timeout_seconds),
+            "--max_workers",
+            str(self.max_workers),
+        ]
+
+        env = _build_harness_env(self.docker_config_mode, self.stage1_root)
+        print(
+            f"[harness] condition={condition} run_id={run_id} "
+            f"n_predictions={len(predictions)} timeout={self.timeout_seconds}s"
         )
+        proc = subprocess.run(cmd, check=False, env=env)
+        run_exit = proc.returncode
+        _move_report_to_outputs(
+            model_name=model_name, run_id=run_id, reports_dir=self.reports_dir
+        )
+
+        for iid in instance_ids:
+            report = _read_harness_report(
+                run_id=run_id, model_name=model_name, instance_id=iid
+            )
+            if report is None:
+                results[iid] = PassAtOneResult(
+                    pass_at_1=0,
+                    source="fallback",
+                    status=f"missing_report_exit_{run_exit}",
+                )
+                continue
+            patch_applied = bool(report.get("patch_successfully_applied"))
+            resolved = bool(report.get("resolved"))
+            if not patch_applied:
+                results[iid] = PassAtOneResult(
+                    pass_at_1=0,
+                    source="executed",
+                    status="patch_not_applied",
+                )
+                continue
+            results[iid] = PassAtOneResult(
+                pass_at_1=int(resolved),
+                source="executed",
+                status="resolved" if resolved else "not_resolved",
+            )
+
+        return results
 
 
 def evaluate_condition(
     condition: str,
     completions_dir: Path,
-    pass_executor: PassAtOneExecutor,
+    instance_meta: dict[str, InstanceMeta],
+    executor: HarnessExecutor,
+    pass_at_1_mode: str,
 ) -> tuple[pd.DataFrame, dict]:
     inp = completions_dir / f"condition_{condition}.jsonl"
     if not inp.exists():
         raise FileNotFoundError(f"Missing completions file: {inp}")
 
-    rows = []
+    rows: list[dict] = []
     with inp.open("r", encoding="utf-8") as f:
         for line in f:
             rec = json.loads(line)
@@ -559,14 +492,10 @@ def evaluate_condition(
             exact = int(pred_n == gold_n)
             bleu = sentence_bleu4(pred_n, gold_n)
             valid = int(
-                syntax_is_valid(rec.get("masked_function", "def f():\n    pass"), pred)
+                syntax_is_valid(
+                    rec.get("masked_function", "def f():\n    pass"), pred
+                )
             )
-            pass_result = pass_executor.evaluate_record(
-                rec,
-                exact_match=exact,
-                syntax_valid=bool(valid),
-            )
-
             rows.append(
                 {
                     "instance_id": rec["instance_id"],
@@ -574,10 +503,9 @@ def evaluate_condition(
                     "repo": rec.get("repo", ""),
                     "file_path": rec.get("file_path", ""),
                     "exact_match": exact,
-                    "pass_at_1": pass_result.pass_at_1,
-                    "pass_at_1_source": pass_result.source,
-                    "pass_at_1_status": pass_result.status,
-                    "selected_test_count": pass_result.selected_test_count,
+                    "pass_at_1": 0,
+                    "pass_at_1_source": "pending",
+                    "pass_at_1_status": "pending",
                     "bleu4": bleu,
                     "syntax_valid": valid,
                     "generation_time_s": rec.get("generation_time_s", 0.0),
@@ -586,8 +514,51 @@ def evaluate_condition(
                     "hit_max_new_tokens": rec.get("hit_max_new_tokens", 0),
                     "bleu_gap_bc": float("nan"),
                     "gap_stratum": "unknown",
+                    "_predicted_body_": pred,
+                    "_masked_function_": rec.get("masked_function", ""),
+                    "_syntax_valid_": bool(valid),
                 }
             )
+
+    if pass_at_1_mode == "exact_only":
+        for r in rows:
+            r["pass_at_1"] = int(r["exact_match"])
+            r["pass_at_1_source"] = "exact_match_only"
+            r["pass_at_1_status"] = "mode_exact_only"
+    else:
+        # Build records consumed by the harness executor.
+        harness_records: list[dict] = []
+        for r in rows:
+            harness_records.append(
+                {
+                    "instance_id": r["instance_id"],
+                    "predicted_body": r["_predicted_body_"],
+                    "_syntax_valid_": r["_syntax_valid_"],
+                }
+            )
+        result_map = executor.evaluate_condition(
+            condition=condition,
+            records=harness_records,
+            instances=instance_meta,
+        )
+        for r in rows:
+            iid = r["instance_id"]
+            result = result_map.get(iid)
+            if result is None:
+                # executor disabled or no result (e.g. skipped); fall through to
+                # exact-match fallback so downstream analysis has a numeric value.
+                r["pass_at_1"] = int(r["exact_match"])
+                r["pass_at_1_source"] = "fallback_exact_match"
+                r["pass_at_1_status"] = "no_harness_result"
+            else:
+                r["pass_at_1"] = int(result.pass_at_1)
+                r["pass_at_1_source"] = result.source
+                r["pass_at_1_status"] = result.status
+
+    for r in rows:
+        r.pop("_predicted_body_", None)
+        r.pop("_masked_function_", None)
+        r.pop("_syntax_valid_", None)
 
     df = pd.DataFrame(rows, columns=PER_INSTANCE_COLUMNS)
     if df.empty:
@@ -602,7 +573,6 @@ def evaluate_condition(
             "mean_context_token_count": 0.0,
             "mean_generated_token_count": 0.0,
             "max_new_token_hit_rate": 0.0,
-            "mean_selected_test_count": 0.0,
             "pass_at_1_source_counts": {},
             "pass_at_1_status_counts": {},
         }
@@ -619,7 +589,6 @@ def evaluate_condition(
         "mean_context_token_count": float(df["context_token_count"].mean()),
         "mean_generated_token_count": float(df["generated_token_count"].mean()),
         "max_new_token_hit_rate": float(df["hit_max_new_tokens"].mean()),
-        "mean_selected_test_count": float(df["selected_test_count"].mean()),
         "pass_at_1_source_counts": df["pass_at_1_source"]
         .value_counts(dropna=False)
         .to_dict(),
@@ -636,21 +605,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model-id", default=MODEL_ID)
     p.add_argument(
         "--pass-at-1-mode",
-        choices=["pytest_heuristic", "exact_only"],
-        default="pytest_heuristic",
-        help="How to compute pass@1: targeted pytest execution or exact-match-only fallback.",
-    )
-    p.add_argument(
-        "--test-timeout-seconds",
-        type=int,
-        default=30,
-        help="Per-instance timeout for targeted pytest execution.",
-    )
-    p.add_argument(
-        "--max-relevant-tests",
-        type=int,
-        default=8,
-        help="Cap on selected relevant test files per instance.",
+        choices=["swebench_harness", "exact_only"],
+        default="swebench_harness",
+        help=(
+            "How to compute pass@1: SWE-rebench harness (docker-based execution) "
+            "or exact-string-match fallback."
+        ),
     )
     p.add_argument(
         "--instances-jsonl",
@@ -658,11 +618,23 @@ def parse_args() -> argparse.Namespace:
         default=INSTANCES_JSONL,
         help="Path to Stage 0 stage1_instances.jsonl with span metadata.",
     )
+    # Harness tunables (mirror stage-0/scripts/verify_wipe.py).
+    p.add_argument("--harness-dataset-name", default=DEFAULT_HARNESS_DATASET)
+    p.add_argument("--harness-namespace", default=DEFAULT_HARNESS_NAMESPACE)
+    p.add_argument("--harness-cache-level", default=DEFAULT_HARNESS_CACHE_LEVEL)
     p.add_argument(
-        "--stage0-repos-dir",
-        type=Path,
-        default=STAGE0_DIR / "data" / "repos",
-        help="Root directory containing cloned Stage 0 repos.",
+        "--harness-timeout-seconds",
+        type=int,
+        default=DEFAULT_HARNESS_TIMEOUT_SECONDS,
+    )
+    p.add_argument(
+        "--harness-max-workers", type=int, default=DEFAULT_HARNESS_MAX_WORKERS
+    )
+    p.add_argument("--harness-run-id-prefix", default="stage1-eval")
+    p.add_argument(
+        "--harness-docker-config-mode",
+        choices=["safe", "inherit"],
+        default="safe",
     )
     p.add_argument("--low-gap-threshold", type=float, default=LOW_GAP_BLEU_THRESHOLD)
     p.add_argument(
@@ -722,20 +694,35 @@ def main() -> int:
     paths.evaluation.mkdir(parents=True, exist_ok=True)
 
     instance_meta = load_instance_meta(args.instances_jsonl)
-    pass_executor = PassAtOneExecutor(
-        mode=args.pass_at_1_mode,
-        repos_root=args.stage0_repos_dir,
-        instances=instance_meta,
-        test_timeout_seconds=args.test_timeout_seconds,
-        max_relevant_tests=args.max_relevant_tests,
+
+    harness_predictions_dir = paths.evaluation / "harness_predictions"
+    harness_reports_dir = paths.evaluation / "harness_reports"
+    executor = HarnessExecutor(
+        enabled=(args.pass_at_1_mode == "swebench_harness"),
+        stage1_root=paths.root,
+        predictions_dir=harness_predictions_dir,
+        reports_dir=harness_reports_dir,
+        dataset_name=args.harness_dataset_name,
+        namespace=args.harness_namespace,
+        cache_level=args.harness_cache_level,
+        timeout_seconds=args.harness_timeout_seconds,
+        max_workers=args.harness_max_workers,
+        run_id_prefix=args.harness_run_id_prefix,
+        docker_config_mode=args.harness_docker_config_mode,
     )
 
     conds = CONDITIONS if args.condition == "all" else [args.condition]
-    all_summaries = []
+    all_summaries: list[dict] = []
     dfs: dict[str, pd.DataFrame] = {}
 
     for cond in conds:
-        df, summary = evaluate_condition(cond, paths.completions, pass_executor)
+        df, summary = evaluate_condition(
+            condition=cond,
+            completions_dir=paths.completions,
+            instance_meta=instance_meta,
+            executor=executor,
+            pass_at_1_mode=args.pass_at_1_mode,
+        )
         dfs[cond] = df
         all_summaries.append(summary)
 
