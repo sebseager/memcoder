@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# Confirm with the user
+read -p "This will download ~25GB in your PWD. Continue? (y/n): " confirm
+if [ "$confirm" != "y" ]; then
+  echo "Aborting."
+  exit 1
+fi
+
 # Dependencies
 uv pip install huggingface==0.0.1 modelscope==1.31.0 transformers==4.57.1 \
   datasets==4.4.1 scikit-learn==1.7.2 hydra-core==1.3.2 tensorboard==2.20.0 \
