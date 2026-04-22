@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import time
 from collections import defaultdict
@@ -64,7 +65,126 @@ def parse_args() -> argparse.Namespace:
         help="Instances per harness invocation at each rank (0 means all remaining at that rank).",
     )
     parser.add_argument("--run-id-prefix", default="stage0-verify")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Reuse existing outputs/04_verify_runs.jsonl and "
+            "outputs/04_verified_instances.jsonl to avoid rerunning completed attempts."
+        ),
+    )
+    parser.add_argument(
+        "--retry-missing-only",
+        action="store_true",
+        help=(
+            "With --resume, retry attempts that previously had no per-instance report "
+            "(typically infrastructure failures)."
+        ),
+    )
+    parser.add_argument(
+        "--docker-config-mode",
+        choices=["safe", "inherit"],
+        default="safe",
+        help=(
+            "Docker auth config mode for harness subprocesses. 'safe' writes a minimal "
+            "DOCKER_CONFIG under outputs to avoid broken credential helper binaries."
+        ),
+    )
     return parser.parse_args()
+
+
+def normalize_rank(value: object) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
+def build_harness_env(mode: str) -> dict[str, str]:
+    env = os.environ.copy()
+    if mode != "safe":
+        return env
+
+    safe_dir = OUTPUTS_DIR / ".docker-safe-config"
+    safe_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = safe_dir / "config.json"
+
+    # Intentionally omit credsStore/credHelpers so docker SDK never calls host helpers.
+    payload: dict[str, dict] = {"auths": {}}
+    if cfg_path.exists():
+        try:
+            existing = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = {}
+        auths = existing.get("auths")
+        if isinstance(auths, dict):
+            payload["auths"] = auths
+
+    cfg_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    env["DOCKER_CONFIG"] = str(safe_dir)
+    return env
+
+
+def load_resume_rows(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return read_jsonl(path)
+
+
+def completed_pairs_from_runs(
+    verify_rows: list[dict], *, retry_missing_only: bool
+) -> set[tuple[str, int]]:
+    pair_has_report: dict[tuple[str, int], bool] = {}
+    for row in verify_rows:
+        iid = row.get("instance_id")
+        rank = normalize_rank(row.get("rank"))
+        if not iid or rank < 1:
+            continue
+        key = (iid, rank)
+        report_exists = bool(row.get("report_exists"))
+        pair_has_report[key] = pair_has_report.get(key, False) or report_exists
+
+    if retry_missing_only:
+        return {key for key, has_report in pair_has_report.items() if has_report}
+    return set(pair_has_report.keys())
+
+
+def selected_from_verified_rows(rows: list[dict]) -> dict[str, dict]:
+    selected: dict[str, dict] = {}
+    for row in rows:
+        iid = row.get("instance_id")
+        if iid:
+            selected[iid] = row
+    return selected
+
+
+def selected_from_verify_rows(
+    verify_rows: list[dict], attempts_by_pair: dict[tuple[str, int], dict]
+) -> dict[str, dict]:
+    selected: dict[str, dict] = {}
+    accepted_rows = [row for row in verify_rows if row.get("accepted")]
+    accepted_rows.sort(
+        key=lambda row: (normalize_rank(row.get("rank")), row.get("instance_id", ""))
+    )
+
+    for row in accepted_rows:
+        iid = row.get("instance_id")
+        rank = normalize_rank(row.get("rank"))
+        if not iid or rank < 1 or iid in selected:
+            continue
+        attempt = attempts_by_pair.get((iid, rank))
+        if attempt is None:
+            continue
+        selected[iid] = {
+            **attempt,
+            "verify_rank": rank,
+            "verify_run_id": row.get("run_id"),
+            "verify_model_name": row.get("model_name"),
+            "verify_patch_applied": bool(row.get("patch_successfully_applied")),
+            "verify_resolved": bool(row.get("resolved")),
+        }
+
+    return selected
 
 
 def read_report(run_id: str, model_name: str, instance_id: str) -> dict | None:
@@ -89,19 +209,44 @@ def main() -> None:
     args = parse_args()
     ensure_stage0_dirs()
 
+    output_runs = OUTPUTS_DIR / "04_verify_runs.jsonl"
+    output_verified = OUTPUTS_DIR / "04_verified_instances.jsonl"
+    output_summary = OUTPUTS_DIR / "04_verify_summary.json"
+
     attempts = read_jsonl(Path(args.attempts_jsonl))
     grouped: dict[str, list[dict]] = defaultdict(list)
+    attempts_by_pair: dict[tuple[str, int], dict] = {}
     for row in attempts:
-        grouped[row["instance_id"]].append(row)
+        iid = row["instance_id"]
+        rank = normalize_rank(row.get("rank"))
+        grouped[iid].append(row)
+        if rank > 0:
+            attempts_by_pair[(iid, rank)] = row
 
     for rows in grouped.values():
         rows.sort(key=lambda x: x["rank"])
 
-    remaining = set(grouped.keys())
-    selected: dict[str, dict] = {}
     verify_rows: list[dict] = []
+    completed_pairs: set[tuple[str, int]] = set()
+    selected: dict[str, dict] = {}
+
+    if args.resume:
+        prior_verify_rows = load_resume_rows(output_runs)
+        verify_rows.extend(prior_verify_rows)
+        completed_pairs = completed_pairs_from_runs(
+            prior_verify_rows,
+            retry_missing_only=args.retry_missing_only,
+        )
+
+        prior_selected_rows = load_resume_rows(output_verified)
+        selected = selected_from_verified_rows(prior_selected_rows)
+        if not selected and prior_verify_rows:
+            selected = selected_from_verify_rows(prior_verify_rows, attempts_by_pair)
+
+    remaining = {iid for iid in grouped.keys() if iid not in selected}
 
     max_rank = max((row["rank"] for row in attempts), default=0)
+    harness_env = build_harness_env(args.docker_config_mode)
 
     for rank in range(1, max_rank + 1):
         if not remaining:
@@ -114,6 +259,10 @@ def main() -> None:
             candidate = next(
                 (row for row in grouped[iid] if int(row["rank"]) == rank), None
             )
+            if candidate is None:
+                continue
+            if args.resume and (iid, rank) in completed_pairs:
+                continue
             if candidate is not None:
                 ranked_candidates.append(candidate)
 
@@ -174,7 +323,7 @@ def main() -> None:
                 str(args.max_workers),
             ]
 
-            proc = subprocess.run(cmd, check=False)
+            proc = subprocess.run(cmd, check=False, env=harness_env)
             run_exit = proc.returncode
             run_report_json = move_report_to_outputs(
                 model_name=model_name, run_id=run_id
@@ -220,15 +369,14 @@ def main() -> None:
                     }
                 )
 
+                if report_exists:
+                    completed_pairs.add((iid, rank))
+
         remaining = {iid for iid in remaining if iid not in selected}
 
     selected_rows = sorted(
         selected.values(), key=lambda row: (row["verify_rank"], row["instance_id"])
     )
-
-    output_runs = OUTPUTS_DIR / "04_verify_runs.jsonl"
-    output_verified = OUTPUTS_DIR / "04_verified_instances.jsonl"
-    output_summary = OUTPUTS_DIR / "04_verify_summary.json"
 
     write_jsonl(output_runs, verify_rows)
     write_jsonl(output_verified, selected_rows)
@@ -239,6 +387,11 @@ def main() -> None:
             "selected_instances": len(selected_rows),
             "target_final_instances": args.target_final_instances,
             "max_rank_considered": max_rank,
+            "resume": {
+                "enabled": bool(args.resume),
+                "retry_missing_only": bool(args.retry_missing_only),
+                "docker_config_mode": args.docker_config_mode,
+            },
             "outputs": {
                 "verify_runs_jsonl": str(output_runs),
                 "verified_instances_jsonl": str(output_verified),

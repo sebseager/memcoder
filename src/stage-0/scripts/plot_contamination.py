@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import matplotlib.dates as mdates
@@ -23,7 +23,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def parse_created_at(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    raw = (value or "").strip()
+    if not raw:
+        raise ValueError("created_at is empty")
+
+    # Support both historical naive timestamps and newer ISO 8601 timestamps.
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+
+    created = datetime.fromisoformat(raw)
+    if created.tzinfo is not None:
+        created = created.astimezone(timezone.utc).replace(tzinfo=None)
+    return created
 
 
 def main() -> None:
