@@ -8,9 +8,6 @@ TRUNC_BUDGET=2048
 MAX_NEW_TOKENS=1024
 TEMPERATURE=0.0
 TOP_P=1.0
-BEHAVIORAL_PROBES=0
-BEHAVIORAL_EPOCHS=1
-BEHAVIORAL_LR_MULT=0.5
 ORACLE_CHUNK_SIZE=3072
 
 while [[ $# -gt 0 ]]; do
@@ -43,18 +40,6 @@ while [[ $# -gt 0 ]]; do
       TOP_P="$2"
       shift 2
       ;;
-    --behavioral-probes)
-      BEHAVIORAL_PROBES="$2"
-      shift 2
-      ;;
-    --behavioral-epochs)
-      BEHAVIORAL_EPOCHS="$2"
-      shift 2
-      ;;
-    --behavioral-lr-mult)
-      BEHAVIORAL_LR_MULT="$2"
-      shift 2
-      ;;
     *)
       echo "Unknown arg: $1"
       exit 1
@@ -78,6 +63,13 @@ if [[ ! -d ".venv" ]]; then
 fi
 
 source .venv/bin/activate
+
+if ! python -c "import pytest" >/dev/null 2>&1; then
+  echo "Missing pytest in src/.venv (required for execution-based pass@1)."
+  echo "Install it with: source .venv/bin/activate && python -m pip install pytest"
+  exit 1
+fi
+
 cd "$STAGE_DIR"
 
 if [[ "$MODE" == "tiny" ]]; then
@@ -134,9 +126,6 @@ python scripts/init_run_config.py \
   --seed "$SEED" \
   --trunc-budget "$TRUNC_BUDGET" \
   --chunk-size "$ORACLE_CHUNK_SIZE" \
-  --behavioral-probes "$BEHAVIORAL_PROBES" \
-  --behavioral-epochs "$BEHAVIORAL_EPOCHS" \
-  --behavioral-lr-mult "$BEHAVIORAL_LR_MULT" \
   --max-new-tokens "$MAX_NEW_TOKENS" \
   --temperature "$TEMPERATURE" \
   --top-p "$TOP_P"
@@ -194,9 +183,6 @@ TRAIN_ARGS=(
   --chunk-size "$ORACLE_CHUNK_SIZE"
   --max-epochs "$TRAIN_MAX_EPOCHS"
   --min-epochs "$TRAIN_MIN_EPOCHS"
-  --behavioral-probes "$BEHAVIORAL_PROBES"
-  --behavioral-epochs "$BEHAVIORAL_EPOCHS"
-  --behavioral-lr-mult "$BEHAVIORAL_LR_MULT"
 )
 if [[ -n "$SUBSET_FILE_KEYS_FILE" ]]; then
   TRAIN_ARGS+=(--file-keys-file "$SUBSET_FILE_KEYS_FILE")
