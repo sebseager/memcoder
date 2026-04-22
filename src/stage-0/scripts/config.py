@@ -14,11 +14,11 @@ INSTANCES_DIR = OUTPUTS_DIR / "instances"
 
 @dataclass(frozen=True)
 class Stage0Config:
-    min_stars: int = 20
-    max_stars: int | None = None
+    min_stars: int = 50
+    max_stars: int | None = 1_000
     min_python_files: int = 10
     max_python_files: int = 300
-    max_repo_size_kb: int = 30_000
+    max_repo_size_kb: int = 20_000
     target_repo_count: int = 20
     min_repo_count: int = 15
     first_commit_cutoff: date = date(2024, 10, 28)
