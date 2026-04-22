@@ -1,6 +1,6 @@
 # Stage 0 - Dataset Construction
 
-This stage builds a contamination-safe function completion dataset from recently created Python repositories.
+This stage builds a contamination-safe function completion dataset from recently active Python repositories.
 
 ## Environment
 

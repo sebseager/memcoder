@@ -14,12 +14,12 @@ INSTANCES_DIR = OUTPUTS_DIR / "instances"
 
 @dataclass(frozen=True)
 class Stage0Config:
-    min_stars: int = 50
-    max_stars: int = 500
+    min_stars: int = 20
+    max_stars: int | None = None
     min_python_files: int = 20
     target_repo_count: int = 20
     min_repo_count: int = 15
-    first_commit_cutoff: date = date(2024, 11, 1)
+    first_commit_cutoff: date = date(2024, 10, 28)
     env_python_version: str = "3.12"
     baseline_runtime_limit_seconds: float = 120.0
     baseline_error_limit: int = 5

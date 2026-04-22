@@ -146,7 +146,13 @@ def main() -> None:
         if venv_path.exists():
             result["attempts"].append(
                 {
-                    "command": ["uv", "venv", str(venv_path), "--python", args.python_version],
+                    "command": [
+                        "uv",
+                        "venv",
+                        str(venv_path),
+                        "--python",
+                        args.python_version,
+                    ],
                     "cwd": str(repo_root),
                     "returncode": 0,
                     "runtime_seconds": 0.0,

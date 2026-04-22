@@ -34,7 +34,6 @@ SERVICE_DEPENDENCY_PACKAGES = (
     "twilio",
     "sendgrid",
 )
-CI_RELAXED_STATES = {"pending", "no_status", "unknown"}
 CHECK_RUN_SUCCESS_CONCLUSIONS = {"success", "neutral", "skipped"}
 CHECK_RUN_FAILURE_CONCLUSIONS = {
     "failure",
@@ -69,7 +68,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--disable-relaxed-fallback",
         action="store_true",
-        help="Disable relaxed CI fallback when strict filtering yields too few repos",
+        help=(
+            "Deprecated no-op retained for CLI compatibility; discovery now always "
+            "selects strictly by hard filters plus ranking"
+        ),
     )
     parser.add_argument(
         "--max-dependency-files",
@@ -331,6 +333,28 @@ def apply_runtime_signal(
     )
 
 
+def build_search_query(cfg: Any) -> str:
+    stars_clause = f"stars:>={cfg.min_stars}"
+    if cfg.max_stars is not None:
+        stars_clause = f"stars:{cfg.min_stars}..{cfg.max_stars}"
+    return (
+        f"language:Python {stars_clause} "
+        f"pushed:>={cfg.pushed_since.isoformat()} fork:false archived:false"
+    )
+
+
+def passes_hard_filters(record: dict[str, Any], *, require_cutoff_pass: bool) -> bool:
+    passes = (
+        record.get("passes_python_file_filter", False)
+        and record.get("has_test_suite", False)
+        and record.get("has_installable_config", False)
+        and not record.get("historical_runtime_hard_excluded", False)
+    )
+    if require_cutoff_pass:
+        passes = passes and record.get("passes_first_commit_filter", False)
+    return passes
+
+
 def dependency_flags_from_local_files(
     files: list[Path],
     *,
@@ -377,7 +401,9 @@ def parse_remote_full_name(remote_url: str | None, local_name: str) -> str:
         candidate = remote_url.strip()
         if candidate.endswith(".git"):
             candidate = candidate[:-4]
-        match = re.search(r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+)$", candidate)
+        match = re.search(
+            r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+)$", candidate
+        )
         if match:
             return f"{match.group('owner')}/{match.group('repo')}"
 
@@ -400,7 +426,9 @@ def build_local_candidate_record(
     local_name = repo_root.name
     remote_url = git_capture(repo_root, ["config", "--get", "remote.origin.url"])
     full_name = parse_remote_full_name(remote_url, local_name)
-    default_branch = git_capture(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"]) or "main"
+    default_branch = (
+        git_capture(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"]) or "main"
+    )
     head_sha = git_capture(repo_root, ["rev-parse", "HEAD"])
     pushed_iso = git_capture(repo_root, ["show", "-s", "--format=%cI", "HEAD"])
     first_commit_sha = git_capture(repo_root, ["rev-list", "--max-parents=0", "HEAD"])
@@ -457,7 +485,11 @@ def build_local_candidate_record(
     pushed_date_iso = None
     if pushed_iso:
         try:
-            pushed_date_iso = datetime.fromisoformat(pushed_iso.replace("Z", "+00:00")).date().isoformat()
+            pushed_date_iso = (
+                datetime.fromisoformat(pushed_iso.replace("Z", "+00:00"))
+                .date()
+                .isoformat()
+            )
         except Exception:  # noqa: BLE001
             pushed_date_iso = None
 
@@ -476,7 +508,9 @@ def build_local_candidate_record(
         "pushed_at": pushed_date_iso,
         "created_at": first_commit_iso,
         "python_file_count": python_file_count,
-        "first_commit_date": first_commit_date.isoformat() if first_commit_date else None,
+        "first_commit_date": first_commit_date.isoformat()
+        if first_commit_date
+        else None,
         "passes_python_file_filter": python_file_count >= cfg.min_python_files,
         "passes_first_commit_filter": bool(
             first_commit_date and first_commit_date > cfg.first_commit_cutoff
@@ -500,28 +534,14 @@ def build_local_candidate_record(
         hard_exclude_runtime_seconds=hard_exclude_runtime_seconds,
     )
 
-    passes_strict = (
-        record["passes_python_file_filter"]
-        and record["has_test_suite"]
-        and record["has_installable_config"]
-        and record["ci_green"]
-        and not record.get("historical_runtime_hard_excluded", False)
+    passes_strict = passes_hard_filters(
+        record,
+        require_cutoff_pass=require_cutoff_pass,
     )
-    if require_cutoff_pass:
-        passes_strict = passes_strict and record["passes_first_commit_filter"]
-
-    passes_relaxed = (
-        record["passes_python_file_filter"]
-        and record["has_test_suite"]
-        and record["has_installable_config"]
-        and relaxed_ci_pass(record)
-        and not record.get("historical_runtime_hard_excluded", False)
-    )
-    if require_cutoff_pass:
-        passes_relaxed = passes_relaxed and record["passes_first_commit_filter"]
 
     record["passes_strict_filters"] = passes_strict
-    record["passes_relaxed_filters"] = passes_relaxed
+    # Kept for backward compatibility with existing artifacts.
+    record["passes_relaxed_filters"] = passes_strict
     record["quality_score"] = quality_score(record)
     return record
 
@@ -665,12 +685,6 @@ def quality_score(record: dict[str, Any]) -> float:
     return score
 
 
-def relaxed_ci_pass(record: dict[str, Any]) -> bool:
-    if record.get("ci_green", False):
-        return True
-    return record.get("ci_status_state") in CI_RELAXED_STATES
-
-
 def oldest_commit_date(
     session: requests.Session, owner: str, repo: str, branch: str
 ) -> date | None:
@@ -702,15 +716,10 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
     session = github_session()
     runtime_profile = load_runtime_profile(args.runtime_profile)
 
-    query = (
-        f"language:Python stars:{cfg.min_stars}..{cfg.max_stars} "
-        f"created:>={cfg.first_commit_cutoff.isoformat()} "
-        f"pushed:>={cfg.pushed_since.isoformat()} fork:false archived:false"
-    )
+    query = build_search_query(cfg)
 
     raw_candidates: list[dict[str, Any]] = []
     strict_qualified: list[dict[str, Any]] = []
-    relaxed_qualified: list[dict[str, Any]] = []
     seen_full_names: set[str] = set()
 
     for page in range(1, args.max_search_pages + 1):
@@ -811,28 +820,14 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
                 hard_exclude_runtime_seconds=args.hard_exclude_runtime_seconds,
             )
 
-            passes_strict = (
-                record["passes_python_file_filter"]
-                and record["has_test_suite"]
-                and record["has_installable_config"]
-                and record["ci_green"]
-                and not record.get("historical_runtime_hard_excluded", False)
+            passes_strict = passes_hard_filters(
+                record,
+                require_cutoff_pass=args.require_cutoff_pass,
             )
-            if args.require_cutoff_pass:
-                passes_strict = passes_strict and record["passes_first_commit_filter"]
-
-            passes_relaxed = (
-                record["passes_python_file_filter"]
-                and record["has_test_suite"]
-                and record["has_installable_config"]
-                and relaxed_ci_pass(record)
-                and not record.get("historical_runtime_hard_excluded", False)
-            )
-            if args.require_cutoff_pass:
-                passes_relaxed = passes_relaxed and record["passes_first_commit_filter"]
 
             record["passes_strict_filters"] = passes_strict
-            record["passes_relaxed_filters"] = passes_relaxed
+            # Kept for backward compatibility with existing artifacts.
+            record["passes_relaxed_filters"] = passes_strict
             record["quality_score"] = quality_score(record)
 
             raw_candidates.append(record)
@@ -840,20 +835,11 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             if passes_strict:
                 strict_qualified.append(record)
 
-            if passes_relaxed:
-                relaxed_qualified.append(record)
-
-            if len(strict_qualified) >= cfg.target_repo_count:
-                break
-
             time.sleep(args.sleep_seconds)
-
-        if len(strict_qualified) >= cfg.target_repo_count:
-            break
 
     local_fallback_candidates: list[dict[str, Any]] = []
     if (
-        len(strict_qualified) < cfg.min_repo_count
+        len(strict_qualified) < cfg.target_repo_count
         and not args.disable_local_fallback
     ):
         local_fallback_candidates = discover_local_fallback_candidates(
@@ -874,8 +860,6 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             raw_candidates.append(record)
             if record.get("passes_strict_filters", False):
                 strict_qualified.append(record)
-            if record.get("passes_relaxed_filters", False):
-                relaxed_qualified.append(record)
 
     strict_sorted = sorted(
         strict_qualified,
@@ -885,28 +869,8 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
     selected: list[dict[str, Any]] = strict_sorted[: cfg.target_repo_count]
     selection_mode = "strict"
 
-    if (
-        len(selected) < cfg.min_repo_count
-        and not args.disable_relaxed_fallback
-        and relaxed_qualified
-    ):
-        relaxed_sorted = sorted(
-            relaxed_qualified,
-            key=lambda r: (
-                r.get("passes_strict_filters", False),
-                r.get("quality_score", 0.0),
-                r["stars"],
-                r["python_file_count"],
-            ),
-            reverse=True,
-        )
-        selected = relaxed_sorted[: cfg.target_repo_count]
-        selection_mode = "relaxed"
-
     for record in selected:
-        record["selection_tier"] = (
-            "strict" if record.get("passes_strict_filters", False) else "relaxed"
-        )
+        record["selection_tier"] = "strict"
 
     strict_selected_count = sum(
         1 for record in selected if record.get("selection_tier") == "strict"
@@ -930,7 +894,8 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
         "stats": {
             "raw_candidate_count": len(raw_candidates),
             "strict_qualified_count": len(strict_qualified),
-            "relaxed_qualified_count": len(relaxed_qualified),
+            # Kept for backward compatibility with existing artifacts.
+            "relaxed_qualified_count": len(strict_qualified),
             "selected_count": len(selected),
             "strict_selected_count": strict_selected_count,
             "selected_with_service_dependency_flags": risky_selected_count,
@@ -939,7 +904,7 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_profile_entries": len(runtime_profile),
             "local_fallback_candidate_count": len(local_fallback_candidates),
             "selection_mode": selection_mode,
-            "fallback_used": selection_mode == "relaxed",
+            "fallback_used": False,
             "selected_meets_min_repo_target": len(selected) >= cfg.min_repo_count,
         },
         "selected_repos": selected,
