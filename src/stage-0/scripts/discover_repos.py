@@ -119,7 +119,9 @@ def parse_args() -> argparse.Namespace:
 def github_session() -> requests.Session:
     session = requests.Session()
     token = os.getenv("GITHUB_TOKEN", "").strip()
-    if token:
+    if not token:
+        print("WARNING: GITHUB_TOKEN not set, /search/code calls will 401", flush=True)
+    else:
         session.headers["Authorization"] = f"Bearer {token}"
     session.headers["Accept"] = "application/vnd.github+json"
     session.headers["X-GitHub-Api-Version"] = "2022-11-28"
