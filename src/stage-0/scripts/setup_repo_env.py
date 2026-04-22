@@ -143,16 +143,28 @@ def main() -> None:
             print(f"Disqualified {full_name}: repo not found at {repo_root}")
             continue
 
-        create_venv = run_command(
-            ["uv", "venv", str(venv_path), "--python", args.python_version],
-            cwd=repo_root,
-        )
-        result["attempts"].append(create_venv)
-        if not command_succeeded(create_venv):
-            result["disqualify_reason"] = "venv_creation_failed"
-            repo_results.append(result)
-            print(f"Disqualified {full_name}: failed to create venv")
-            continue
+        if venv_path.exists():
+            result["attempts"].append(
+                {
+                    "command": ["uv", "venv", str(venv_path), "--python", args.python_version],
+                    "cwd": str(repo_root),
+                    "returncode": 0,
+                    "runtime_seconds": 0.0,
+                    "stdout": "",
+                    "stderr": "Reused existing virtual environment",
+                }
+            )
+        else:
+            create_venv = run_command(
+                ["uv", "venv", str(venv_path), "--python", args.python_version],
+                cwd=repo_root,
+            )
+            result["attempts"].append(create_venv)
+            if not command_succeeded(create_venv):
+                result["disqualify_reason"] = "venv_creation_failed"
+                repo_results.append(result)
+                print(f"Disqualified {full_name}: failed to create venv")
+                continue
 
         editable_ok, editable_nobi, editable_attempts = (
             try_install_with_optional_no_build_isolation(
