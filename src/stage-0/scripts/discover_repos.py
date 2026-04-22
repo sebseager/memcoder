@@ -19,6 +19,7 @@ from config import (
     config_as_json_dict,
     ensure_stage_dirs,
 )
+from tqdm import tqdm
 
 GITHUB_API = "https://api.github.com"
 LINK_RE = re.compile(r"<([^>]+)>; rel=\"([^\"]+)\"")
@@ -70,8 +71,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sleep-seconds",
         type=float,
-        default=0.25,
-        help="Delay between GitHub API calls to stay below rate limits",
+        default=0.5,
+        help="Delay between non-code GitHub API calls to stay below rate limits",
+    )
+    parser.add_argument(
+        "--code-search-sleep-seconds",
+        type=float,
+        default=2.0,
+        help="Minimum delay between GitHub code-search API calls",
     )
     parser.add_argument(
         "--require-cutoff-pass",
@@ -116,22 +123,52 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def github_session() -> requests.Session:
+def github_session(*, token: str | None = None) -> requests.Session:
     session = requests.Session()
-    token = os.getenv("GITHUB_TOKEN", "").strip()
-    if not token:
-        print("WARNING: GITHUB_TOKEN not set, /search/code calls will 401", flush=True)
-    else:
+    if token:
         session.headers["Authorization"] = f"Bearer {token}"
     session.headers["Accept"] = "application/vnd.github+json"
     session.headers["X-GitHub-Api-Version"] = "2022-11-28"
     return session
 
 
+def token_from_dotenv(dotenv_path: Path, key: str) -> str | None:
+    if not dotenv_path.exists():
+        return None
+
+    for line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        env_key, raw_value = stripped.split("=", 1)
+        env_key = env_key.strip()
+        if env_key.startswith("export "):
+            env_key = env_key.removeprefix("export ").strip()
+        if env_key != key:
+            continue
+        value = raw_value.strip().strip('"').strip("'")
+        return value or None
+
+    return None
+
+
+def required_github_token() -> str:
+    dotenv_path = Path(__file__).resolve().parent / ".env"
+    token = token_from_dotenv(dotenv_path, "GITHUB_TOKEN")
+    if not token:
+        token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError(
+            "Missing GITHUB_TOKEN for GitHub API access. "
+            f"Set it in {dotenv_path} or export it in the environment."
+        )
+    return token
+
+
 def request_json(
     session: requests.Session, url: str, *, params: dict[str, Any] | None = None
 ) -> tuple[Any, requests.Response]:
-    max_attempts = 5
+    max_attempts = 3
 
     for attempt in range(1, max_attempts + 1):
         response = session.get(url, params=params, timeout=30)
@@ -162,7 +199,7 @@ def request_json(
                 except ValueError:
                     pass
 
-            wait_seconds = min(wait_seconds, 120)
+            wait_seconds = min(wait_seconds, 60)
             print(
                 "GitHub API rate-limited "
                 f"({response.status_code}) for {url}; "
@@ -177,6 +214,25 @@ def request_json(
         )
 
     raise RuntimeError(f"GitHub API request failed after retries for {url}")
+
+
+def rate_limit_snapshot(session: requests.Session) -> dict[str, Any]:
+    payload, _ = request_json(session, f"{GITHUB_API}/rate_limit")
+    resources = payload.get("resources", {})
+
+    def pick(resource_name: str) -> dict[str, int]:
+        resource = resources.get(resource_name, {})
+        return {
+            "limit": int(resource.get("limit", 0) or 0),
+            "remaining": int(resource.get("remaining", 0) or 0),
+            "reset": int(resource.get("reset", 0) or 0),
+        }
+
+    return {
+        "core": pick("core"),
+        "search": pick("search"),
+        "code_search": pick("code_search"),
+    }
 
 
 def parse_link_header(link_header: str | None) -> dict[str, str]:
@@ -232,7 +288,22 @@ def fetch_repo_file_via_contents(
     return True, decode_blob_content(payload)
 
 
-def code_search_total_count(session: requests.Session, query: str) -> int:
+def code_search_total_count(
+    session: requests.Session,
+    query: str,
+    *,
+    code_search_sleep_seconds: float,
+    throttle_state: dict[str, float | None],
+) -> int:
+    last_code_search_call = throttle_state.get("last_code_search_call")
+    if (
+        last_code_search_call is not None
+        and code_search_sleep_seconds > 0
+        and (elapsed := (time.monotonic() - last_code_search_call))
+        < code_search_sleep_seconds
+    ):
+        time.sleep(code_search_sleep_seconds - elapsed)
+
     search_url = f"{GITHUB_API}/search/code"
     payload, _ = request_json(
         session,
@@ -243,21 +314,25 @@ def code_search_total_count(session: requests.Session, query: str) -> int:
             "page": 1,
         },
     )
+    throttle_state["last_code_search_call"] = time.monotonic()
+
     return int(payload.get("total_count", 0) or 0)
 
 
-def has_test_suite_via_code_search(session: requests.Session, full_name: str) -> bool:
-    tests_dir_count = code_search_total_count(
+def has_test_suite_via_code_search(
+    session: requests.Session,
+    full_name: str,
+    *,
+    code_search_sleep_seconds: float,
+    throttle_state: dict[str, float | None],
+) -> bool:
+    tests_count = code_search_total_count(
         session,
-        f"repo:{full_name} path:tests language:Python",
+        f"repo:{full_name} language:Python test in:path",
+        code_search_sleep_seconds=code_search_sleep_seconds,
+        throttle_state=throttle_state,
     )
-    if tests_dir_count > 0:
-        return True
-    test_filename_count = code_search_total_count(
-        session,
-        f"repo:{full_name} filename:test_ language:Python",
-    )
-    return test_filename_count > 0
+    return tests_count > 0
 
 
 def dependency_flags_from_known_paths(
@@ -358,6 +433,7 @@ def apply_runtime_signal(
     record["historical_baseline_exit_code"] = None
     record["historical_runtime_slow"] = False
     record["historical_runtime_hard_excluded"] = False
+    record["hard_excluded_by_runtime"] = False
 
     if not runtime_info:
         return
@@ -380,6 +456,7 @@ def apply_runtime_signal(
     record["historical_runtime_hard_excluded"] = actionable_runtime and (
         runtime_seconds >= hard_exclude_runtime_seconds
     )
+    record["hard_excluded_by_runtime"] = record["historical_runtime_hard_excluded"]
 
 
 def build_search_query(cfg: Any) -> str:
@@ -418,6 +495,46 @@ def python_file_count_within_range(cfg: Any, python_file_count: int) -> bool:
 
 def repo_size_within_limit(cfg: Any, repo_size_kb: int) -> bool:
     return repo_size_kb <= cfg.max_repo_size_kb
+
+
+def _apply_default_record_fields(record: dict[str, Any]) -> None:
+    record["python_file_count"] = 0
+    record["first_commit_date"] = None
+    record["passes_python_file_filter"] = False
+    record["passes_repo_size_filter"] = True
+    record["passes_first_commit_filter"] = False
+    record["has_test_suite"] = False
+    record["has_installable_config"] = False
+    record["ci_status_state"] = "unknown"
+    record["ci_green"] = False
+    record["ci_status_context_count"] = 0
+    record["ci_check_run_count"] = 0
+    record["head_sha"] = None
+    record["service_dependency_flags"] = []
+    record["service_dependency_flagged"] = False
+
+
+def finalize_record(
+    record: dict[str, Any],
+    runtime_profile: dict[str, dict[str, Any]],
+    *,
+    slow_runtime_seconds: float,
+    hard_exclude_runtime_seconds: float,
+    require_cutoff_pass: bool,
+) -> bool:
+    apply_runtime_signal(
+        record,
+        runtime_profile,
+        slow_runtime_seconds=slow_runtime_seconds,
+        hard_exclude_runtime_seconds=hard_exclude_runtime_seconds,
+    )
+    passes_strict = passes_hard_filters(
+        record,
+        require_cutoff_pass=require_cutoff_pass,
+    )
+    record["passes_strict_filters"] = passes_strict
+    record["quality_score"] = quality_score(record)
+    return passes_strict
 
 
 def dependency_flags_from_local_files(
@@ -597,20 +714,13 @@ def build_local_candidate_record(
         "candidate_source": "local-fallback",
     }
 
-    apply_runtime_signal(
+    finalize_record(
         record,
         runtime_profile,
         slow_runtime_seconds=slow_runtime_seconds,
         hard_exclude_runtime_seconds=hard_exclude_runtime_seconds,
-    )
-
-    passes_strict = passes_hard_filters(
-        record,
         require_cutoff_pass=require_cutoff_pass,
     )
-
-    record["passes_strict_filters"] = passes_strict
-    record["quality_score"] = quality_score(record)
     return record
 
 
@@ -628,7 +738,8 @@ def discover_local_fallback_candidates(
         return []
 
     records: list[dict[str, Any]] = []
-    for repo_root in sorted(local_repos_dir.iterdir()):
+    local_repo_paths = sorted(local_repos_dir.iterdir())
+    for repo_root in tqdm(local_repo_paths, desc="Local fallback repos", unit="repo"):
         if not repo_root.is_dir():
             continue
         record = build_local_candidate_record(
@@ -739,8 +850,6 @@ def quality_score(record: dict[str, Any]) -> float:
         slow_runtime_seconds = float(record.get("slow_runtime_seconds", 30.0))
         # Strongly penalize known slow repos so they sink in discovery ranking.
         score -= 320.0 + max(0.0, runtime_seconds - slow_runtime_seconds) * 12.0
-    if record.get("historical_runtime_hard_excluded", False):
-        score -= 10000.0
     return score
 
 
@@ -772,7 +881,31 @@ def oldest_commit_date(
 def discover(args: argparse.Namespace) -> dict[str, Any]:
     ensure_stage_dirs()
     cfg = DEFAULT_CONFIG
-    session = github_session()
+    github_token = required_github_token()
+    session = github_session(token=github_token)
+    code_search_throttle_state: dict[str, float | None] = {
+        "last_code_search_call": None
+    }
+    initial_rate_limit = rate_limit_snapshot(session)
+    code_search_limit = int(initial_rate_limit.get("code_search", {}).get("limit", 0))
+    inferred_min_code_search_sleep_seconds = 0.0
+    if code_search_limit > 0:
+        # Keep below the per-minute code-search cap advertised by /rate_limit.
+        effective_capacity = max(1, code_search_limit - 2)
+        inferred_min_code_search_sleep_seconds = 60.0 / float(effective_capacity)
+    effective_code_search_sleep_seconds = max(
+        args.code_search_sleep_seconds,
+        inferred_min_code_search_sleep_seconds,
+    )
+
+    if effective_code_search_sleep_seconds > args.code_search_sleep_seconds:
+        print(
+            "Increasing code-search sleep from "
+            f"{args.code_search_sleep_seconds:.2f}s to "
+            f"{effective_code_search_sleep_seconds:.2f}s based on /rate_limit",
+            flush=True,
+        )
+
     runtime_profile = load_runtime_profile(args.runtime_profile)
     blacklisted = repo_blacklist_set(cfg)
 
@@ -784,7 +917,11 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
     blacklisted_candidate_count = 0
     repo_size_filtered_candidate_count = 0
 
-    for page in range(1, args.max_search_pages + 1):
+    for page in tqdm(
+        range(1, args.max_search_pages + 1),
+        desc="Search result pages",
+        unit="page",
+    ):
         search_url = f"{GITHUB_API}/search/repositories"
         search_payload, _ = request_json(
             session,
@@ -801,7 +938,7 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
         if not items:
             break
 
-        for repo in items:
+        for repo in tqdm(items, desc=f"Repos on page {page}", unit="repo", leave=False):
             owner = repo["owner"]["login"]
             name = repo["name"]
             full_name = repo["full_name"]
@@ -829,37 +966,18 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
                 "created_at": repo["created_at"],
                 "candidate_source": "github-search",
             }
+            _apply_default_record_fields(record)
 
             if not within_repo_size:
                 repo_size_filtered_candidate_count += 1
-                record["python_file_count"] = 0
-                record["first_commit_date"] = None
-                record["passes_python_file_filter"] = False
                 record["passes_repo_size_filter"] = False
-                record["passes_first_commit_filter"] = False
-                record["has_test_suite"] = False
-                record["has_installable_config"] = False
-                record["ci_status_state"] = "unknown"
-                record["ci_green"] = False
-                record["ci_status_context_count"] = 0
-                record["ci_check_run_count"] = 0
-                record["head_sha"] = None
-                record["service_dependency_flags"] = []
-                record["service_dependency_flagged"] = False
-
-                apply_runtime_signal(
+                finalize_record(
                     record,
                     runtime_profile,
                     slow_runtime_seconds=args.slow_runtime_seconds,
                     hard_exclude_runtime_seconds=args.hard_exclude_runtime_seconds,
-                )
-
-                passes_strict = passes_hard_filters(
-                    record,
                     require_cutoff_pass=args.require_cutoff_pass,
                 )
-                record["passes_strict_filters"] = passes_strict
-                record["quality_score"] = quality_score(record)
                 raw_candidates.append(record)
                 time.sleep(args.sleep_seconds)
                 continue
@@ -868,39 +986,23 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
                 python_files = code_search_total_count(
                     session,
                     f"repo:{full_name} language:Python",
+                    code_search_sleep_seconds=effective_code_search_sleep_seconds,
+                    throttle_state=code_search_throttle_state,
                 )
                 within_python_range = python_file_count_within_range(cfg, python_files)
 
                 record["python_file_count"] = python_files
-                record["first_commit_date"] = None
                 record["passes_python_file_filter"] = within_python_range
-                record["passes_repo_size_filter"] = True
-                record["passes_first_commit_filter"] = False
-                record["has_test_suite"] = False
-                record["has_installable_config"] = False
-                record["ci_status_state"] = "unknown"
-                record["ci_green"] = False
-                record["ci_status_context_count"] = 0
-                record["ci_check_run_count"] = 0
-                record["head_sha"] = None
-                record["service_dependency_flags"] = []
-                record["service_dependency_flagged"] = False
 
                 # Skip expensive API calls for repos that are outside our Python file budget.
                 if not within_python_range:
-                    apply_runtime_signal(
+                    finalize_record(
                         record,
                         runtime_profile,
                         slow_runtime_seconds=args.slow_runtime_seconds,
                         hard_exclude_runtime_seconds=args.hard_exclude_runtime_seconds,
-                    )
-
-                    passes_strict = passes_hard_filters(
-                        record,
                         require_cutoff_pass=args.require_cutoff_pass,
                     )
-                    record["passes_strict_filters"] = passes_strict
-                    record["quality_score"] = quality_score(record)
                     raw_candidates.append(record)
                     time.sleep(args.sleep_seconds)
                     continue
@@ -908,6 +1010,8 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
                 record["has_test_suite"] = has_test_suite_via_code_search(
                     session,
                     full_name,
+                    code_search_sleep_seconds=effective_code_search_sleep_seconds,
+                    throttle_state=code_search_throttle_state,
                 )
                 dependency_flags, has_installable_config = (
                     dependency_flags_from_known_paths(
@@ -952,20 +1056,13 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             record["service_dependency_flags"] = dependency_flags
             record["service_dependency_flagged"] = len(dependency_flags) > 0
 
-            apply_runtime_signal(
+            passes_strict = finalize_record(
                 record,
                 runtime_profile,
                 slow_runtime_seconds=args.slow_runtime_seconds,
                 hard_exclude_runtime_seconds=args.hard_exclude_runtime_seconds,
-            )
-
-            passes_strict = passes_hard_filters(
-                record,
                 require_cutoff_pass=args.require_cutoff_pass,
             )
-
-            record["passes_strict_filters"] = passes_strict
-            record["quality_score"] = quality_score(record)
 
             raw_candidates.append(record)
 
@@ -998,11 +1095,13 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
                 continue
             seen_full_names.add(full_name)
             raw_candidates.append(record)
-            if record.get("passes_strict_filters", False):
+            if record.get("passes_strict_filters", False) and not record.get(
+                "hard_excluded_by_runtime", False
+            ):
                 strict_qualified.append(record)
 
     strict_sorted = sorted(
-        strict_qualified,
+        [r for r in strict_qualified if not r.get("hard_excluded_by_runtime", False)],
         key=lambda r: (r.get("quality_score", 0.0), r["stars"], r["python_file_count"]),
         reverse=True,
     )
@@ -1025,6 +1124,7 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
         for record in raw_candidates
         if record.get("historical_runtime_hard_excluded", False)
     )
+    final_rate_limit = rate_limit_snapshot(session)
 
     result = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -1043,6 +1143,10 @@ def discover(args: argparse.Namespace) -> dict[str, Any]:
             "blacklisted_candidate_count": blacklisted_candidate_count,
             "repo_size_filtered_candidate_count": repo_size_filtered_candidate_count,
             "selected_meets_min_repo_target": len(selected) >= cfg.min_repo_count,
+            "configured_code_search_sleep_seconds": args.code_search_sleep_seconds,
+            "effective_code_search_sleep_seconds": effective_code_search_sleep_seconds,
+            "initial_rate_limit": initial_rate_limit,
+            "final_rate_limit": final_rate_limit,
         },
         "selected_repos": selected,
         "raw_candidates": raw_candidates,

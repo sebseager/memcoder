@@ -4,3 +4,4 @@ trained_d2l/
 *.log
 experiments/logs/
 experiments/dyprag_exp1_condition_*.json
+.env
