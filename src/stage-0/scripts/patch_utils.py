@@ -15,8 +15,8 @@ def parse_touched_files(patch_text: str) -> set[str]:
 
 
 def build_unified_patch(file_path: str, original_text: str, new_text: str) -> str:
-    original_lines = original_text.splitlines(keepends=True)
-    new_lines = new_text.splitlines(keepends=True)
+    original_lines = original_text.splitlines()
+    new_lines = new_text.splitlines()
     diff = difflib.unified_diff(
         original_lines,
         new_lines,
@@ -24,7 +24,8 @@ def build_unified_patch(file_path: str, original_text: str, new_text: str) -> st
         tofile=f"b/{file_path}",
         lineterm="",
     )
-    return "\n".join(diff).strip() + "\n"
+    patch = "\n".join(diff).strip()
+    return patch + "\n" if patch else ""
 
 
 def combine_patches(*patches: str) -> str:

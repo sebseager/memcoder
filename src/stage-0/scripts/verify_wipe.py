@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import os
+import re
 import subprocess
+import sys
 import time
+import warnings
 from collections import defaultdict
 from pathlib import Path
 
@@ -19,6 +24,18 @@ from config import (
     ensure_stage0_dirs,
 )
 from patch_utils import combine_patches
+
+try:
+    from requests.exceptions import RequestsDependencyWarning
+except Exception:  # noqa: BLE001
+    RequestsDependencyWarning = Warning
+
+warnings.filterwarnings("ignore", category=RequestsDependencyWarning)
+warnings.filterwarnings(
+    "ignore",
+    message=r"urllib3 .* doesn't match a supported version!",
+    category=Warning,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +54,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-workers", type=int, default=DEFAULT_VERIFY_MAX_WORKERS)
     parser.add_argument(
         "--target-final-instances", type=int, default=DEFAULT_TARGET_FINAL_INSTANCES
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        help="Instances per harness invocation at each rank (0 means all remaining at that rank).",
     )
     parser.add_argument("--run-id-prefix", default="stage0-verify")
     return parser.parse_args()
@@ -60,11 +83,52 @@ def read_report(run_id: str, model_name: str, instance_id: str) -> dict | None:
     return payload.get(instance_id)
 
 
+def resolve_run_evaluation_entrypoint() -> str:
+    spec = importlib.util.find_spec("swebench.harness.run_evaluation")
+    if spec is None or not spec.origin:
+        raise RuntimeError(
+            "Could not locate swebench.harness.run_evaluation entrypoint"
+        )
+    return spec.origin
+
+
+def build_harness_env() -> dict[str, str]:
+    env = os.environ.copy()
+    # Keep harness output focused on execution status and test results.
+    env["PYTHONWARNINGS"] = "ignore"
+    env["HF_HUB_VERBOSITY"] = "error"
+    env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+    env["TRANSFORMERS_VERBOSITY"] = "error"
+    env["DATASETS_VERBOSITY"] = "error"
+    env["TOKENIZERS_PARALLELISM"] = "false"
+    env["NO_COLOR"] = "1"
+    return env
+
+
+NOISE_PATTERNS = [
+    re.compile(r"RequestsDependencyWarning"),
+    re.compile(r"-\s+httpx\s+-\s+INFO\s+-\s+HTTP Request:"),
+    re.compile(r"warnings\.warn\(\"urllib3"),
+]
+
+
+def emit_harness_output(stdout_text: str) -> None:
+    for raw_line in stdout_text.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        if any(pattern.search(line) for pattern in NOISE_PATTERNS):
+            continue
+        print(line)
+
+
 def main() -> None:
     args = parse_args()
     ensure_stage0_dirs()
 
     attempts = read_jsonl(Path(args.attempts_jsonl))
+    run_eval_entrypoint = resolve_run_evaluation_entrypoint()
+    harness_env = build_harness_env()
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in attempts:
         grouped[row["instance_id"]].append(row)
@@ -84,98 +148,120 @@ def main() -> None:
         if len(selected) >= args.target_final_instances:
             break
 
-        batch_attempts: list[dict] = []
-        predictions: list[dict] = []
-        instance_ids: list[str] = []
-
-        model_name = f"stage0-wipe-r{rank}"
-        run_id = f"{args.run_id_prefix}-r{rank}-{int(time.time())}"
-
+        ranked_candidates: list[dict] = []
         for iid in sorted(remaining):
             candidate = next(
                 (row for row in grouped[iid] if int(row["rank"]) == rank), None
             )
-            if candidate is None:
-                continue
+            if candidate is not None:
+                ranked_candidates.append(candidate)
 
-            patch = combine_patches(
-                candidate.get("gold_patch", ""), candidate.get("mask_patch", "")
-            )
-            predictions.append(
-                {
-                    "instance_id": iid,
-                    "model_name_or_path": model_name,
-                    "model_patch": patch,
-                }
-            )
-            instance_ids.append(iid)
-            batch_attempts.append(candidate)
-
-        if not predictions:
+        if not ranked_candidates:
             continue
 
-        pred_path = OUTPUTS_DIR / f"04_predictions_rank_{rank}.jsonl"
-        write_jsonl(pred_path, predictions)
+        chunk_size = args.batch_size if args.batch_size > 0 else len(ranked_candidates)
 
-        cmd = [
-            "python",
-            "-m",
-            "swebench.harness.run_evaluation",
-            "--dataset_name",
-            args.dataset_name,
-            "--predictions_path",
-            str(pred_path),
-            "--instance_ids",
-            *instance_ids,
-            "--cache_level",
-            args.cache_level,
-            "--run_id",
-            run_id,
-            "--namespace",
-            args.namespace,
-            "--timeout",
-            str(args.timeout_seconds),
-            "--max_workers",
-            str(args.max_workers),
-        ]
+        for offset in range(0, len(ranked_candidates), chunk_size):
+            if len(selected) >= args.target_final_instances:
+                break
 
-        proc = subprocess.run(cmd, check=False)
-        run_exit = proc.returncode
+            batch_attempts = ranked_candidates[offset : offset + chunk_size]
+            if not batch_attempts:
+                continue
 
-        for attempt in batch_attempts:
-            iid = attempt["instance_id"]
-            report = read_report(run_id=run_id, model_name=model_name, instance_id=iid)
-            report_exists = report is not None
-            patch_applied = (
-                bool(report.get("patch_successfully_applied")) if report else False
+            model_name = f"stage0-wipe-r{rank}"
+            run_id = f"{args.run_id_prefix}-r{rank}-{int(time.time())}"
+
+            predictions = []
+            instance_ids = []
+            for candidate in batch_attempts:
+                iid = candidate["instance_id"]
+                patch = combine_patches(
+                    candidate.get("gold_patch", ""), candidate.get("mask_patch", "")
+                )
+                predictions.append(
+                    {
+                        "instance_id": iid,
+                        "model_name_or_path": model_name,
+                        "model_patch": patch,
+                    }
+                )
+                instance_ids.append(iid)
+
+            pred_path = OUTPUTS_DIR / f"04_predictions_rank_{rank}_{offset}.jsonl"
+            write_jsonl(pred_path, predictions)
+
+            cmd = [
+                sys.executable,
+                run_eval_entrypoint,
+                "--dataset_name",
+                args.dataset_name,
+                "--predictions_path",
+                str(pred_path),
+                "--instance_ids",
+                *instance_ids,
+                "--cache_level",
+                args.cache_level,
+                "--run_id",
+                run_id,
+                "--namespace",
+                args.namespace,
+                "--timeout",
+                str(args.timeout_seconds),
+                "--max_workers",
+                str(args.max_workers),
+            ]
+
+            proc = subprocess.run(
+                cmd,
+                check=False,
+                env=harness_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
             )
-            resolved = bool(report.get("resolved")) if report else False
+            if proc.stdout:
+                emit_harness_output(proc.stdout)
+            run_exit = proc.returncode
 
-            # Keep only attempts where gold+wipe was applied and no longer resolves.
-            accepted = patch_applied and (not resolved)
-            if accepted and iid not in selected:
-                selected[iid] = {
-                    **attempt,
-                    "verify_rank": rank,
-                    "verify_run_id": run_id,
-                    "verify_model_name": model_name,
-                    "verify_patch_applied": patch_applied,
-                    "verify_resolved": resolved,
-                }
+            for attempt in batch_attempts:
+                iid = attempt["instance_id"]
+                report = read_report(
+                    run_id=run_id,
+                    model_name=model_name,
+                    instance_id=iid,
+                )
+                report_exists = report is not None
+                patch_applied = (
+                    bool(report.get("patch_successfully_applied")) if report else False
+                )
+                resolved = bool(report.get("resolved")) if report else False
 
-            verify_rows.append(
-                {
-                    "instance_id": iid,
-                    "rank": rank,
-                    "run_id": run_id,
-                    "model_name": model_name,
-                    "run_exit_code": run_exit,
-                    "report_exists": report_exists,
-                    "patch_successfully_applied": patch_applied,
-                    "resolved": resolved,
-                    "accepted": accepted,
-                }
-            )
+                # Keep only attempts where gold+wipe was applied and no longer resolves.
+                accepted = patch_applied and (not resolved)
+                if accepted and iid not in selected:
+                    selected[iid] = {
+                        **attempt,
+                        "verify_rank": rank,
+                        "verify_run_id": run_id,
+                        "verify_model_name": model_name,
+                        "verify_patch_applied": patch_applied,
+                        "verify_resolved": resolved,
+                    }
+
+                verify_rows.append(
+                    {
+                        "instance_id": iid,
+                        "rank": rank,
+                        "run_id": run_id,
+                        "model_name": model_name,
+                        "run_exit_code": run_exit,
+                        "report_exists": report_exists,
+                        "patch_successfully_applied": patch_applied,
+                        "resolved": resolved,
+                        "accepted": accepted,
+                    }
+                )
 
         remaining = {iid for iid in remaining if iid not in selected}
 

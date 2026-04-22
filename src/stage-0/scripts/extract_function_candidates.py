@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import ast
 import statistics
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -127,7 +128,15 @@ def collect_load_names(fn_node: ast.AST) -> set[str]:
 
 
 def file_token_count(tokenizer, text: str) -> int:
-    return len(tokenizer.encode(text, add_special_tokens=False))
+    encoded = tokenizer(
+        text,
+        add_special_tokens=False,
+        truncation=False,
+        return_attention_mask=False,
+        return_token_type_ids=False,
+        verbose=False,
+    )
+    return len(encoded["input_ids"])
 
 
 def main() -> None:
@@ -138,8 +147,15 @@ def main() -> None:
     if args.max_instances > 0:
         instances = instances[: args.max_instances]
 
-    parser = get_parser("python")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Language\(path, name\) is deprecated.*",
+            category=FutureWarning,
+        )
+        parser = get_parser("python")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_id, trust_remote_code=True)
+    tokenizer.model_max_length = int(1e12)
 
     all_candidates: list[dict] = []
     ranked_rows: list[dict] = []
@@ -184,7 +200,9 @@ def main() -> None:
                 continue
 
             try:
-                module = ast.parse(text)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=SyntaxWarning)
+                    module = ast.parse(text)
             except SyntaxError:
                 continue
 
