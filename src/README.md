@@ -55,7 +55,7 @@
    | C | Full file in context | None | Ceiling |
    | D | Truncated ≤ 2048 tok | Oracle | Oracle upper bound |
 
-7. Evaluate with pass@1 (execute against repo test suite) as primary metric. BLEU-4 as secondary for instances where no test suite is available.
+7. Evaluate with pass@1 (execute against repo test suite) as primary metric. BLEU-4 as secondary.
 
 8. Compute the recovery ratio: `(D − B) / (C − B)`. If this is below 0.3, stop and diagnose — either tighten the truncation budget to 1024 tokens to widen the B→C gap, or inspect whether oracle LoRA training loss actually converged. Do not proceed to Stage 2 until D meaningfully exceeds B.
 
