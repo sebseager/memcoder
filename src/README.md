@@ -2,28 +2,42 @@
 
 ---
 
-Stage 0 — Dataset Construction (Days 1–3)
+### Stage 0 — Dataset Construction (Days 1–3)
 
-[REWRITTEN FROM EARLIER VERSION -- NOW USES SWEBENCH INSTEAD OF GITHUB SCRAPING]
+[TOTAL REWRITE FROM EARLIER VERSION -- NOW USES SWEBENCH INSTEAD OF GITHUB SCRAPING.]
 
-Goal: Build a contamination-safe completion dataset from SWE-bench instances with pre-verified, executable test harnesses.
+**Goal:** Build a contamination-safe completion dataset from SWE-rebench instances with pre-verified, pre-built Docker harnesses.
 
-Source instances from SWE-bench Verified (not Lite). Filter to Python-only instances where the gold patch touches exactly one file — this keeps the completion target unambiguous and avoids multi-file entanglement confounding your LoRA attribution. Target 80–120 instances after filtering.
-Contamination cut. Drop any instance whose repo first-commit date falls before Qwen3-8B's estimated training cutoff (Oct 28, 2024). If this leaves no or few repos, stop and ask me what to do. Produce the contamination figure: plot cutoff as a horizontal line against issue dates. All retained instances should sit above it. Save this for the paper.
-Construct the completion instances. For each retained SWE-bench instance, the pre-patch state of the touched file is your input; the gold patch body gives you the ground-truth completion. Specifically:
+1. **Load from `nebius/SWE-rebench-leaderboard`.** This is the leaderboard split, not the full corpus — the key advantage being that every instance already has a pre-built Docker image on Docker Hub under the `swerebench` namespace, so there is no environment build step to debug. Install the nebius SWE-bench fork (`SWE-rebench/SWE-bench-fork`) rather than upstream SWE-bench — it handles the `install_config` field and the `--namespace swerebench` flag correctly; the upstream harness will silently fail on these instances.
 
-Check out the repo at the pre-patch commit using the SWE-bench instance metadata
-Use tree-sitter to locate the function(s) modified by the gold patch within the touched file
-Keep only functions satisfying all three: body references names defined elsewhere in the same file (class attributes, module-level constants, other functions); body is 10–80 lines; the containing file exceeds 2048 tokens when fully read
-Record: the full pre-patch file, the masked version (signature only), the ground-truth body from the gold patch, and the cross-file context (imported files)
+2. **Filter for contamination safety and task structure.** Apply the following filters in sequence:
+   - `created_at >= 2025-01-01` (well past Qwen3-8B's October 2024 cutoff — all leaderboard instances satisfy this by construction, but make it explicit in your filtering code so it's auditable)
+   - `meta.num_modified_files == 1` (single-file gold patch; multi-file patches make LoRA attribution ambiguous)
+   - `meta.has_test_patch == True` (confirms FAIL_TO_PASS tests exist)
+   - Pool across months (pull from the monthly splits using `created_at` prefix filtering) until you have a candidate set of 300–400 instances before your function-level filters below
 
+3. **Construct completion instances.** For each candidate instance, check out the repo at `base_commit` using the `environment_setup_commit` field for dependency resolution. Use tree-sitter to enumerate all functions across all Python files in the repo — you are not constrained to the file touched by the gold patch, which you can ignore entirely from here on. For each function, apply the following filters:
+   - The containing file exceeds 2048 tokens when fully read
+   - Body is 10–80 lines
+   - Body references names defined elsewhere in the same file (class attributes, module-level constants, other functions) — this ensures truncation actually hurts and the function isn't self-contained
 
-Verify test harness executability upfront, before any model runs. For each instance, use the SWE-bench Docker harness to confirm that: (a) the pre-patch state produces a failing FAIL_TO_PASS test, and (b) applying the gold patch flips it to passing. Discard any instance where either check fails — environment issues, flaky tests, or gold patch errors will silently corrupt your results later and you want zero ambiguity in what passing means. This is the key advantage over scraping GitHub directly: you are curating from a set that has already been through human verification, and you are re-verifying executability yourself before committing to the instance.
-Define your evaluation contract now, once. Pass@1 means: complete the masked function, apply it as a patch to the pre-patch repo state using the same patch format SWE-bench uses, run the FAIL_TO_PASS tests via the Docker harness, record binary pass/fail. BLEU-4 is not a fallback metric here — if an instance lacks a runnable harness after Step 4, discard it rather than falling back to BLEU. Execution-based signal only. This contract carries through Stages 1–3 unchanged.
-Record instance metadata for later use: repo name, file path, pre-patch commit SHA, token count of the full file, FAIL_TO_PASS test IDs, and whether cross-file context was needed for the gold patch. The token count feeds directly into Stage 1's truncation analysis.
+   From the functions passing all three, pick the best candidate per instance (prefer functions with more intra-file references). Record: the full file, the masked version (signature + docstring if present, body wiped to `pass`), the ground-truth body, the file path, `instance_id`, `base_commit`, `docker_image`, token count of the full file.
 
+4. **Verify that wiping each candidate function actually breaks the test suite.** Inside the instance's Docker container, apply the masked version of the file (body replaced with `pass`) and run the harness:
+   ```
+   python -m swebench.harness.run_evaluation \
+     --dataset_name nebius/SWE-rebench-leaderboard \
+     --predictions_path <masked_patch> \
+     --instance_ids <instance_id> \
+     --cache_level instance \
+     --run_id verify-wipe \
+     --namespace "swerebench"
+   ```
+   If the suite still passes with the body wiped, the function isn't exercised by the tests — discard it and try the next candidate function in that instance. If no function in the instance survives this check, discard the instance. This is your most important filter: it guarantees that every instance in your dataset has a direct execution signal tied to the specific function you're completing. Target 80–120 instances after this pass.
 
-The rest of the plan flows cleanly from this: Stage 1's conditions B/C/D run the same Docker harness, Stage 3 adds condition E, and the recovery ratio (E − B) / (C − B) is computed over binary pass/fail — which makes the primary claim much harder to dismiss. BLEU is a secondary metric only. The "close but wrong" failure mode you're worried about is exactly what execution-based eval catches that BLEU doesn't.
+5. **Define your evaluation contract now, once.** Pass@1 means: complete the masked function body, apply it as a patch to `base_commit`, run the FAIL_TO_PASS tests inside the Docker container via the harness, record binary pass/fail. The `test_cmd` in `install_config` gives you the exact pytest invocation per instance — record it so the eval is reproducible independently of the harness. No BLEU fallback anywhere in the pipeline. This contract carries through Stages 1–3 unchanged.
+
+6. **Produce the contamination figure.** Plot Qwen3-8B's October 2024 cutoff as a horizontal line against each instance's `created_at` date. All retained instances should sit above it by construction. Save this for the paper — and because you're sourcing from SWE-rebench, you can cite their contamination-control methodology directly rather than having to argue the point yourself.
 
 ---
 
