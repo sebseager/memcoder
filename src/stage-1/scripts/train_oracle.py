@@ -10,9 +10,6 @@ import numpy as np
 import torch
 from config import (
     MODEL_ID,
-    ORACLE_BEHAVIORAL_EPOCHS,
-    ORACLE_BEHAVIORAL_LR_MULT,
-    ORACLE_BEHAVIORAL_PROBES,
     ORACLE_CHUNK_SIZE,
     ORACLE_GRAD_ACCUM,
     ORACLE_LR,
@@ -131,10 +128,6 @@ def existing_meta_compatible(
     meta: dict,
     args: argparse.Namespace,
     probe_manifest_sha256: str,
-    *,
-    behavioral_probes: int,
-    behavioral_epochs: int,
-    behavioral_lr_mult: float,
 ) -> tuple[bool, str]:
     if meta.get("objective") != "supervised_prompt_completion_masked":
         return False, "objective_mismatch"
@@ -151,8 +144,8 @@ def existing_meta_compatible(
         "max_epochs": args.max_epochs,
         "trunc_budget": args.trunc_budget,
         "enable_eval": bool(args.enable_eval),
-        "behavioral_probes": behavioral_probes,
-        "behavioral_epochs": behavioral_epochs,
+        "behavioral_probes": args.behavioral_probes,
+        "behavioral_epochs": args.behavioral_epochs,
         "seed": args.seed,
         "behavioral_probe_manifest_sha256": probe_manifest_sha256,
     }
@@ -165,7 +158,7 @@ def existing_meta_compatible(
     if not _float_close(meta.get("lr"), args.lr):
         return False, "lr_mismatch"
 
-    if not _float_close(meta.get("behavioral_lr_mult", 1.0), behavioral_lr_mult):
+    if not _float_close(meta.get("behavioral_lr_mult", 1.0), args.behavioral_lr_mult):
         return False, "behavioral_lr_mult_mismatch"
 
     return True, "compatible"
@@ -431,6 +424,24 @@ def parse_args() -> argparse.Namespace:
         help="Enable per-epoch eval/early-stopping. Disabled by default to reduce VRAM pressure.",
     )
     p.add_argument(
+        "--behavioral-probes",
+        type=int,
+        default=0,
+        help="Run a second short pass on up to this many eval-style probe prompts per file.",
+    )
+    p.add_argument(
+        "--behavioral-epochs",
+        type=int,
+        default=1,
+        help="Epochs for the optional behavioral second pass.",
+    )
+    p.add_argument(
+        "--behavioral-lr-mult",
+        type=float,
+        default=0.5,
+        help="Multiplier applied to --lr during the behavioral second pass.",
+    )
+    p.add_argument(
         "--inspect-only-file-key",
         default=None,
         help="Build one supervised example for this file key and print inspection JSON.",
@@ -466,9 +477,6 @@ def main() -> int:
     args = parse_args()
     set_seed(args.seed)
     paths = get_stage1_paths(args.model_id)
-    behavioral_probes = ORACLE_BEHAVIORAL_PROBES
-    behavioral_epochs = ORACLE_BEHAVIORAL_EPOCHS
-    behavioral_lr_mult = ORACLE_BEHAVIORAL_LR_MULT
 
     instances = load_instances()
     file_records = build_file_records(instances)
@@ -550,7 +558,7 @@ def main() -> int:
         )
         probe_manifest = build_behavioral_probe_manifest(
             examples=examples,
-            n_probes=behavioral_probes,
+            n_probes=args.behavioral_probes,
         )
         assert_saved_probe_manifest_compatible(out_dir, probe_manifest)
 
@@ -563,9 +571,6 @@ def main() -> int:
                 existing_meta,
                 args,
                 probe_manifest_sha256=probe_manifest.get("manifest_sha256", ""),
-                behavioral_probes=behavioral_probes,
-                behavioral_epochs=behavioral_epochs,
-                behavioral_lr_mult=behavioral_lr_mult,
             )
             if compatible:
                 print("  skip existing compatible adapter")
@@ -594,9 +599,9 @@ def main() -> int:
             batch_size=args.batch_size,
             patience=args.patience,
             enable_eval=args.enable_eval,
-            behavioral_probes=behavioral_probes,
-            behavioral_epochs=behavioral_epochs,
-            behavioral_lr_mult=behavioral_lr_mult,
+            behavioral_probes=args.behavioral_probes,
+            behavioral_epochs=args.behavioral_epochs,
+            behavioral_lr_mult=args.behavioral_lr_mult,
             seed=args.seed,
         )
         meta["wall_time_s"] = time.time() - t0

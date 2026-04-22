@@ -5,9 +5,6 @@ import argparse
 from config import (
     MAX_NEW_TOKENS,
     MODEL_ID,
-    ORACLE_BEHAVIORAL_EPOCHS,
-    ORACLE_BEHAVIORAL_LR_MULT,
-    ORACLE_BEHAVIORAL_PROBES,
     ORACLE_CHUNK_SIZE,
     SEED,
     TEMPERATURE,
@@ -24,6 +21,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--trunc-budget", type=int, default=TRUNCATION_BUDGET_TOKENS)
     p.add_argument("--chunk-size", type=int, default=ORACLE_CHUNK_SIZE)
+    p.add_argument("--behavioral-probes", type=int, default=0)
+    p.add_argument("--behavioral-epochs", type=int, default=1)
+    p.add_argument("--behavioral-lr-mult", type=float, default=0.5)
     p.add_argument("--max-new-tokens", type=int, default=MAX_NEW_TOKENS)
     p.add_argument("--temperature", type=float, default=TEMPERATURE)
     p.add_argument("--top-p", type=float, default=TOP_P)
@@ -41,9 +41,9 @@ def main() -> int:
         model_id=args.model_id,
         truncation_budget_tokens=args.trunc_budget,
         oracle_chunk_size=args.chunk_size,
-        behavioral_probes=ORACLE_BEHAVIORAL_PROBES,
-        behavioral_epochs=ORACLE_BEHAVIORAL_EPOCHS,
-        behavioral_lr_mult=ORACLE_BEHAVIORAL_LR_MULT,
+        behavioral_probes=args.behavioral_probes,
+        behavioral_epochs=args.behavioral_epochs,
+        behavioral_lr_mult=args.behavioral_lr_mult,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_p=args.top_p,

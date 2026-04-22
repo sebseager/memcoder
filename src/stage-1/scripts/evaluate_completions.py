@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import importlib.util
 import json
 import math
 import re
@@ -207,47 +206,18 @@ class PassAtOneExecutor:
         self.instances = instances
         self.test_timeout_seconds = max(1, int(test_timeout_seconds))
         self.max_relevant_tests = max(1, int(max_relevant_tests))
-        self.pytest_available = importlib.util.find_spec("pytest") is not None
-        self._warned_missing_pytest = False
 
         self._repo_tests_cache: dict[str, list[str]] = {}
         self._test_text_cache: dict[tuple[str, str], str] = {}
         self._selection_cache: dict[tuple[str, str, str], list[str]] = {}
-        self._baseline_result_cache: dict[tuple[str, tuple[str, ...]], int] = {}
 
-    def _fallback(
-        self,
-        exact_match: int,
-        status: str,
-        selected_test_count: int = 0,
-    ) -> PassAtOneResult:
+    def _fallback(self, exact_match: int, status: str) -> PassAtOneResult:
         return PassAtOneResult(
             pass_at_1=int(exact_match),
             source="fallback_exact_match",
             status=status,
-            selected_test_count=selected_test_count,
+            selected_test_count=0,
         )
-
-    def _run_pytest(
-        self,
-        *,
-        repo_root: Path,
-        selected_tests: list[str],
-    ) -> tuple[int, str]:
-        try:
-            proc = subprocess.run(
-                [sys.executable, "-m", "pytest", "-q", "-x", *selected_tests],
-                cwd=repo_root,
-                text=True,
-                capture_output=True,
-                timeout=self.test_timeout_seconds,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return -1, ""
-
-        combined_output = (proc.stdout or "") + "\n" + (proc.stderr or "")
-        return proc.returncode, combined_output
 
     def _list_repo_tests(self, repo_name: str) -> list[str]:
         cached = self._repo_tests_cache.get(repo_name)
@@ -306,17 +276,17 @@ class PassAtOneExecutor:
 
         module_patterns = [
             re.compile(
-                rf"(^|\n)\s*(from\s+{re.escape(module)}\s+import\b|import\s+{re.escape(module)}(\s|$|,|\.))",
+                rf"(^|\\n)\\s*(from\\s+{re.escape(module)}\\s+import\\b|import\\s+{re.escape(module)}(\\s|$|,|\\.))",
                 flags=re.MULTILINE,
             )
             for module in module_candidates_for_file(file_path)
         ]
         function_pattern = (
-            re.compile(rf"\b{re.escape(function_name)}\b") if function_name else None
+            re.compile(rf"\\b{re.escape(function_name)}\\b") if function_name else None
         )
         source_stem = PurePosixPath(file_path).stem
         stem_pattern = (
-            re.compile(rf"\b{re.escape(source_stem)}\b") if source_stem else None
+            re.compile(rf"\\b{re.escape(source_stem)}\\b") if source_stem else None
         )
 
         scored: list[tuple[int, str]] = []
@@ -337,29 +307,7 @@ class PassAtOneExecutor:
                 scored.append((score, rel_path))
 
         scored.sort(key=lambda x: (-x[0], x[1]))
-
         selected = [rel for _, rel in scored[: self.max_relevant_tests]]
-        if not selected:
-            source_path = PurePosixPath(file_path)
-            source_rel = source_path.as_posix()
-            if source_rel in tests and is_test_file(source_path):
-                selected = [source_rel]
-            else:
-                same_dir = [
-                    rel
-                    for rel in tests
-                    if PurePosixPath(rel).parent == source_path.parent
-                ]
-                if same_dir:
-                    selected = sorted(same_dir)[: self.max_relevant_tests]
-                elif source_stem:
-                    stem_matches = [
-                        rel
-                        for rel in tests
-                        if source_stem.lower() in PurePosixPath(rel).stem.lower()
-                    ]
-                    selected = sorted(stem_matches)[: self.max_relevant_tests]
-
         self._selection_cache[cache_key] = selected
         return selected
 
@@ -417,15 +365,6 @@ class PassAtOneExecutor:
                 selected_test_count=0,
             )
 
-        if not self.pytest_available:
-            if not self._warned_missing_pytest:
-                print(
-                    "Warning: pytest not installed in current interpreter; "
-                    "pass@1 falls back to exact match."
-                )
-                self._warned_missing_pytest = True
-            return self._fallback(exact_match, "pytest_not_installed")
-
         instance_id = str(rec.get("instance_id", ""))
         meta = self.instances.get(instance_id)
         if meta is None:
@@ -448,34 +387,6 @@ class PassAtOneExecutor:
         if not selected_tests:
             return self._fallback(exact_match, "no_relevant_tests")
 
-        cache_key = (repo_name, tuple(selected_tests))
-        baseline_rc = self._baseline_result_cache.get(cache_key)
-        if baseline_rc is None:
-            baseline_rc, _ = self._run_pytest(
-                repo_root=repo_root,
-                selected_tests=selected_tests,
-            )
-            self._baseline_result_cache[cache_key] = baseline_rc
-
-        if baseline_rc == -1:
-            return self._fallback(
-                exact_match,
-                "baseline_timeout",
-                selected_test_count=len(selected_tests),
-            )
-        if baseline_rc == 5:
-            return self._fallback(
-                exact_match,
-                "baseline_no_tests_collected",
-                selected_test_count=len(selected_tests),
-            )
-        if baseline_rc != 0:
-            return self._fallback(
-                exact_match,
-                f"baseline_pytest_error_{baseline_rc}",
-                selected_test_count=len(selected_tests),
-            )
-
         try:
             original_text = target_file.read_text(encoding="utf-8", errors="ignore")
             patched_text = self._patch_file_text(
@@ -490,11 +401,16 @@ class PassAtOneExecutor:
 
         target_file.write_text(patched_text, encoding="utf-8")
         try:
-            patched_rc, patched_output = self._run_pytest(
-                repo_root=repo_root,
-                selected_tests=selected_tests,
-            )
-            if patched_rc == -1:
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", "pytest", "-q", "-x", *selected_tests],
+                    cwd=repo_root,
+                    text=True,
+                    capture_output=True,
+                    timeout=self.test_timeout_seconds,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired:
                 return PassAtOneResult(
                     pass_at_1=0,
                     source="executed",
@@ -504,37 +420,23 @@ class PassAtOneExecutor:
         finally:
             target_file.write_text(original_text, encoding="utf-8")
 
-        if patched_rc == 0:
+        if proc.returncode == 0:
             return PassAtOneResult(
                 pass_at_1=1,
                 source="executed",
                 status="passed",
                 selected_test_count=len(selected_tests),
             )
-        if patched_rc == 1:
-            if "No module named pytest" in patched_output:
-                return self._fallback(
-                    exact_match,
-                    "pytest_not_installed",
-                    selected_test_count=len(selected_tests),
-                )
+        if proc.returncode == 1:
             return PassAtOneResult(
                 pass_at_1=0,
                 source="executed",
                 status="failed",
                 selected_test_count=len(selected_tests),
             )
-        if patched_rc == 5:
-            return self._fallback(
-                exact_match,
-                "no_tests_collected",
-                selected_test_count=len(selected_tests),
-            )
-        return self._fallback(
-            exact_match,
-            f"pytest_error_{patched_rc}",
-            selected_test_count=len(selected_tests),
-        )
+        if proc.returncode == 5:
+            return self._fallback(exact_match, "no_tests_collected")
+        return self._fallback(exact_match, f"pytest_error_{proc.returncode}")
 
 
 def evaluate_condition(
