@@ -50,25 +50,40 @@ This stage builds a contamination-safe, execution-grounded completion dataset fr
      - `outputs/04_verify_summary.json`
      - `outputs/verify_reports/*.json`
 
-5. `scripts/finalize_instances.py`
-   - Materializes final artifacts per accepted instance:
+5. `scripts/verify_gold_pass.py`
+   - Positive complement to wipe verification.
+   - Re-runs selected instances with `gold_patch` only.
+   - Emits filtered subsets and diffs between wipe-selected vs gold-passing rows.
+   - Writes:
+     - `outputs/05_gold_verify_runs.jsonl`
+     - `outputs/05_gold_verify_summary.json`
+     - `outputs/05_gold_passed_verified_instances.jsonl`
+     - `outputs/05_gold_removed_verified_instances.jsonl`
+     - `outputs/05_gold_filter_diff.json`
+     - `outputs/gold_verify_reports/*.json`
+
+6. `scripts/finalize_instances.py`
+   - Materializes final artifacts per gold-passing instance:
      - full file
      - masked file
      - ground-truth body
      - function source
      - mask patch
    - Writes:
+     - `outputs/stage1_instances.jsonl`
+     - `outputs/stage1_instances.csv`
      - `outputs/instances.jsonl`
      - `outputs/instances.csv`
      - `outputs/instances/<instance_id>/...`
-     - `outputs/05_final_summary.json`
+     - `outputs/06_final_summary.json`
 
-6. `scripts/plot_contamination.py`
+7. `scripts/plot_contamination.py`
    - Generates contamination table and figure against the model cutoff line.
+   - Includes upstream verify/finalize metadata in summary output.
    - Writes:
      - `outputs/contamination.csv`
      - `outputs/contamination.png`
-     - `outputs/06_contamination_summary.json`
+     - `outputs/07_contamination_summary.json`
 
 ## Environment
 

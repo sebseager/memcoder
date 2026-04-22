@@ -108,8 +108,8 @@ python scripts/verify_wipe.py \
   --max-workers "$VERIFY_WORKERS" \
   --batch-size "$VERIFY_BATCH_SIZE" \
   --timeout-seconds "$VERIFY_TIMEOUT"
+python scripts/verify_gold_pass.py
 python scripts/finalize_instances.py
 python scripts/plot_contamination.py
-python scripts/verify_gold_pass.py
 
 echo "Stage 0 complete. Outputs in src/stage-0/outputs"

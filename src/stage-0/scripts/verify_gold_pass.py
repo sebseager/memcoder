@@ -66,6 +66,7 @@ def build_harness_env(mode: str) -> dict[str, str]:
     safe_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = safe_dir / "config.json"
 
+    # Omit credsStore/credHelpers so docker SDK never calls host helper binaries.
     payload: dict[str, dict] = {"auths": {}}
     if cfg_path.exists():
         try:
@@ -81,21 +82,31 @@ def build_harness_env(mode: str) -> dict[str, str]:
     return env
 
 
+def load_json_file(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Standalone Stage 0 gold-only sanity check. Verifies every selected "
-            "instance resolves in SWE-rebench harness when applying gold patch only."
+            "Stage 0 gold-only sanity check. Runs after verify_wipe and before "
+            "finalize_instances."
         )
     )
     parser.add_argument(
-        "--verified-jsonl", default=str(OUTPUTS_DIR / "04_verified_instances.jsonl")
+        "--verified-jsonl",
+        default=str(OUTPUTS_DIR / "04_verified_instances.jsonl"),
+        help="verify_wipe accepted instances.",
     )
     parser.add_argument(
-        "--instances-jsonl", default=str(OUTPUTS_DIR / "instances.jsonl")
-    )
-    parser.add_argument(
-        "--final-summary-json", default=str(OUTPUTS_DIR / "05_final_summary.json")
+        "--verify-summary-json",
+        default=str(OUTPUTS_DIR / "04_verify_summary.json"),
+        help="Optional verify_wipe summary for provenance metadata.",
     )
     parser.add_argument("--dataset-name", default=DATASET_NAME)
     parser.add_argument("--namespace", default=DEFAULT_DOCKER_NAMESPACE)
@@ -108,7 +119,7 @@ def parse_args() -> argparse.Namespace:
         "--batch-size",
         type=int,
         default=20,
-        help="Instances per harness invocation (0 means all selected instances at once).",
+        help="Instances per harness invocation (0 means all accepted instances at once).",
     )
     parser.add_argument("--run-id-prefix", default="stage0-goldcheck")
     parser.add_argument(
@@ -120,74 +131,60 @@ def parse_args() -> argparse.Namespace:
             "DOCKER_CONFIG under outputs to avoid broken credential helper binaries."
         ),
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Fail with exit code 1 if any selected instance does not pass gold-only "
+            "verification. Default behavior is non-blocking for pipeline execution."
+        ),
+    )
     return parser.parse_args()
 
 
-def load_json_file(path: Path) -> dict | None:
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-
-
 def validate_prereqs(
-    *,
     verified_path: Path,
-    instances_path: Path,
-    final_summary_path: Path,
-) -> tuple[list[dict], list[dict], dict]:
-    missing = [
-        str(path)
-        for path in (verified_path, instances_path, final_summary_path)
-        if not path.exists()
-    ]
-    if missing:
+) -> list[dict]:
+    if not verified_path.exists():
         raise FileNotFoundError(
-            "Stage 0 prerequisites missing. Run stage-0 pipeline first. Missing: "
-            + ", ".join(missing)
+            f"Missing verify_wipe output; run verify_wipe first: {verified_path}"
         )
 
     verified_rows = read_jsonl(verified_path)
-    instance_rows = read_jsonl(instances_path)
-    summary = load_json_file(final_summary_path)
-
-    if not isinstance(summary, dict):
-        raise ValueError(f"Malformed summary JSON: {final_summary_path}")
-
-    expected_final = int(summary.get("final_instance_count", 0))
-    if expected_final <= 0:
+    if not verified_rows:
         raise ValueError(
-            "final_instance_count <= 0 in 05_final_summary.json. "
-            "Run finalize_instances.py first."
+            "verify_wipe produced zero accepted instances; cannot run gold verification."
         )
 
-    if len(instance_rows) != expected_final:
-        raise ValueError(
-            "instances.jsonl count does not match 05_final_summary.json: "
-            f"{len(instance_rows)} != {expected_final}"
-        )
+    for row in verified_rows:
+        iid = row.get("instance_id")
+        gold_patch = (row.get("gold_patch") or "").strip()
+        if not iid:
+            raise ValueError("verify_wipe row is missing instance_id")
+        if not gold_patch:
+            raise ValueError(f"Missing gold_patch in verify_wipe row: {iid}")
 
-    if len(verified_rows) < expected_final:
-        raise ValueError(
-            "04_verified_instances.jsonl has fewer rows than finalized instances: "
-            f"{len(verified_rows)} < {expected_final}"
-        )
+    return verified_rows
 
-    instance_ids = {row.get("instance_id") for row in instance_rows}
-    verified_ids = {row.get("instance_id") for row in verified_rows}
-    missing_in_verified = sorted(
-        [iid for iid in instance_ids if iid not in verified_ids]
-    )
-    if missing_in_verified:
-        raise ValueError(
-            "Some finalized instances are missing in 04_verified_instances.jsonl: "
-            + ", ".join(missing_in_verified[:10])
-            + (" ..." if len(missing_in_verified) > 10 else "")
-        )
 
-    return verified_rows, instance_rows, summary
+def select_best_outcome_rows(verify_rows: list[dict]) -> dict[str, dict]:
+    best: dict[str, dict] = {}
+    for row in verify_rows:
+        iid = row["instance_id"]
+        prev = best.get(iid)
+        if prev is None:
+            best[iid] = row
+            continue
+
+        prev_report = bool(prev.get("report_exists"))
+        row_report = bool(row.get("report_exists"))
+        prev_passed = bool(prev.get("passed"))
+        row_passed = bool(row.get("passed"))
+
+        if (not prev_report and row_report) or (not prev_passed and row_passed):
+            best[iid] = row
+
+    return best
 
 
 def main() -> None:
@@ -195,28 +192,19 @@ def main() -> None:
     ensure_stage0_dirs()
 
     verified_path = Path(args.verified_jsonl)
-    instances_path = Path(args.instances_jsonl)
-    final_summary_path = Path(args.final_summary_json)
+    verify_summary_path = Path(args.verify_summary_json)
 
-    verified_rows, instance_rows, _ = validate_prereqs(
-        verified_path=verified_path,
-        instances_path=instances_path,
-        final_summary_path=final_summary_path,
+    verified_rows = validate_prereqs(verified_path=verified_path)
+    wipe_summary = load_json_file(verify_summary_path)
+
+    selected_rows = sorted(
+        verified_rows,
+        key=lambda row: (
+            int(row.get("verify_rank") or 9999),
+            row.get("instance_id") or "",
+        ),
     )
-
-    selected_ids = [row["instance_id"] for row in instance_rows]
-    selected_id_set = set(selected_ids)
-
-    by_id = {row.get("instance_id"): row for row in verified_rows}
-    selected_rows: list[dict] = []
-    for iid in selected_ids:
-        row = by_id.get(iid)
-        if row is None:
-            raise ValueError(f"Missing selected instance in verified rows: {iid}")
-        patch = (row.get("gold_patch") or "").strip()
-        if not patch:
-            raise ValueError(f"Missing gold_patch for selected instance: {iid}")
-        selected_rows.append(row)
+    selected_ids = [row["instance_id"] for row in selected_rows]
 
     batch_size = args.batch_size if args.batch_size > 0 else len(selected_rows)
     env = build_harness_env(args.docker_config_mode)
@@ -244,7 +232,7 @@ def main() -> None:
             )
             instance_ids.append(iid)
 
-        pred_path = OUTPUTS_DIR / f"07_gold_predictions_{offset}.jsonl"
+        pred_path = OUTPUTS_DIR / f"05_gold_predictions_{offset}.jsonl"
         write_jsonl(pred_path, predictions)
 
         cmd = [
@@ -297,37 +285,26 @@ def main() -> None:
                 }
             )
 
-    output_runs = OUTPUTS_DIR / "07_gold_verify_runs.jsonl"
-    output_summary = OUTPUTS_DIR / "07_gold_verify_summary.json"
+    output_runs = OUTPUTS_DIR / "05_gold_verify_runs.jsonl"
+    output_summary = OUTPUTS_DIR / "05_gold_verify_summary.json"
+    output_passed_verified = OUTPUTS_DIR / "05_gold_passed_verified_instances.jsonl"
+    output_removed_verified = OUTPUTS_DIR / "05_gold_removed_verified_instances.jsonl"
+    output_diff = OUTPUTS_DIR / "05_gold_filter_diff.json"
 
     write_jsonl(output_runs, verify_rows)
 
-    by_iid: dict[str, dict] = {}
-    for row in verify_rows:
-        iid = row["instance_id"]
-        prev = by_iid.get(iid)
-        if prev is None:
-            by_iid[iid] = row
-            continue
-        if not prev.get("report_exists") and row.get("report_exists"):
-            by_iid[iid] = row
-            continue
-        if not prev.get("passed") and row.get("passed"):
-            by_iid[iid] = row
+    best_by_iid = select_best_outcome_rows(verify_rows)
 
-    missing_rows = [iid for iid in selected_id_set if iid not in by_iid]
-    failed = []
-    missing_report = []
-    not_resolved = []
-    patch_not_applied = []
+    missing_report: list[str] = []
+    patch_not_applied: list[str] = []
+    not_resolved: list[str] = []
+    failed: list[str] = []
 
     for iid in selected_ids:
-        row = by_iid.get(iid)
-        if row is None:
+        row = best_by_iid.get(iid)
+        if row is None or not row.get("report_exists"):
             missing_report.append(iid)
-            continue
-        if not row.get("report_exists"):
-            missing_report.append(iid)
+            failed.append(iid)
             continue
         if not row.get("patch_successfully_applied"):
             patch_not_applied.append(iid)
@@ -337,14 +314,37 @@ def main() -> None:
             not_resolved.append(iid)
             failed.append(iid)
 
-    missing_report.extend(missing_rows)
-    unique_failed = sorted(set(failed + missing_report))
-    passed_count = len(selected_id_set) - len(unique_failed)
-    all_passed = len(unique_failed) == 0
+    unique_failed = sorted(set(failed))
+    failed_set = set(unique_failed)
+    passed_ids = [iid for iid in selected_ids if iid not in failed_set]
+    removed_ids = [iid for iid in selected_ids if iid in failed_set]
 
+    selected_by_id = {row["instance_id"]: row for row in selected_rows}
+    passed_verified_rows = [selected_by_id[iid] for iid in passed_ids]
+    removed_verified_rows = [selected_by_id[iid] for iid in removed_ids]
+
+    write_jsonl(output_passed_verified, passed_verified_rows)
+    write_jsonl(output_removed_verified, removed_verified_rows)
+
+    write_json(
+        output_diff,
+        {
+            "source_verified_instances": len(selected_rows),
+            "gold_passed_instances": len(passed_ids),
+            "gold_removed_instances": len(removed_ids),
+            "passed_instance_ids": passed_ids,
+            "removed_instance_ids": removed_ids,
+            "outputs": {
+                "gold_passed_verified_jsonl": str(output_passed_verified),
+                "gold_removed_verified_jsonl": str(output_removed_verified),
+            },
+        },
+    )
+
+    all_passed = len(unique_failed) == 0
     summary = {
         "selected_instances": len(selected_ids),
-        "passed_instances": passed_count,
+        "passed_instances": len(passed_ids),
         "failed_instances": len(unique_failed),
         "all_passed": all_passed,
         "failures": {
@@ -360,33 +360,44 @@ def main() -> None:
             "max_workers": args.max_workers,
             "batch_size": batch_size,
             "docker_config_mode": args.docker_config_mode,
+            "strict": bool(args.strict),
         },
         "inputs": {
             "verified_jsonl": str(verified_path),
-            "instances_jsonl": str(instances_path),
-            "final_summary_json": str(final_summary_path),
+            "verify_summary_json": str(verify_summary_path),
         },
+        "upstream_verify_wipe": wipe_summary,
         "outputs": {
             "gold_verify_runs_jsonl": str(output_runs),
             "gold_verify_summary_json": str(output_summary),
             "gold_verify_reports_dir": str(gold_reports_dir()),
+            "gold_passed_verified_jsonl": str(output_passed_verified),
+            "gold_removed_verified_jsonl": str(output_removed_verified),
+            "gold_filter_diff_json": str(output_diff),
         },
     }
     write_json(output_summary, summary)
 
     print(
         "Gold pass verification: "
-        f"{passed_count}/{len(selected_ids)} passed "
+        f"{len(passed_ids)}/{len(selected_ids)} passed "
         f"(failed={len(unique_failed)})."
     )
 
-    if not all_passed:
+    if not all_passed and args.strict:
         print(
             "ERROR: Not all selected instances passed gold-only verification. "
             f"See {output_summary}",
             file=sys.stderr,
         )
         raise SystemExit(1)
+
+    if not all_passed:
+        print(
+            "WARNING: Some selected instances failed gold-only verification; "
+            "continuing with filtered outputs.",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
