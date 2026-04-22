@@ -501,3 +501,36 @@ Switched Stage 1 onto the new Stage-0 artifact-based contract and the SWE-rebenc
 - First harness invocation per condition will pull ~17 Docker images (already used in Stage 0, so usually cached).
 - `HARNESS_MAX_WORKERS=2` is conservative; bump if GPU-bound gen time is the bottleneck and Docker concurrency is safe on the host.
 - A noop prediction patch combined with no gold patch falls back to `status="noop_patch"` and `pass@1=0` to avoid spurious positives. With 17/17 gold patches available this path shouldn't trigger in the full run.
+
+## Entry 2026-04-22 2
+
+- Follow-up requested: make Stage 0 include `gold_patch` directly in `stage1_instances.jsonl`, then simplify Stage 1 to read only that file.
+
+- Code changes:
+  - Updated `stage-0/scripts/finalize_instances.py` to include `"gold_patch"` in `metadata`, so it propagates into each finalized `stage1_instances.jsonl` row.
+  - Updated `stage-1/scripts/evaluate_completions.py` to:
+    - read `gold_patch` directly from each hydrated `stage1_instances.jsonl` row,
+    - remove `--gold-patches-jsonl` and the separate lookup path,
+    - remove `STAGE0_DIR` import dependency for gold-patch loading,
+    - keep harness submission as `combine_patches(gold_patch, prediction_patch)`.
+  - Fixed a stale variable reference bug in the harness loop (`patch_text` was referenced after refactor).
+
+- Data refresh:
+  - Attempted rerun of `python3 stage-0/scripts/finalize_instances.py` to regenerate outputs.
+  - In this local environment it failed during repo checkout maintenance because cached repos under `stage-0/cache/repos` are root-owned and the script's `git remote set-url` step returned exit 128.
+  - Applied a deterministic one-off backfill for current artifacts:
+    - joined `stage-0/outputs/stage1_instances.jsonl` with `stage-0/outputs/05_gold_passed_verified_instances.jsonl` by `instance_id`,
+    - wrote `gold_patch` inline into all 17 stage1 rows,
+    - verification result: `with_gold_patch=17/17`.
+
+- Smoke tests (as listed at bottom of notes):
+
+```bash
+cd /home/seb/Developer/Classes/continual-learning/src/stage-1
+bash -n scripts/run_stage1.sh
+python3 -m py_compile scripts/*.py
+```
+
+- Additional quick checks:
+  - `python3 scripts/evaluate_completions.py --help` runs and no longer shows `--gold-patches-jsonl`.
+  - `stage-0/outputs/stage1_instances.jsonl` now contains `gold_patch` on every row.

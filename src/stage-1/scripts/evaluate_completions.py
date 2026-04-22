@@ -19,7 +19,6 @@ from config import (
     INSTANCES_JSONL,
     LOW_GAP_BLEU_THRESHOLD,
     MODEL_ID,
-    STAGE0_DIR,
     get_stage1_paths,
 )
 
@@ -30,16 +29,6 @@ DEFAULT_HARNESS_NAMESPACE = "swerebench"
 DEFAULT_HARNESS_CACHE_LEVEL = "instance"
 DEFAULT_HARNESS_TIMEOUT_SECONDS = 1800
 DEFAULT_HARNESS_MAX_WORKERS = 2
-
-# Gold patches are not inlined in stage1_instances.jsonl (the Stage-0 final
-# artifact) but are required at eval time so we can submit `gold_patch +
-# prediction_patch` to the harness -- mirroring Stage-0's verify_wipe which
-# submits `gold_patch + mask_patch`. Stage-0 keeps them in
-# `05_gold_passed_verified_instances.jsonl` keyed by instance_id.
-DEFAULT_GOLD_PATCHES_JSONL = (
-    STAGE0_DIR / "outputs" / "05_gold_passed_verified_instances.jsonl"
-)
-
 
 @dataclass(frozen=True)
 class InstanceMeta:
@@ -140,37 +129,7 @@ def syntax_is_valid(masked_function: str, body: str) -> bool:
         return False
 
 
-def _load_gold_patch_lookup(gold_jsonl: Path) -> dict[str, str]:
-    """Return ``instance_id -> gold_patch`` from Stage-0's upstream jsonl."""
-
-    if not gold_jsonl.exists():
-        print(
-            "Warning: gold patches file not found; harness will submit only the "
-            f"prediction patch (tests may fail for unrelated reasons): {gold_jsonl}"
-        )
-        return {}
-
-    lookup: dict[str, str] = {}
-    with gold_jsonl.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            iid = rec.get("instance_id")
-            gp = rec.get("gold_patch")
-            if isinstance(iid, str) and isinstance(gp, str) and gp.strip():
-                lookup[iid] = gp
-    return lookup
-
-
-def load_instance_meta(
-    instances_jsonl: Path,
-    gold_patches_jsonl: Path | None = None,
-) -> dict[str, InstanceMeta]:
+def load_instance_meta(instances_jsonl: Path) -> dict[str, InstanceMeta]:
     if not instances_jsonl.exists():
         print(
             "Warning: instances file not found, "
@@ -181,10 +140,6 @@ def load_instance_meta(
     # Hydrate artifact-backed rows by delegating to the shared helper, which loads
     # full_file / masked_file / masked_function from disk.
     from helpers import hydrate_instance_row  # local import to avoid torch at import
-
-    gold_lookup = _load_gold_patch_lookup(
-        gold_patches_jsonl if gold_patches_jsonl is not None else DEFAULT_GOLD_PATCHES_JSONL
-    )
 
     out: dict[str, InstanceMeta] = {}
     with instances_jsonl.open("r", encoding="utf-8") as f:
@@ -220,7 +175,7 @@ def load_instance_meta(
                 full_file=str(rec.get("full_file", "")),
                 docker_image=str(rec.get("docker_image", "")),
                 test_cmd=str(rec.get("test_cmd", "")),
-                gold_patch=gold_lookup.get(instance_id, ""),
+                gold_patch=str(rec.get("gold_patch", "")),
             )
     return out
 
@@ -383,7 +338,6 @@ class HarnessExecutor:
         predictions: list[dict] = []
         results: dict[str, PassAtOneResult] = {}
         instance_ids: list[str] = []
-        patch_texts: dict[str, str] = {}
 
         for rec in records:
             iid = str(rec.get("instance_id", ""))
@@ -449,8 +403,6 @@ class HarnessExecutor:
                 }
             )
             instance_ids.append(iid)
-            patch_texts[iid] = patch_text
-
         if not predictions:
             return results
 
@@ -673,16 +625,6 @@ def parse_args() -> argparse.Namespace:
         default=INSTANCES_JSONL,
         help="Path to Stage 0 stage1_instances.jsonl with span metadata.",
     )
-    p.add_argument(
-        "--gold-patches-jsonl",
-        type=Path,
-        default=DEFAULT_GOLD_PATCHES_JSONL,
-        help=(
-            "Path to Stage 0 jsonl that keeps inline gold_patch per instance. "
-            "Needed so the harness receives gold_patch+prediction_patch "
-            "(analogous to Stage-0 verify_wipe)."
-        ),
-    )
     # Harness tunables (mirror stage-0/scripts/verify_wipe.py).
     p.add_argument("--harness-dataset-name", default=DEFAULT_HARNESS_DATASET)
     p.add_argument("--harness-namespace", default=DEFAULT_HARNESS_NAMESPACE)
@@ -758,9 +700,7 @@ def main() -> int:
     paths = get_stage1_paths(args.model_id)
     paths.evaluation.mkdir(parents=True, exist_ok=True)
 
-    instance_meta = load_instance_meta(
-        args.instances_jsonl, gold_patches_jsonl=args.gold_patches_jsonl
-    )
+    instance_meta = load_instance_meta(args.instances_jsonl)
 
     harness_predictions_dir = paths.evaluation / "harness_predictions"
     harness_reports_dir = paths.evaluation / "harness_reports"

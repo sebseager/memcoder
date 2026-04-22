@@ -214,6 +214,9 @@ def main() -> None:
                     "passed": gold_passed,
                 },
             },
+            # Keep the upstream benchmark fix patch inline in stage1_instances so
+            # Stage 1 can evaluate from a single input file.
+            "gold_patch": str(get_field(row, wipe_row, "gold_patch") or ""),
             "evaluation_contract": {
                 "metric": "pass@1",
                 "definition": (
