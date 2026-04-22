@@ -29,10 +29,21 @@ source .venv/bin/activate
 - scripts/train_oracle.py: trains file-level oracle adapters.
 - scripts/generate_completions.py: runs B/C/D generation.
 - scripts/identifier_overlap.py: computes novel identifier overlap diagnostics for condition D.
-- scripts/evaluate_completions.py: computes pass@1 proxy and BLEU.
+- scripts/evaluate_completions.py: computes exact_match, execution-based pass@1, BLEU, and syntax validity.
 - scripts/analyze_stage1.py: recovery-ratio analysis + bootstrap CI + gap-stratified summaries + plots.
 - scripts/capability_interference.py: probe-based adapter interference check.
 - scripts/run_stage1.sh: tiny/small/full orchestration.
+
+## Evaluation Metrics
+
+- exact_match: strict normalized string identity between prediction and ground-truth body.
+- pass_at_1: targeted pytest execution after patching the predicted body into the original repo file.
+  - Test selection heuristic uses likely-relevant test files (module import hits and function-name mentions).
+  - If execution is infeasible (for example no relevant tests discovered or missing repo clone), evaluator falls back to exact_match and labels the fallback in per-instance columns (`pass_at_1_source`, `pass_at_1_status`).
+- bleu4: token n-gram overlap.
+- syntax_valid: AST parse check of reconstructed function.
+
+By default, `evaluate_completions.py` runs execution-based pass@1 (`--pass-at-1-mode pytest_heuristic`). Use `--pass-at-1-mode exact_only` to disable test execution.
 
 ## Tiny Run
 

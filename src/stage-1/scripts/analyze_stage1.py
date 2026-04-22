@@ -40,7 +40,8 @@ def bootstrap_ratio(
 def load_eval_csv(path: Path) -> pd.DataFrame:
     cols = [
         "instance_id",
-        "pass_at_1_proxy",
+        "pass_at_1",
+        "exact_match",
         "bleu4",
         "gap_stratum",
         "bleu_gap_bc",
@@ -52,16 +53,32 @@ def load_eval_csv(path: Path) -> pd.DataFrame:
     except pd.errors.EmptyDataError:
         return pd.DataFrame(columns=cols)
 
+    required = {"instance_id", "pass_at_1", "exact_match", "bleu4"}
+    missing_required = sorted(required.difference(df.columns))
+    if missing_required:
+        raise ValueError(
+            f"Missing required evaluation columns in {path}: {missing_required}. "
+            "Re-run scripts/evaluate_completions.py with the current schema."
+        )
+
     for col in cols:
+        if col in {"gap_stratum"}:
+            if col not in df.columns:
+                df[col] = "unknown"
+            continue
         if col not in df.columns:
-            df[col] = np.nan if col == "bleu_gap_bc" else "unknown"
+            df[col] = np.nan
+
+    df["gap_stratum"] = df["gap_stratum"].fillna("unknown")
     return df[cols]
 
 
 def safe_mean(arr: np.ndarray) -> float:
     if arr.size == 0:
         return 0.0
-    return float(np.mean(arr))
+    if np.all(np.isnan(arr)):
+        return float("nan")
+    return float(np.nanmean(arr))
 
 
 def ci95(vals: list[float]) -> list[float] | None:
@@ -140,17 +157,28 @@ def main() -> int:
     d_df = load_eval_csv(paths.evaluation / "condition_D.per_instance.csv")
 
     merged = (
-        b_df[["instance_id", "pass_at_1_proxy", "bleu4", "gap_stratum", "bleu_gap_bc"]]
+        b_df[
+            [
+                "instance_id",
+                "pass_at_1",
+                "exact_match",
+                "bleu4",
+                "gap_stratum",
+                "bleu_gap_bc",
+            ]
+        ]
         .rename(
             columns={
-                "pass_at_1_proxy": "pass_B",
+                "pass_at_1": "pass_B",
+                "exact_match": "exact_B",
                 "bleu4": "bleu_B",
             }
         )
         .merge(
-            c_df[["instance_id", "pass_at_1_proxy", "bleu4"]].rename(
+            c_df[["instance_id", "pass_at_1", "exact_match", "bleu4"]].rename(
                 columns={
-                    "pass_at_1_proxy": "pass_C",
+                    "pass_at_1": "pass_C",
+                    "exact_match": "exact_C",
                     "bleu4": "bleu_C",
                 }
             ),
@@ -158,9 +186,10 @@ def main() -> int:
             how="inner",
         )
         .merge(
-            d_df[["instance_id", "pass_at_1_proxy", "bleu4"]].rename(
+            d_df[["instance_id", "pass_at_1", "exact_match", "bleu4"]].rename(
                 columns={
-                    "pass_at_1_proxy": "pass_D",
+                    "pass_at_1": "pass_D",
+                    "exact_match": "exact_D",
                     "bleu4": "bleu_D",
                 }
             ),
@@ -211,11 +240,16 @@ def main() -> int:
         "mean_pass_B": pass_summary["mean_B"],
         "mean_pass_C": pass_summary["mean_C"],
         "mean_pass_D": pass_summary["mean_D"],
+        "mean_exact_B": safe_mean(merged["exact_B"].to_numpy(dtype=float)),
+        "mean_exact_C": safe_mean(merged["exact_C"].to_numpy(dtype=float)),
+        "mean_exact_D": safe_mean(merged["exact_D"].to_numpy(dtype=float)),
         "mean_bleu_B": bleu_summary["mean_B"],
         "mean_bleu_C": bleu_summary["mean_C"],
         "mean_bleu_D": bleu_summary["mean_D"],
         "recovery_ratio_pass": pass_summary["recovery_ratio"],
+        "recovery_ratio_pass_at_1": pass_summary["recovery_ratio"],
         "recovery_ratio_pass_ci95": pass_summary["recovery_ratio_ci95"],
+        "recovery_ratio_pass_at_1_ci95": pass_summary["recovery_ratio_ci95"],
         "recovery_ratio_bleu": bleu_summary["recovery_ratio"],
         "recovery_ratio_bleu_ci95": bleu_summary["recovery_ratio_ci95"],
         "recovery_by_gap_stratum": {
@@ -244,7 +278,7 @@ def main() -> int:
         "analysis_summary": {
             "n_instances": summary["n_instances"],
             "recovery_ratio_bleu": summary["recovery_ratio_bleu"],
-            "recovery_ratio_pass": summary["recovery_ratio_pass"],
+            "recovery_ratio_pass_at_1": summary["recovery_ratio_pass_at_1"],
         },
     }
 
@@ -253,7 +287,7 @@ def main() -> int:
         ["B", "C", "D"],
         [summary["mean_pass_B"], summary["mean_pass_C"], summary["mean_pass_D"]],
     )
-    axes[0].set_title("Pass@1 Proxy Mean")
+    axes[0].set_title("Pass@1 Mean")
     axes[0].set_ylim(0, 1)
 
     axes[1].bar(
