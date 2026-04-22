@@ -5,3 +5,6 @@ trained_d2l/
 experiments/logs/
 experiments/dyprag_exp1_condition_*.json
 .env
+src/stage-0/cache/
+src/stage-1a/checkpoints/
+src/stage-1a/models/
