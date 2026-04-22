@@ -9,6 +9,9 @@ from pathlib import Path
 import numpy as np
 import torch
 from config import (
+    BEHAVIORAL_EPOCHS,
+    BEHAVIORAL_LR_MULT,
+    BEHAVIORAL_PROBES,
     MODEL_ID,
     ORACLE_CHUNK_SIZE,
     ORACLE_GRAD_ACCUM,
@@ -426,19 +429,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--behavioral-probes",
         type=int,
-        default=0,
+        default=BEHAVIORAL_PROBES,
         help="Run a second short pass on up to this many eval-style probe prompts per file.",
     )
     p.add_argument(
         "--behavioral-epochs",
         type=int,
-        default=1,
+        default=BEHAVIORAL_EPOCHS,
         help="Epochs for the optional behavioral second pass.",
     )
     p.add_argument(
         "--behavioral-lr-mult",
         type=float,
-        default=0.5,
+        default=BEHAVIORAL_LR_MULT,
         help="Multiplier applied to --lr during the behavioral second pass.",
     )
     p.add_argument(

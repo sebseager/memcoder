@@ -38,12 +38,14 @@ source .venv/bin/activate
 
 - exact_match: strict normalized string identity between prediction and ground-truth body.
 - pass_at_1: targeted pytest execution after patching the predicted body into the original repo file.
+  - Default mode is dockerized execution (`--pass-at-1-mode docker_pytest`) using Stage 0 prebuilt-image metadata from `stage-0/outputs/prebuilt_images/image_manifest.json`.
+  - Run `python ../stage-0/scripts/sync_prebuilt_images.py --operation move` once to migrate image artifacts into `stage-0/outputs/prebuilt_images/instances`, then `--operation copy` for incremental updates.
   - Test selection heuristic uses likely-relevant test files (module import hits and function-name mentions).
-  - If execution is infeasible (for example no relevant tests discovered or missing repo clone), evaluator falls back to exact_match and labels the fallback in per-instance columns (`pass_at_1_source`, `pass_at_1_status`).
+  - If execution is infeasible (for example no relevant tests discovered, missing repo clone, or missing docker image mapping), evaluator falls back to exact_match and labels the fallback in per-instance columns (`pass_at_1_source`, `pass_at_1_status`).
 - bleu4: token n-gram overlap.
 - syntax_valid: AST parse check of reconstructed function.
 
-By default, `evaluate_completions.py` runs execution-based pass@1 (`--pass-at-1-mode pytest_heuristic`). Use `--pass-at-1-mode exact_only` to disable test execution.
+By default, `evaluate_completions.py` runs dockerized execution-based pass@1 (`--pass-at-1-mode docker_pytest`). Use `--pass-at-1-mode pytest_heuristic` for host execution or `--pass-at-1-mode exact_only` to disable test execution.
 
 ## Tiny Run
 

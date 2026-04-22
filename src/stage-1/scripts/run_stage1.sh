@@ -8,7 +8,7 @@ TRUNC_BUDGET=2048
 MAX_NEW_TOKENS=1024
 TEMPERATURE=0.0
 TOP_P=1.0
-BEHAVIORAL_PROBES=0
+BEHAVIORAL_PROBES=5
 BEHAVIORAL_EPOCHS=1
 BEHAVIORAL_LR_MULT=0.5
 ORACLE_CHUNK_SIZE=3072
@@ -223,7 +223,8 @@ python scripts/generate_completions.py --condition D "${GEN_ARGS[@]}" --force
 
 python scripts/identifier_overlap.py --model-id "$MODEL_ID" --trunc-budget "$TRUNC_BUDGET" --condition D
 
-python scripts/evaluate_completions.py --condition all --model-id "$MODEL_ID"
+python "$SRC_DIR/stage-0/scripts/sync_prebuilt_images.py" --operation copy --quiet
+python scripts/evaluate_completions.py --condition all --model-id "$MODEL_ID" --pass-at-1-mode docker_pytest
 python scripts/analyze_stage1.py --model-id "$MODEL_ID" --seed "$SEED"
 
 CAP_ARGS=(--model-id "$MODEL_ID" --seed "$SEED")

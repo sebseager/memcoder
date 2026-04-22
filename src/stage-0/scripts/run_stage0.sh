@@ -11,6 +11,7 @@ cd "${ROOT_DIR}"
 python scripts/discover_repos.py --max-search-pages 3 --per-page 40 --sleep-seconds 0.2
 python scripts/clone_repos.py
 python scripts/build_instances.py
+python scripts/sync_prebuilt_images.py --operation move
 python scripts/plot_contamination.py
 
 echo "Stage 0 complete. Outputs are in ${ROOT_DIR}/outputs"
