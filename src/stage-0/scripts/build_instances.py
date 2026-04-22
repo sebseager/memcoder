@@ -22,6 +22,7 @@ from config import (
     config_as_json_dict,
     ensure_stage_dirs,
 )
+from tqdm import tqdm
 from tree_sitter import Node
 from tree_sitter_languages import get_parser
 
@@ -34,6 +35,8 @@ SUMMARY_COUNT_PATTERNS = {
     "errors": re.compile(r"(?P<count>\d+)\s+error"),
     "skipped": re.compile(r"(?P<count>\d+)\s+skipped"),
 }
+COMMON_SOURCE_ROOTS = {"src", "lib", "python", "package"}
+IGNORED_TEST_PREFIXES = ("tests/integration/", "tests/e2e/")
 
 
 class AssignedNameCollector(ast.NodeVisitor):
@@ -153,6 +156,11 @@ def parse_args() -> argparse.Namespace:
         default=240,
         help="Hard timeout per pytest invocation during candidate scoring",
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable tqdm progress bars",
+    )
     return parser.parse_args()
 
 
@@ -169,6 +177,128 @@ def iter_python_files(repo_path: Path) -> list[Path]:
             continue
         files.append(path)
     return files
+
+
+def normalize_rel_path(path: Path, repo_root: Path) -> str:
+    return str(path.relative_to(repo_root)).replace("\\", "/")
+
+
+def is_test_file(path: Path, repo_root: Path) -> bool:
+    rel_path = normalize_rel_path(path, repo_root)
+    name = path.name.lower()
+    return (
+        rel_path.startswith("tests/")
+        or "/tests/" in f"/{rel_path}"
+        or name.startswith("test_")
+        or name.endswith("_test.py")
+    )
+
+
+def is_ignored_test_selector(test_selector: str) -> bool:
+    normalized = test_selector.replace("\\", "/")
+    return any(normalized.startswith(prefix) for prefix in IGNORED_TEST_PREFIXES)
+
+
+def module_candidates_for_file(relative_path: str) -> set[str]:
+    module_parts = list(Path(relative_path).with_suffix("").parts)
+    if module_parts and module_parts[-1] == "__init__":
+        module_parts = module_parts[:-1]
+
+    candidates: set[str] = set()
+    if module_parts:
+        candidates.add(".".join(module_parts))
+        candidates.add(module_parts[-1])
+
+    for idx, part in enumerate(module_parts):
+        if part in COMMON_SOURCE_ROOTS and idx + 1 < len(module_parts):
+            candidates.add(".".join(module_parts[idx + 1 :]))
+
+    return {item for item in candidates if item}
+
+
+def import_signals_from_test_text(test_text: str) -> set[str]:
+    try:
+        module_ast = ast.parse(test_text)
+    except SyntaxError:
+        return set()
+
+    signals: set[str] = set()
+    for node in ast.walk(module_ast):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported = alias.name
+                signals.add(imported)
+                signals.add(imported.split(".")[-1])
+        elif isinstance(node, ast.ImportFrom):
+            if not node.module:
+                continue
+            module_name = node.module
+            signals.add(module_name)
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                signals.add(alias.name)
+                signals.add(f"{module_name}.{alias.name}")
+
+    return signals
+
+
+def build_file_to_test_mapping(
+    repo_root: Path,
+    py_files: list[Path],
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    test_files = [
+        path
+        for path in py_files
+        if is_test_file(path, repo_root)
+        and not is_ignored_test_selector(normalize_rel_path(path, repo_root))
+    ]
+    source_files = [path for path in py_files if not is_test_file(path, repo_root)]
+
+    source_candidates: dict[str, set[str]] = {}
+    for source_file in source_files:
+        rel_source = normalize_rel_path(source_file, repo_root)
+        source_candidates[rel_source] = module_candidates_for_file(rel_source)
+
+    mapping: dict[str, set[str]] = defaultdict(set)
+    test_file_text_cache: dict[str, str] = {}
+
+    for test_file in test_files:
+        try:
+            test_text = test_file.read_text(encoding="utf-8", errors="ignore")
+        except Exception:  # noqa: BLE001
+            continue
+
+        rel_test = normalize_rel_path(test_file, repo_root)
+        test_file_text_cache[rel_test] = test_text
+        import_signals = import_signals_from_test_text(test_text)
+        if not import_signals:
+            continue
+
+        for rel_source, module_names in source_candidates.items():
+            if module_names & import_signals:
+                mapping[rel_source].add(rel_test)
+
+    return (
+        {rel_source: sorted(test_paths) for rel_source, test_paths in mapping.items()},
+        test_file_text_cache,
+    )
+
+
+def keyword_filter_for_candidate(
+    function_name: str,
+    relevant_tests: list[str],
+    test_file_text_cache: dict[str, str],
+) -> str | None:
+    candidate_name = function_name.strip()
+    if len(candidate_name) < 3:
+        return None
+
+    boundary = re.compile(rf"\b{re.escape(candidate_name)}\b")
+    for rel_test in relevant_tests:
+        if boundary.search(test_file_text_cache.get(rel_test, "")):
+            return candidate_name
+    return None
 
 
 def walk_nodes(node: Node) -> list[Node]:
@@ -447,6 +577,9 @@ def run_repo_pytest(
     pytest_bin: Path,
     junit_path: Path,
     timeout_seconds: int,
+    *,
+    test_selectors: list[str] | None = None,
+    keyword_expression: str | None = None,
 ) -> dict[str, Any]:
     if junit_path.exists():
         junit_path.unlink()
@@ -456,11 +589,21 @@ def run_repo_pytest(
         "--tb=no",
         "-q",
         "--timeout=30",
+        "--import-mode=importlib",
         "--ignore=tests/integration",
         "--ignore=tests/e2e",
-        "-x",
         f"--junitxml={junit_path}",
     ]
+
+    if keyword_expression:
+        command.extend(["-k", keyword_expression])
+
+    if test_selectors:
+        command.extend(
+            selector
+            for selector in test_selectors
+            if not is_ignored_test_selector(selector)
+        )
 
     started = time.monotonic()
     try:
@@ -545,10 +688,32 @@ def replace_body_lines(
 def evaluate_candidate_testability(
     repo_task: dict[str, Any],
     candidate: dict[str, Any],
+    coverage_map: dict[str, list[str]],
+    test_file_text_cache: dict[str, str],
 ) -> dict[str, Any]:
     repo_root = Path(repo_task["repo_path"])
     pytest_bin = Path(repo_task["pytest_bin"])
     target_file = repo_root / candidate["file_path"]
+    relevant_tests = coverage_map.get(candidate["file_path"], [])
+
+    if not relevant_tests:
+        skipped = dict(candidate)
+        skipped.update(
+            {
+                "testable": False,
+                "skip_reason": "no_relevant_tests_for_target_file",
+                "scoped_test_targets": [],
+                "scoped_test_count": 0,
+            }
+        )
+        return skipped
+
+    keyword_expression = keyword_filter_for_candidate(
+        candidate.get("function_name", ""),
+        relevant_tests,
+        test_file_text_cache,
+    )
+
     report_dir = repo_root / ".stage0_candidate_reports"
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -579,6 +744,8 @@ def evaluate_candidate_testability(
             pytest_bin,
             masked_report,
             timeout_seconds=int(repo_task["pytest_timeout_seconds"]),
+            test_selectors=relevant_tests,
+            keyword_expression=keyword_expression,
         )
 
         target_file.write_text(ground_truth_text, encoding="utf-8")
@@ -587,6 +754,8 @@ def evaluate_candidate_testability(
             pytest_bin,
             restored_report,
             timeout_seconds=int(repo_task["pytest_timeout_seconds"]),
+            test_selectors=relevant_tests,
+            keyword_expression=keyword_expression,
         )
     finally:
         target_file.write_text(original_text, encoding="utf-8")
@@ -630,6 +799,9 @@ def evaluate_candidate_testability(
             "env_install_method": repo_task["env_install_method"],
             "repo_weight": repo_task.get("repo_weight", 1.0),
             "selection_tier": repo_task.get("selection_tier", "strict"),
+            "scoped_test_targets": relevant_tests,
+            "scoped_test_count": len(relevant_tests),
+            "function_name_filter": keyword_expression,
         }
     )
     return candidate
@@ -648,6 +820,8 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
             "candidate_count": 0,
             "evaluated_count": 0,
             "testable_count": 0,
+            "mapped_source_file_count": 0,
+            "mapped_test_file_count": 0,
             "instances": [],
         }
 
@@ -660,10 +834,13 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
             "candidate_count": 0,
             "evaluated_count": 0,
             "testable_count": 0,
+            "mapped_source_file_count": 0,
+            "mapped_test_file_count": 0,
             "instances": [],
         }
 
     py_files = iter_python_files(repo_root)
+    coverage_map, test_file_text_cache = build_file_to_test_mapping(repo_root, py_files)
     candidates: list[dict[str, Any]] = []
     for idx, py_file in enumerate(py_files, start=1):
         try:
@@ -688,9 +865,24 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
         candidates = candidates[:max_candidates]
 
     testable_instances: list[dict[str, Any]] = []
-    for candidate in candidates:
+    candidate_iterable = candidates
+    if repo_task.get("show_candidate_progress", False):
+        candidate_iterable = tqdm(
+            candidates,
+            total=len(candidates),
+            desc=f"{repo_local_name}: candidates",
+            leave=False,
+            dynamic_ncols=True,
+        )
+
+    for candidate in candidate_iterable:
         try:
-            evaluated = evaluate_candidate_testability(repo_task, candidate)
+            evaluated = evaluate_candidate_testability(
+                repo_task,
+                candidate,
+                coverage_map,
+                test_file_text_cache,
+            )
         except Exception as exc:  # noqa: BLE001
             candidate_with_error = dict(candidate)
             candidate_with_error["testable"] = False
@@ -707,6 +899,8 @@ def process_repo(repo_task: dict[str, Any]) -> dict[str, Any]:
         "candidate_count": len(candidates),
         "evaluated_count": len(candidates),
         "testable_count": len(testable_instances),
+        "mapped_source_file_count": len(coverage_map),
+        "mapped_test_file_count": len(test_file_text_cache),
         "instances": testable_instances,
     }
 
@@ -793,6 +987,7 @@ def write_instance_artifacts(instances: list[dict[str, Any]]) -> None:
 def main() -> None:
     args = parse_args()
     ensure_stage_dirs()
+    progress_enabled = not args.no_progress
 
     candidates_payload = json.loads(args.candidates.read_text(encoding="utf-8"))
     selected_repo_meta = {
@@ -840,6 +1035,7 @@ def main() -> None:
                 "selection_tier": coverage_meta.get("selection_tier", "strict"),
                 "max_candidates_per_repo": args.max_candidates_per_repo,
                 "pytest_timeout_seconds": args.pytest_timeout_seconds,
+                "show_candidate_progress": progress_enabled and args.workers <= 1,
                 "service_dependency_flags": selected_repo_meta.get(full_name, {}).get(
                     "service_dependency_flags", []
                 ),
@@ -861,20 +1057,44 @@ def main() -> None:
     )
 
     if args.workers <= 1:
-        repo_results = [process_repo(task) for task in repo_tasks]
+        repo_iterable = repo_tasks
+        if progress_enabled:
+            repo_iterable = tqdm(
+                repo_tasks,
+                total=len(repo_tasks),
+                desc="Repos",
+                dynamic_ncols=True,
+            )
+        repo_results = [process_repo(task) for task in repo_iterable]
     else:
         with Pool(processes=args.workers) as pool:
-            repo_results = pool.map(process_repo, repo_tasks)
+            repo_iterable = pool.imap_unordered(process_repo, repo_tasks)
+            if progress_enabled:
+                repo_iterable = tqdm(
+                    repo_iterable,
+                    total=len(repo_tasks),
+                    desc="Repos",
+                    dynamic_ncols=True,
+                )
+            repo_results = list(repo_iterable)
 
     all_testable_candidates: list[dict[str, Any]] = []
     repo_candidate_counts: dict[str, int] = {}
     repo_testable_counts: dict[str, int] = {}
+    repo_mapped_source_file_counts: dict[str, int] = {}
+    repo_mapped_test_file_counts: dict[str, int] = {}
     repo_errors: dict[str, str] = {}
 
     for repo_result in repo_results:
         repo_name = repo_result["repo"]
         repo_candidate_counts[repo_name] = int(repo_result["candidate_count"])
         repo_testable_counts[repo_name] = int(repo_result["testable_count"])
+        repo_mapped_source_file_counts[repo_name] = int(
+            repo_result.get("mapped_source_file_count", 0)
+        )
+        repo_mapped_test_file_counts[repo_name] = int(
+            repo_result.get("mapped_test_file_count", 0)
+        )
         if repo_result.get("error"):
             repo_errors[repo_name] = str(repo_result["error"])
             continue
@@ -924,6 +1144,12 @@ def main() -> None:
         >= DEFAULT_CONFIG.target_min_instances,
         "repo_candidate_counts": dict(sorted(repo_candidate_counts.items())),
         "repo_testable_counts": dict(sorted(repo_testable_counts.items())),
+        "repo_mapped_source_file_counts": dict(
+            sorted(repo_mapped_source_file_counts.items())
+        ),
+        "repo_mapped_test_file_counts": dict(
+            sorted(repo_mapped_test_file_counts.items())
+        ),
         "repo_errors": dict(sorted(repo_errors.items())),
         "repo_commits": dict(sorted(repo_commits.items())),
         "selected_instances_by_repo": dict(sorted(by_repo.items())),
