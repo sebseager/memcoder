@@ -656,7 +656,7 @@ def parse_args() -> argparse.Namespace:
         "--instances-jsonl",
         type=Path,
         default=INSTANCES_JSONL,
-        help="Path to Stage 0 instances.jsonl with span metadata.",
+        help="Path to Stage 0 stage1_instances.jsonl with span metadata.",
     )
     p.add_argument(
         "--stage0-repos-dir",

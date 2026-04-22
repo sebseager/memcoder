@@ -72,8 +72,6 @@ This stage builds a contamination-safe, execution-grounded completion dataset fr
    - Writes:
      - `outputs/stage1_instances.jsonl`
      - `outputs/stage1_instances.csv`
-     - `outputs/instances.jsonl`
-     - `outputs/instances.csv`
      - `outputs/instances/<instance_id>/...`
      - `outputs/06_final_summary.json`
 

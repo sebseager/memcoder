@@ -255,13 +255,10 @@ def main() -> None:
             }
         )
 
-    output_instances_jsonl = OUTPUTS_DIR / "instances.jsonl"
-    output_instances_csv = OUTPUTS_DIR / "instances.csv"
     output_stage1_jsonl = OUTPUTS_DIR / "stage1_instances.jsonl"
     output_stage1_csv = OUTPUTS_DIR / "stage1_instances.csv"
     output_summary = OUTPUTS_DIR / "06_final_summary.json"
 
-    write_jsonl(output_instances_jsonl, final_rows)
     write_jsonl(output_stage1_jsonl, final_rows)
 
     fieldnames = [
@@ -277,7 +274,6 @@ def main() -> None:
         "gold_verify_passed",
         "test_cmd",
     ]
-    write_csv(output_instances_csv, csv_rows, fieldnames=fieldnames)
     write_csv(output_stage1_csv, csv_rows, fieldnames=fieldnames)
 
     wipe_count = len(wipe_rows)
@@ -303,8 +299,6 @@ def main() -> None:
             "outputs": {
                 "stage1_instances_jsonl": str(output_stage1_jsonl),
                 "stage1_instances_csv": str(output_stage1_csv),
-                "instances_jsonl": str(output_instances_jsonl),
-                "instances_csv": str(output_instances_csv),
                 "artifacts_root": str(artifacts_root),
             },
         },

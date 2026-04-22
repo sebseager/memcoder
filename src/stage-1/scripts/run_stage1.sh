@@ -135,11 +135,7 @@ SUBSET_FILE_KEYS_FILE=""
 if [[ -n "$MAX_INSTANCES" ]]; then
   SUBSET_INSTANCE_IDS_FILE="${MODEL_LOGS_DIR}/${MODE}_instance_ids.txt"
   SUBSET_FILE_KEYS_FILE="${MODEL_LOGS_DIR}/${MODE}_file_keys.txt"
-  STAGE0_INSTANCES_JSONL_CANDIDATE="$SRC_DIR/stage-0/outputs/stage1_instances.jsonl"
-  if [[ ! -f "$STAGE0_INSTANCES_JSONL_CANDIDATE" ]]; then
-    STAGE0_INSTANCES_JSONL_CANDIDATE="$SRC_DIR/stage-0/outputs/instances.jsonl"
-  fi
-  export STAGE0_INSTANCES_JSONL="$STAGE0_INSTANCES_JSONL_CANDIDATE"
+  export STAGE0_INSTANCES_JSONL="$SRC_DIR/stage-0/outputs/stage1_instances.jsonl"
   export SUBSET_INSTANCE_IDS_FILE
   export SUBSET_FILE_KEYS_FILE
   export MAX_INSTANCES

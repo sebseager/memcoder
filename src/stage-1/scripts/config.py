@@ -11,12 +11,7 @@ STAGE0_DIR = SRC_DIR / "stage-0"
 
 # Inputs from Stage 0
 STAGE1_INSTANCES_JSONL = STAGE0_DIR / "outputs" / "stage1_instances.jsonl"
-LEGACY_INSTANCES_JSONL = STAGE0_DIR / "outputs" / "instances.jsonl"
-INSTANCES_JSONL = (
-    STAGE1_INSTANCES_JSONL
-    if STAGE1_INSTANCES_JSONL.exists()
-    else LEGACY_INSTANCES_JSONL
-)
+INSTANCES_JSONL = STAGE1_INSTANCES_JSONL
 INSTANCES_ARTIFACTS_DIR = STAGE0_DIR / "outputs" / "instances"
 
 # Outputs
