@@ -21,6 +21,25 @@ from config import (
 from patch_utils import combine_patches
 
 
+def verify_reports_dir() -> Path:
+    out_dir = OUTPUTS_DIR / "verify_reports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+
+def move_report_to_outputs(model_name: str, run_id: str) -> str:
+    src_name = f"{model_name.replace('/', '__')}.{run_id}.json"
+    src_path = Path(src_name)
+    if not src_path.exists():
+        return ""
+
+    dst_path = verify_reports_dir() / src_path.name
+    if dst_path.exists():
+        dst_path.unlink()
+    src_path.replace(dst_path)
+    return str(dst_path)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run wipe verification via SWE-rebench harness."
@@ -157,6 +176,9 @@ def main() -> None:
 
             proc = subprocess.run(cmd, check=False)
             run_exit = proc.returncode
+            run_report_json = move_report_to_outputs(
+                model_name=model_name, run_id=run_id
+            )
 
             for attempt in batch_attempts:
                 iid = attempt["instance_id"]
@@ -190,6 +212,7 @@ def main() -> None:
                         "run_id": run_id,
                         "model_name": model_name,
                         "run_exit_code": run_exit,
+                        "run_report_json": run_report_json,
                         "report_exists": report_exists,
                         "patch_successfully_applied": patch_applied,
                         "resolved": resolved,
@@ -219,6 +242,7 @@ def main() -> None:
             "outputs": {
                 "verify_runs_jsonl": str(output_runs),
                 "verified_instances_jsonl": str(output_verified),
+                "verify_reports_dir": str(verify_reports_dir()),
             },
         },
     )

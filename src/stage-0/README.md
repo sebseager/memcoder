@@ -43,10 +43,12 @@ This stage builds a contamination-safe, execution-grounded completion dataset fr
    - Verifies candidate relevance in Docker harness by applying:
      - `gold_patch + mask_patch`
    - Accepts candidates where the combined patch is applied and no longer resolves tests.
+   - Moves harness run report JSON files into `outputs/verify_reports/`.
    - Writes:
      - `outputs/04_verify_runs.jsonl`
      - `outputs/04_verified_instances.jsonl`
      - `outputs/04_verify_summary.json`
+     - `outputs/verify_reports/*.json`
 
 5. `scripts/finalize_instances.py`
    - Materializes final artifacts per accepted instance:
