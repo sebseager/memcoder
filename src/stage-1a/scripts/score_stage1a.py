@@ -129,7 +129,12 @@ def _target_body_indent(masked_function: str) -> str:
     return "    "
 
 
-def normalize_body_prediction(predicted_body: str, masked_function: str) -> str:
+def normalize_body_prediction(
+    predicted_body: str,
+    masked_function: str,
+    *,
+    target_indent: str | None = None,
+) -> str:
     text = predicted_body.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n", "", text)
@@ -140,7 +145,7 @@ def normalize_body_prediction(predicted_body: str, masked_function: str) -> str:
     while lines and lines[0].strip().lower().startswith(("here's", "the function", "###", "---")):
         lines = lines[1:]
 
-    target_indent = _target_body_indent(masked_function)
+    target_indent = target_indent or _target_body_indent(masked_function)
     indents = [_line_indent(line) for line in lines if line.strip()]
     common_indent = ""
     if indents:
@@ -158,6 +163,58 @@ def normalize_body_prediction(predicted_body: str, masked_function: str) -> str:
             trimmed = line[len(common_indent) :]
         out.append(f"{target_indent}{trimmed.rstrip()}")
     return "\n".join(out).rstrip()
+
+
+def _find_function_node(
+    full_file: str,
+    *,
+    start_line: int,
+    function_name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    try:
+        tree = ast.parse(full_file)
+    except SyntaxError:
+        return None
+
+    best: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if function_name and node.name != function_name:
+            continue
+
+        decorator_start = min(
+            [getattr(dec, "lineno", node.lineno) for dec in node.decorator_list],
+            default=node.lineno,
+        )
+        end_line = int(getattr(node, "end_lineno", node.lineno))
+        if node.lineno == start_line or decorator_start <= start_line <= end_line:
+            return node
+        if best is None:
+            best = node
+    return best
+
+
+def _target_body_indent_from_full_file(
+    full_file: str,
+    *,
+    start_line: int,
+    function_name: str,
+    masked_function: str,
+) -> str:
+    node = _find_function_node(
+        full_file,
+        start_line=start_line,
+        function_name=function_name,
+    )
+    lines = full_file.splitlines()
+    if node is not None and getattr(node, "body", None):
+        body_line_idx = int(node.body[0].lineno) - 1
+        if 0 <= body_line_idx < len(lines):
+            indent = _line_indent(lines[body_line_idx])
+            if indent:
+                return indent
+    return _target_body_indent(masked_function)
 
 
 def syntax_is_valid(masked_function: str, body: str) -> bool:
@@ -179,14 +236,56 @@ def syntax_is_valid(masked_function: str, body: str) -> bool:
     return False
 
 
+def patched_file_syntax_is_valid(
+    full_file: str,
+    start_line: int,
+    end_line: int,
+    function_name: str,
+    masked_function: str,
+    body: str,
+) -> bool:
+    if not full_file.strip():
+        return syntax_is_valid(masked_function, body)
+    try:
+        ast.parse(
+            patch_full_file_with_prediction(
+                full_file=full_file,
+                start_line=start_line,
+                end_line=end_line,
+                masked_function=masked_function,
+                predicted_body=body,
+                function_name=function_name,
+            )
+        )
+        return True
+    except SyntaxError:
+        return False
+
+
 def patch_full_file_with_prediction(
     full_file: str,
     start_line: int,
     end_line: int,
     masked_function: str,
     predicted_body: str,
+    function_name: str = "",
 ) -> str:
     lines = full_file.splitlines()
+    node = _find_function_node(
+        full_file,
+        start_line=start_line,
+        function_name=function_name,
+    )
+    if node is not None and getattr(node, "body", None):
+        body_start_idx = max(0, int(node.body[0].lineno) - 1)
+        body_end_idx = min(len(lines), int(getattr(node, "end_lineno", end_line)))
+        replacement = predicted_body.rstrip().splitlines()
+        patched = lines[:body_start_idx] + replacement + lines[body_end_idx:]
+        out = "\n".join(patched)
+        if full_file.endswith("\n"):
+            out += "\n"
+        return out
+
     signature = make_signature(masked_function)
     replacement = signature + ("\n" + predicted_body.rstrip() if predicted_body.strip() else "")
     start_idx = max(0, start_line - 1)
@@ -299,6 +398,7 @@ def run_harness(
             skipped_missing_file += 1
             continue
         file_path = str(rec.get("file_path", ""))
+        function_name = str(rec.get("function_name", ""))
         start_line = int(rec.get("start_line", 1))
         end_line = int(rec.get("end_line", start_line))
         masked_function = str(rec.get("masked_function", ""))
@@ -311,6 +411,7 @@ def run_harness(
             end_line=end_line,
             masked_function=masked_function,
             predicted_body=predicted_body,
+            function_name=function_name,
         )
         prediction_patch = build_unified_patch(file_path, full_file, patched)
         submission_patch = combine_patches(gold_patch, prediction_patch)
@@ -386,6 +487,11 @@ def run_harness(
     report_copy = _move_report(model_name, run_id, args.harness_reports_dir)
     if report_copy:
         logging.info("[harness] moved aggregate report to %s", report_copy)
+    if run_exit != 0:
+        raise RuntimeError(
+            "SWE-rebench harness failed before producing reliable pass@1 results "
+            f"(exit code {run_exit}, run_id={run_id})."
+        )
 
     for iid in tqdm(instance_ids, desc="Read harness reports", unit="instance"):
         report = _read_harness_report(run_id=run_id, model_name=model_name, instance_id=iid)
@@ -429,7 +535,21 @@ def main() -> int:
     for rec in tqdm(rows, desc="Compute text/syntax metrics", unit="pred"):
         pred_raw = str(rec.get("predicted_body", ""))
         masked_function = str(rec.get("masked_function", ""))
-        pred = normalize_body_prediction(pred_raw, masked_function)
+        full_file = str(rec.get("full_file", ""))
+        start_line = int(rec.get("start_line") or 1)
+        end_line = int(rec.get("end_line") or start_line)
+        function_name = str(rec.get("function_name", ""))
+        target_indent = _target_body_indent_from_full_file(
+            full_file,
+            start_line=start_line,
+            function_name=function_name,
+            masked_function=masked_function,
+        )
+        pred = normalize_body_prediction(
+            pred_raw,
+            masked_function,
+            target_indent=target_indent,
+        )
         if pred != pred_raw:
             normalized_changed += 1
         gold = str(rec.get("ground_truth_body", ""))
@@ -437,8 +557,26 @@ def main() -> int:
         gold_n = normalize_text(gold)
         exact = int(pred_n == gold_n)
         bleu = sentence_bleu4(pred_n, gold_n)
-        valid_before = int(syntax_is_valid(masked_function, pred_raw))
-        valid = int(syntax_is_valid(masked_function, pred))
+        valid_before = int(
+            patched_file_syntax_is_valid(
+                full_file=full_file,
+                start_line=start_line,
+                end_line=end_line,
+                function_name=function_name,
+                masked_function=masked_function,
+                body=pred_raw,
+            )
+        )
+        valid = int(
+            patched_file_syntax_is_valid(
+                full_file=full_file,
+                start_line=start_line,
+                end_line=end_line,
+                function_name=function_name,
+                masked_function=masked_function,
+                body=pred,
+            )
+        )
         syntax_valid_before += valid_before
         syntax_valid_after += valid
         records.append(
@@ -446,7 +584,7 @@ def main() -> int:
                 "instance_id": str(rec.get("instance_id", "")),
                 "repo": rec.get("repo", ""),
                 "file_path": rec.get("file_path", ""),
-                "function_name": rec.get("function_name", ""),
+                "function_name": function_name,
                 "exact_match": exact,
                 "pass_at_1": 0,
                 "pass_at_1_source": "pending",
@@ -460,9 +598,9 @@ def main() -> int:
                 "raw_predicted_body": pred_raw,
                 "ground_truth_body": gold,
                 "masked_function": masked_function,
-                "full_file": rec.get("full_file", ""),
-                "start_line": rec.get("start_line"),
-                "end_line": rec.get("end_line"),
+                "full_file": full_file,
+                "start_line": start_line,
+                "end_line": end_line,
                 "gold_patch": rec.get("gold_patch", ""),
                 "syntax_valid_internal": bool(valid),
             }
