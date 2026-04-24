@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -16,6 +17,11 @@ from typing import Any
 
 import pandas as pd
 from tqdm.auto import tqdm
+
+_STAGE1_SCRIPTS = Path(__file__).resolve().parents[2] / "stage-1" / "scripts"
+if str(_STAGE1_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_STAGE1_SCRIPTS))
+from helpers import normalize_body_prediction  # noqa: E402  # type: ignore[import-not-found]
 
 
 @dataclass(frozen=True)
@@ -276,6 +282,18 @@ def run_harness(
         instance_ids.append(iid)
 
     if not submissions:
+        n_syntax_invalid = sum(1 for r in rows if not r.get("syntax_valid", 1))
+        n_missing_file = sum(
+            1
+            for r in rows
+            if r.get("syntax_valid", 0) and not str(r.get("full_file", "")).strip()
+        )
+        logging.warning(
+            "[harness] No submissions built (syntax_invalid=%d, missing_full_file=%d). "
+            "SWE-bench harness was not invoked.",
+            n_syntax_invalid,
+            n_missing_file,
+        )
         return results
 
     run_id = f"{args.run_id_prefix}-{int(time.time())}"
@@ -357,13 +375,15 @@ def main() -> int:
 
     records: list[dict[str, Any]] = []
     for rec in tqdm(rows, desc="Compute text/syntax metrics", unit="pred"):
-        pred = str(rec.get("predicted_body", ""))
+        mask = str(rec.get("masked_function", ""))
+        pred_raw = str(rec.get("predicted_body", ""))
+        pred = normalize_body_prediction(pred_raw, mask if mask else None)
         gold = str(rec.get("ground_truth_body", ""))
         pred_n = normalize_text(pred)
         gold_n = normalize_text(gold)
         exact = int(pred_n == gold_n)
         bleu = sentence_bleu4(pred_n, gold_n)
-        valid = int(syntax_is_valid(str(rec.get("masked_function", "")), pred))
+        valid = int(syntax_is_valid(mask, pred))
         records.append(
             {
                 "instance_id": str(rec.get("instance_id", "")),
