@@ -36,7 +36,23 @@ source .venv/bin/activate
 if [[ "$PASS_AT_1_MODE" == "swebench_harness" ]]; then
   if ! python -c "import swebench" >/dev/null 2>&1; then
     echo "Missing swebench in src/.venv."
-    echo "Install before scoring: uv pip install swe-rebench"
+    echo "Install before scoring: uv sync"
+    echo "Or: uv pip install --upgrade 'git+https://github.com/SWE-rebench/SWE-bench-fork.git'"
+    exit 1
+  fi
+  if ! python - <<'PY' >/dev/null 2>&1
+import inspect
+from swebench.harness.test_spec.test_spec import make_test_spec
+
+src = inspect.getsource(make_test_spec)
+raise SystemExit(0 if "install_config" in src else 1)
+PY
+  then
+    echo "Installed swebench is not the SWE-rebench harness fork."
+    echo "Fix src/.venv before scoring:"
+    echo "  cd $SRC_DIR && uv sync"
+    echo "Or:"
+    echo "  cd $SRC_DIR && uv pip install --upgrade 'git+https://github.com/SWE-rebench/SWE-bench-fork.git'"
     exit 1
   fi
   if ! command -v docker >/dev/null 2>&1; then

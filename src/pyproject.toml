@@ -14,7 +14,7 @@ dependencies = [
     "peft>=0.19.1",
     "pyzmq>=27.1.0",
     "scikit-learn>=1.8.0",
-    "swebench>=4.1.0",
+    "swebench",
     "tensorboard>=2.20.0",
     "torch>=2.6.0",
     "transformers==4.57.1",
@@ -32,3 +32,4 @@ explicit = true
 torch = { index = "pytorch-cu124" }
 torchvision = { index = "pytorch-cu124" }
 torchaudio = { index = "pytorch-cu124" }
+swebench = { git = "https://github.com/SWE-rebench/SWE-bench-fork.git" }
