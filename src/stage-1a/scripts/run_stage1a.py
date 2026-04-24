@@ -6,16 +6,16 @@ import ast
 import gc
 import json
 import logging
-import os
 import re
+import subprocess
 import sys
 import time
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
-from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 from omegaconf import OmegaConf
@@ -61,6 +61,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--tokenizer-path", type=Path, default=None)
     p.add_argument("--checkpoint-dir", type=Path, default=default_ckpt)
     p.add_argument("--vendor-shine-dir", type=Path, default=default_vendor)
+    p.add_argument("--repo-cache-dir", type=Path, default=stage1a_root / "cache" / "repos")
     p.add_argument("--context-max-tokens", type=int, default=1024)
     p.add_argument("--max-new-tokens", type=int, default=512)
     p.add_argument("--max-conversation-length", type=int, default=4096)
@@ -101,7 +102,88 @@ def read_text(path: str | None) -> str:
     return p.read_text(encoding="utf-8")
 
 
-def resolve_instances(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def ensure_repo_checkout(repo: str, commit: str, cache_dir: Path) -> Path:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    repo_key = re.sub(r"[^A-Za-z0-9_.-]", "__", repo)
+    repo_dir = cache_dir / repo_key
+    url = f"https://github.com/{repo}.git"
+
+    if not repo_dir.exists():
+        subprocess.run(
+            ["git", "clone", "--no-tags", "--filter=blob:none", url, str(repo_dir)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "fetch", "--depth", "1", "origin", commit],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "checkout", "--force", commit],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return repo_dir
+
+
+def extract_function_source_from_full_file(
+    full_file: str,
+    function_name: str,
+    start_line: int,
+) -> str:
+    if not full_file.strip():
+        return ""
+    try:
+        tree = ast.parse(full_file)
+    except SyntaxError:
+        return ""
+    target: ast.AST | None = None
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name != function_name:
+            continue
+        if int(getattr(node, "lineno", -1)) == start_line:
+            target = node
+            break
+        if target is None:
+            target = node
+    if target is None:
+        return ""
+    return node_source_segment(full_file, target)
+
+
+def function_body_from_source(function_source: str, function_name: str) -> str:
+    if not function_source.strip():
+        return ""
+    try:
+        tree = ast.parse(textwrap.dedent(function_source))
+    except SyntaxError:
+        return ""
+    target: ast.AST | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name:
+            target = node
+            break
+    if target is None:
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                target = node
+                break
+    if target is None or not getattr(target, "body", None):
+        return ""
+    lines = function_source.splitlines()
+    start = int(target.body[0].lineno)
+    end = int(getattr(target, "end_lineno", start))
+    return "\n".join(lines[start - 1 : end]).rstrip()
+
+
+def resolve_instances(rows: list[dict[str, Any]], repo_cache_dir: Path, log: logging.Logger) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for row in rows:
         rec = dict(row)
@@ -111,6 +193,38 @@ def resolve_instances(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             rec["ground_truth_body"] = read_text(rec.get("ground_truth_artifact"))
         if not rec.get("function_source"):
             rec["function_source"] = read_text(rec.get("function_source_artifact"))
+
+        if not rec.get("full_file"):
+            repo = str(rec.get("repo", ""))
+            base_commit = str(rec.get("base_commit", ""))
+            file_path = str(rec.get("file_path", ""))
+            if repo and base_commit and file_path:
+                try:
+                    repo_dir = ensure_repo_checkout(repo=repo, commit=base_commit, cache_dir=repo_cache_dir)
+                    abs_file = repo_dir / file_path
+                    if abs_file.exists():
+                        rec["full_file"] = abs_file.read_text(encoding="utf-8")
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "Fallback repo hydrate failed for %s (%s): %s",
+                        rec.get("instance_id", ""),
+                        repo,
+                        exc,
+                    )
+
+        if not rec.get("function_source"):
+            rec["function_source"] = extract_function_source_from_full_file(
+                full_file=str(rec.get("full_file", "")),
+                function_name=str(rec.get("function_name", "")),
+                start_line=int(rec.get("start_line", 1)),
+            )
+
+        if not rec.get("ground_truth_body"):
+            rec["ground_truth_body"] = function_body_from_source(
+                function_source=str(rec.get("function_source", "")),
+                function_name=str(rec.get("function_name", "")),
+            )
+
         if not rec.get("masked_function"):
             rec["masked_function"] = masked_function_from_source(
                 rec.get("function_source", ""),
@@ -124,7 +238,7 @@ def masked_function_from_source(function_source: str, function_name: str) -> str
     if not function_source.strip():
         return ""
     try:
-        tree = ast.parse(function_source)
+        tree = ast.parse(textwrap.dedent(function_source))
     except SyntaxError:
         return ""
     target: ast.AST | None = None
@@ -218,6 +332,12 @@ def module_level_defs(module: ast.Module) -> dict[str, ast.AST]:
                     out[target.id] = node
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             out[node.target.id] = node
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                out[alias.asname or alias.name.split(".")[0]] = node
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                out[alias.asname or alias.name] = node
     return out
 
 
@@ -256,7 +376,7 @@ def function_signature_plus_doc(function_source: str, function_name: str) -> str
     if not function_source.strip():
         return f"def {function_name}(...):"
     try:
-        tree = ast.parse(function_source)
+        tree = ast.parse(textwrap.dedent(function_source))
     except SyntaxError:
         return function_source.strip()
     target: ast.AST | None = None
@@ -337,21 +457,32 @@ def build_slice(
 
     q_text = function_signature_plus_doc(fn_source, fn_name).strip()
     sections.append(("TARGET_SIGNATURE", q_text, set()))
+    if refs:
+        sections.append(
+            (
+                "REFERENCE_NAME_INDEX",
+                "Known in-file references:\n" + ", ".join(sorted(refs)),
+                set(refs),
+            )
+        )
+        covered.update(refs)
 
-    callee_parts: list[str] = []
-    callee_names: set[str] = set()
     for name in called:
         node = defs.get(name)
         if node is None or isinstance(node, ast.ClassDef):
             continue
-        callee_parts.append(node_source_segment(full_file, node))
-        callee_names.add(name)
-    if callee_parts:
-        sections.append(("ONE_HOP_CALLEES", "\n\n".join(callee_parts), callee_names))
-        covered.update(callee_names)
+        sections.append(("ONE_HOP_CALLEE", node_source_segment(full_file, node), {name}))
+        covered.add(name)
 
-    const_parts: list[str] = []
-    const_names: set[str] = set()
+    for name in refs:
+        if name in covered:
+            continue
+        node = defs.get(name)
+        if node is None:
+            continue
+        sections.append(("REFERENCE_SYMBOL", node_source_segment(full_file, node), {name}))
+        covered.add(name)
+
     for name in refs:
         if name not in defs:
             continue
@@ -359,14 +490,9 @@ def build_slice(
             continue
         node = defs[name]
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            const_parts.append(node_source_segment(full_file, node))
-            const_names.add(name)
-    if const_parts:
-        sections.append(("MODULE_CONSTANTS", "\n\n".join(const_parts), const_names))
-        covered.update(const_names)
+            sections.append(("MODULE_CONSTANT", node_source_segment(full_file, node), {name}))
+            covered.add(name)
 
-    attr_parts: list[str] = []
-    attr_covered: set[str] = set()
     parent = getattr(target, "_parent", None)
     if isinstance(parent, ast.ClassDef):
         class_name = parent.name
@@ -375,11 +501,8 @@ def build_slice(
             node = attr_map.get(attr)
             if node is None:
                 continue
-            attr_parts.append(node_source_segment(full_file, node))
-            attr_covered.add(attr)
-    if attr_parts:
-        sections.append(("CLASS_ATTRIBUTES", "\n\n".join(attr_parts), attr_covered))
-        covered.update(attr_covered)
+            sections.append(("CLASS_ATTRIBUTE", node_source_segment(full_file, node), {attr}))
+            covered.add(attr)
 
     chunked: list[str] = []
     for title, body, _names in sections:
@@ -401,11 +524,16 @@ def build_slice(
         break
 
     token_count = len(tokenizer.encode(selected, add_special_tokens=False))
-    missing = [r for r in refs if r not in covered]
-    frac = 1.0 if not refs else len([r for r in refs if r in covered]) / len(refs)
+    covered_in_text = [
+        r
+        for r in refs
+        if re.search(rf"\b{re.escape(r)}\b", selected)
+    ]
+    missing = [r for r in refs if r not in covered_in_text]
+    frac = 1.0 if not refs else len(covered_in_text) / len(refs)
     return SliceArtifact(
         context_text=selected,
-        covered_refs=sorted([r for r in refs if r in covered]),
+        covered_refs=sorted(covered_in_text),
         missing_refs=missing,
         coverage_fraction=frac,
         token_count=token_count,
@@ -530,11 +658,26 @@ def init_metanetwork(
 
 def extract_answer(raw: str) -> str:
     text = raw.strip()
+    if text.lstrip().startswith("<think>") and "</think>" not in text:
+        return ""
     if "<think>" in text and "</think>" in text:
         text = text.split("</think>", 1)[-1].strip()
-    text = re.sub(r"^```[a-zA-Z]*\n", "", text)
-    text = re.sub(r"\n```$", "", text)
+    if "```" in text:
+        code_blocks = re.findall(r"```(?:python)?\n(.*?)```", text, flags=re.DOTALL)
+        if code_blocks:
+            text = code_blocks[-1].strip()
+    text = re.sub(r"^```[a-zA-Z]*\n", "", text, flags=re.DOTALL)
+    text = re.sub(r"\n```$", "", text, flags=re.DOTALL)
     text = re.sub(r"^(final answer|answer)\s*:\s*", "", text, flags=re.IGNORECASE).strip()
+    bad_prefixes = (
+        "here's",
+        "the function",
+        "###",
+        "---",
+    )
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    if lines and lines[0].strip().lower().startswith(bad_prefixes):
+        return ""
     return text
 
 
@@ -548,36 +691,52 @@ def generate_single(
     max_conversation_length: int,
     device: torch.device,
 ) -> tuple[str, str]:
-    from utils.mydataset import HumanDataset, HumanCollator
-
-    data = [{"context": context, "questions": [question]}]
-    dataset = HumanDataset(data)
-    collator = HumanCollator(
-        tokenizer,
-        context_max_length=1024,
-        conversation_max_length=max_conversation_length,
-        cfg={},
-        sys_msg=False,
-        no_evidence=False,
+    evidence_enc = tokenizer(
+        [context],
+        max_length=1024,
+        truncation=True,
+        return_tensors="pt",
+        padding="max_length",
     )
-    loader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collator, num_workers=0)
-    batch = next(iter(loader))
-    evidence_ids = batch["evidence_ids"].to(device, non_blocking=True)
-    evidence_attention_mask = batch["evidence_attention_mask"].to(device, non_blocking=True)
+    evidence_ids = evidence_enc["input_ids"].to(device, non_blocking=True)
+    evidence_attention_mask = evidence_enc["attention_mask"].to(device, non_blocking=True)
 
     with torch.no_grad():
         lora_dict = metanetwork.generate_lora_dict(evidence_ids, evidence_attention_mask, metalora)
-        messages = [{"role": "user", "content": question}]
-        input_enc = tokenizer.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            tokenize=True,
-            return_tensors="pt",
-            max_length=max_conversation_length,
-            truncation=True,
-            return_dict=True,
-            padding="max_length",
-        )
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You complete Python function bodies. "
+                    "Return ONLY the missing body lines with correct indentation. "
+                    "No markdown, no explanation, no think mode."
+                ),
+            },
+            {"role": "user", "content": question},
+        ]
+        try:
+            input_enc = tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_tensors="pt",
+                max_length=max_conversation_length,
+                truncation=True,
+                return_dict=True,
+                padding="max_length",
+                enable_thinking=False,
+            )
+        except TypeError:
+            input_enc = tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_tensors="pt",
+                max_length=max_conversation_length,
+                truncation=True,
+                return_dict=True,
+                padding="max_length",
+            )
         input_ids = input_enc["input_ids"].to(device)
         attention_mask = input_enc["attention_mask"].to(device)
         outputs = metanetwork.metamodel.generate(
@@ -633,7 +792,7 @@ def main() -> int:
     )
 
     raw_rows = read_jsonl(args.instances_jsonl)
-    rows = resolve_instances(raw_rows)
+    rows = resolve_instances(raw_rows, repo_cache_dir=args.repo_cache_dir, log=log)
     rows = maybe_filter_instance_ids(rows, args.instance_ids_file, args.max_instances)
     log.info("Loaded %d instances for Stage 1a run.", len(rows))
 
@@ -650,10 +809,24 @@ def main() -> int:
                 tokenizer=tokenizer,
                 max_tokens=args.context_max_tokens,
             )
-            question = function_signature_plus_doc(
+            sig_doc = function_signature_plus_doc(
                 str(row.get("function_source", "")),
                 str(row.get("function_name", "")),
             )
+            masked_function = str(row.get("masked_function", "")).strip()
+            if masked_function:
+                question = (
+                    "Complete the missing function body.\n"
+                    "Return ONLY body lines with indentation.\n\n"
+                    f"Function signature + docstring:\n{sig_doc}\n\n"
+                    f"Masked function:\n{masked_function}"
+                )
+            else:
+                question = (
+                    "Complete the missing function body.\n"
+                    "Return ONLY body lines with indentation.\n\n"
+                    f"Function signature + docstring:\n{sig_doc}"
+                )
             raw_output, predicted_body = generate_single(
                 metanetwork=metanetwork,
                 metalora=metalora,
