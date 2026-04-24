@@ -7,6 +7,7 @@ import difflib
 import json
 import logging
 import os
+import re
 import subprocess
 import time
 from collections import Counter
@@ -111,6 +112,52 @@ def make_signature(masked_function: str) -> str:
     if lines[-1].strip() == "pass":
         return "\n".join(lines[:-1]).rstrip()
     return "\n".join(lines).rstrip()
+
+
+def _line_indent(line: str) -> str:
+    m = re.match(r"^\s*", line)
+    return "" if m is None else m.group(0)
+
+
+def _target_body_indent(masked_function: str) -> str:
+    lines = masked_function.splitlines()
+    if not lines:
+        return "    "
+    last = lines[-1]
+    if last.strip() == "pass":
+        return _line_indent(last) or "    "
+    return "    "
+
+
+def normalize_body_prediction(predicted_body: str, masked_function: str) -> str:
+    text = predicted_body.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n", "", text)
+        text = re.sub(r"\n```$", "", text)
+
+    lines = text.splitlines()
+    # Drop obvious prose wrappers that models often produce.
+    while lines and lines[0].strip().lower().startswith(("here's", "the function", "###", "---")):
+        lines = lines[1:]
+
+    target_indent = _target_body_indent(masked_function)
+    indents = [_line_indent(line) for line in lines if line.strip()]
+    common_indent = ""
+    if indents:
+        common_indent = indents[0]
+        for indent in indents[1:]:
+            common_indent = os.path.commonprefix([common_indent, indent])
+
+    out: list[str] = []
+    for line in lines:
+        if not line.strip():
+            out.append("")
+            continue
+        trimmed = line
+        if common_indent and line.startswith(common_indent):
+            trimmed = line[len(common_indent) :]
+        out.append(f"{target_indent}{trimmed.rstrip()}")
+    return "\n".join(out).rstrip()
 
 
 def syntax_is_valid(masked_function: str, body: str) -> bool:
@@ -232,6 +279,9 @@ def run_harness(
     results: dict[str, PassResult] = {}
     submissions: list[dict[str, str]] = []
     instance_ids: list[str] = []
+    skipped_syntax = 0
+    skipped_missing_file = 0
+    skipped_noop_patch = 0
 
     for rec in tqdm(rows, desc="Build harness submissions", unit="pred"):
         iid = str(rec.get("instance_id", ""))
@@ -240,11 +290,13 @@ def run_harness(
 
         if not rec.get("syntax_valid", 1):
             results[iid] = PassResult(0, "executed", "syntax_invalid")
+            skipped_syntax += 1
             continue
 
         full_file = str(rec.get("full_file", ""))
         if not full_file.strip():
             results[iid] = PassResult(0, "fallback", "missing_full_file")
+            skipped_missing_file += 1
             continue
         file_path = str(rec.get("file_path", ""))
         start_line = int(rec.get("start_line", 1))
@@ -264,6 +316,7 @@ def run_harness(
         submission_patch = combine_patches(gold_patch, prediction_patch)
         if not submission_patch.strip():
             results[iid] = PassResult(0, "executed", "noop_patch")
+            skipped_noop_patch += 1
             continue
 
         submissions.append(
@@ -276,7 +329,21 @@ def run_harness(
         instance_ids.append(iid)
 
     if not submissions:
+        logging.warning(
+            "No harness submissions built (syntax_invalid=%d, missing_full_file=%d, noop_patch=%d).",
+            skipped_syntax,
+            skipped_missing_file,
+            skipped_noop_patch,
+        )
         return results
+    logging.info(
+        "Harness submissions built: %d/%d (syntax_invalid=%d, missing_full_file=%d, noop_patch=%d).",
+        len(submissions),
+        len(rows),
+        skipped_syntax,
+        skipped_missing_file,
+        skipped_noop_patch,
+    )
 
     run_id = f"{args.run_id_prefix}-{int(time.time())}"
     pred_path = args.harness_predictions_dir / f"{run_id}.jsonl"
@@ -356,14 +423,24 @@ def main() -> int:
     logging.info("Loaded %d prediction rows (ok status).", len(rows))
 
     records: list[dict[str, Any]] = []
+    normalized_changed = 0
+    syntax_valid_before = 0
+    syntax_valid_after = 0
     for rec in tqdm(rows, desc="Compute text/syntax metrics", unit="pred"):
-        pred = str(rec.get("predicted_body", ""))
+        pred_raw = str(rec.get("predicted_body", ""))
+        masked_function = str(rec.get("masked_function", ""))
+        pred = normalize_body_prediction(pred_raw, masked_function)
+        if pred != pred_raw:
+            normalized_changed += 1
         gold = str(rec.get("ground_truth_body", ""))
         pred_n = normalize_text(pred)
         gold_n = normalize_text(gold)
         exact = int(pred_n == gold_n)
         bleu = sentence_bleu4(pred_n, gold_n)
-        valid = int(syntax_is_valid(str(rec.get("masked_function", "")), pred))
+        valid_before = int(syntax_is_valid(masked_function, pred_raw))
+        valid = int(syntax_is_valid(masked_function, pred))
+        syntax_valid_before += valid_before
+        syntax_valid_after += valid
         records.append(
             {
                 "instance_id": str(rec.get("instance_id", "")),
@@ -380,8 +457,9 @@ def main() -> int:
                 "slice_token_count": int(rec.get("slice_token_count", 0)),
                 "slice_coverage_fraction": float(rec.get("slice_coverage_fraction", 0.0)),
                 "predicted_body": pred,
+                "raw_predicted_body": pred_raw,
                 "ground_truth_body": gold,
-                "masked_function": rec.get("masked_function", ""),
+                "masked_function": masked_function,
                 "full_file": rec.get("full_file", ""),
                 "start_line": rec.get("start_line"),
                 "end_line": rec.get("end_line"),
@@ -389,6 +467,13 @@ def main() -> int:
                 "syntax_valid_internal": bool(valid),
             }
         )
+    logging.info(
+        "Normalized %d/%d predictions; syntax-valid before=%d, after=%d.",
+        normalized_changed,
+        len(rows),
+        syntax_valid_before,
+        syntax_valid_after,
+    )
 
     if args.pass_at_1_mode == "exact_only":
         for r in records:
@@ -438,7 +523,15 @@ def main() -> int:
             "mean_slice_token_count": float(df["slice_token_count"].mean()),
         }
 
-    drop_cols = {"predicted_body", "ground_truth_body", "masked_function", "full_file", "gold_patch", "syntax_valid_internal"}
+    drop_cols = {
+        "predicted_body",
+        "raw_predicted_body",
+        "ground_truth_body",
+        "masked_function",
+        "full_file",
+        "gold_patch",
+        "syntax_valid_internal",
+    }
     keep_cols = [c for c in df.columns if c not in drop_cols]
     df[keep_cols].to_csv(args.output_per_instance_csv, index=False)
     args.output_summary_json.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
