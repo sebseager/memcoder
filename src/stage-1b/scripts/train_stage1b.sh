@@ -22,6 +22,8 @@ CONVERSATION_MAX_LEN="${CONVERSATION_MAX_LEN:-4096}"
 LORA_R="${LORA_R:-8}"
 METALORA_R="${METALORA_R:-128}"
 METANET_LAYERS="${METANET_LAYERS:-4}"
+STAGE1B_ATTN_IMPL="${STAGE1B_ATTN_IMPL:-sdpa}"
+STAGE1B_DISABLE_COMPILE="${STAGE1B_DISABLE_COMPILE:-1}"
 MODEL_PATH="${MODEL_PATH:-$SRC_DIR/stage-1a/models/Qwen3-8B}"
 DATA_JSON="${DATA_JSON:-$STAGE1B_DIR/data/ift_c1qa_code_train.json}"
 WORK_DIR="${WORK_DIR:-$STAGE1B_DIR/shine_work}"
@@ -54,7 +56,7 @@ mkdir -p "$WORK_DIR" "$WORK_DIR/data" "$WORK_DIR/checkpoints/$NAME" "$WORK_DIR/t
 for entry in "$SHINE_DIR"/*; do
   base="$(basename "$entry")"
   case "$base" in
-    data|checkpoints|tensorboard|tmp_metatrain_*.txt|meta_train_parallel.py)
+    data|checkpoints|tensorboard|tmp_metatrain_*.txt|meta_train_parallel.py|metanetwork_family.py)
       ;;
     *)
       ln -sfn "$entry" "$WORK_DIR/$base"
@@ -63,6 +65,7 @@ for entry in "$SHINE_DIR"/*; do
 done
 
 cp "$SHINE_DIR/meta_train_parallel.py" "$WORK_DIR/meta_train_parallel.py"
+cp "$SHINE_DIR/metanetwork_family.py" "$WORK_DIR/metanetwork_family.py"
 python - "$WORK_DIR/meta_train_parallel.py" <<'PY'
 from pathlib import Path
 import sys
@@ -87,6 +90,46 @@ new = '''    elif cfg.data.source == "ift-c1qa":
 '''
 if old not in text:
     raise SystemExit("Could not patch SHINE ift-c1qa validation branch")
+text = text.replace(old, new)
+
+old = '''    config = ConfigCls.from_pretrained(cfg.model.model_from)
+    config.num_mem_token = -1
+'''
+new = '''    config = ConfigCls.from_pretrained(cfg.model.model_from)
+    config._attn_implementation = os.environ.get("STAGE1B_ATTN_IMPL", "sdpa")
+    config.num_mem_token = -1
+'''
+if old not in text:
+    raise SystemExit("Could not patch SHINE attention implementation")
+text = text.replace(old, new)
+
+old = '''        tmp_model = MetaModelCls.from_pretrained(cfg.model.model_from, config=config)
+        lora_numel = tmp_model.lora_params_numel(cfg.model.lora_r)
+        assert lora_numel % (cfg.hidden_size * cfg.num_layers) == 0, \\
+            "For transformer metanetwork, num_mem_token must be set to model.lora_params_numel(lora_r) * mean_pool_size / (hidden_size * num_layers)"
+        config.num_mem_token = tmp_model.lora_params_numel(cfg.model.lora_r) * cfg.metanetwork.transformer_cfg.mean_pool_size // (cfg.hidden_size * cfg.num_layers)
+        cfg.num_mem_token = config.num_mem_token
+        del tmp_model
+'''
+new = '''        with torch.device("meta"):
+            tmp_model = MetaModelCls(config)
+        lora_numel = tmp_model.lora_params_numel(cfg.model.lora_r)
+        assert lora_numel % (cfg.hidden_size * cfg.num_layers) == 0, \\
+            "For transformer metanetwork, num_mem_token must be set to model.lora_params_numel(lora_r) * mean_pool_size / (hidden_size * num_layers)"
+        config.num_mem_token = lora_numel * cfg.metanetwork.transformer_cfg.mean_pool_size // (cfg.hidden_size * cfg.num_layers)
+        cfg.num_mem_token = config.num_mem_token
+        del tmp_model
+'''
+if old not in text:
+    raise SystemExit("Could not patch SHINE temporary model construction")
+text = text.replace(old, new)
+
+old = '''    metamodel = MetaModelCls.from_pretrained(cfg.model.model_from, config=config)
+'''
+new = '''    metamodel = MetaModelCls.from_pretrained(cfg.model.model_from, config=config, torch_dtype=amp_dtype)
+'''
+if old not in text:
+    raise SystemExit("Could not patch SHINE model dtype")
 text = text.replace(old, new)
 
 # Upstream's optimizer filter only excludes "module.metamodel", which is the
@@ -130,6 +173,36 @@ if old not in text:
 path.write_text(text.replace(old, new), encoding="utf-8")
 PY
 
+python - "$WORK_DIR/metanetwork_family.py" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '''class Metanetwork(nn.Module):
+'''
+new = '''def _stage1b_compile(fn):
+    if os.environ.get("STAGE1B_DISABLE_COMPILE", "1").lower() in {"1", "true", "yes", "on"}:
+        return fn
+    return torch.compile(fn)
+
+
+class Metanetwork(nn.Module):
+'''
+if old not in text:
+    raise SystemExit("Could not patch SHINE compile gate helper")
+text = text.replace(old, new)
+old = '''    @torch.compile # (mode="max-autotune")
+    def forward(self, input_ids, input_attention_mask, evidence_ids, evidence_attention_mask, metalora = None, labels = None, use_metanet = True, use_gradient_checkpoint = False, **kwargs) -> dict:
+'''
+new = '''    @_stage1b_compile
+    def forward(self, input_ids, input_attention_mask, evidence_ids, evidence_attention_mask, metalora = None, labels = None, use_metanet = True, use_gradient_checkpoint = False, **kwargs) -> dict:
+'''
+if old not in text:
+    raise SystemExit("Could not patch SHINE metanetwork compile decorator")
+path.write_text(text.replace(old, new), encoding="utf-8")
+PY
+
 ln -sfn "$DATA_JSON" "$WORK_DIR/data/ift_c1qa.json"
 ln -sfn "$PRETRAIN_IFTPWC" "$WORK_DIR/checkpoints/$NAME/iftpwc"
 ln -sfn "$WORK_DIR/checkpoints/$NAME" "$STAGE1B_DIR/checkpoints/$NAME"
@@ -149,10 +222,14 @@ export HYDRA_FULL_ERROR=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
 export TORCH_DISTRIBUTED_DEBUG="${TORCH_DISTRIBUTED_DEBUG:-INFO}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+export STAGE1B_ATTN_IMPL
+export STAGE1B_DISABLE_COMPILE
 
 cd "$WORK_DIR"
 echo "Training Stage 1b SHINE IFT: name=$NAME gpus=$NUM_GPUS data=$DATA_JSON"
 echo "Outputs: $WORK_DIR/checkpoints/$NAME/train (also linked from $STAGE1B_DIR/checkpoints/$NAME)"
+echo "Memory settings: attn=$STAGE1B_ATTN_IMPL disable_compile=$STAGE1B_DISABLE_COMPILE amp=${USE_AMP:-true} gradient_checkpoint=${USE_GRADIENT_CHECKPOINT:-True}"
 
 torchrun \
   --nproc_per_node="$NUM_GPUS" \
@@ -174,8 +251,8 @@ torchrun \
   data.eval_batch_size=1 \
   data.num_workers="${NUM_WORKERS:-2}" \
   run.gradient_accumulation_steps="$GRADIENT_ACCUMULATION_STEPS" \
-  run.use_gradient_checkpoint="${USE_GRADIENT_CHECKPOINT:-False}" \
-  run.use_amp="${USE_AMP:-false}" \
+  run.use_gradient_checkpoint="${USE_GRADIENT_CHECKPOINT:-True}" \
+  run.use_amp="${USE_AMP:-true}" \
   optim.num_epochs="$NUM_EPOCHS" \
   optim.learning_rate="$LEARNING_RATE" \
   optim.warmup_steps="$WARMUP_STEPS" \

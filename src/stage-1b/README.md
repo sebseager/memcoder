@@ -26,10 +26,14 @@ The builder filters SWE-rebench training rows to be repo-disjoint from the Stage
 
 ## Train
 
+The train wrapper defaults to bf16 autocast, gradient checkpointing, SDPA attention, and disabled `torch.compile` so the Qwen3-8B SHINE run fits on 49GB GPUs without changing the training objective.
+
 ```bash
 cd src
 MODE=train NUM_GPUS=1 stage-1b/scripts/run_stage1b.sh
 ```
+
+If memory is still tight, try `CONVERSATION_MAX_LEN=3072` before dropping to `2048`. More GPUs improve throughput via DDP, but they do not reduce per-GPU memory because each rank holds a full model replica.
 
 Defaults are one epoch and `lr=1e-5`. The script creates a writable SHINE overlay at `stage-1b/shine_work`, points `data/ift_c1qa.json` to the Stage 1b training JSON, points the required `iftpwc` checkpoint to Stage 1a, and writes new checkpoints under Stage 1b.
 
