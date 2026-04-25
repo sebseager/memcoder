@@ -3,11 +3,13 @@ from pathlib import Path
 
 import torch
 import transformers.modeling_utils as modeling_utils
+from checkpoint_config import resolve_checkpoint_path
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "vendor" / "doc-to-lora" / "src"))
 
 from ctx_to_lora.model_loading import get_tokenizer
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
+
 
 @classmethod
 def _force_eager_attn(cls, config, *args, **kwargs):
@@ -17,9 +19,11 @@ def _force_eager_attn(cls, config, *args, **kwargs):
         config.attn_implementation = "eager"
     return config
 
+
 modeling_utils.PreTrainedModel._autoset_attn_implementation = _force_eager_attn
 
-checkpoint_path = "trained_d2l/gemma_demo/checkpoint-80000/pytorch_model.bin"
+checkpoint_path = resolve_checkpoint_path()
+print(f"Loading checkpoint: {checkpoint_path}")
 state_dict = torch.load(checkpoint_path, weights_only=False)
 
 from ctx_to_lora.modeling import idefics2
@@ -36,7 +40,7 @@ model = ModulatedPretrainedModel.from_state_dict(
 model.reset()
 tokenizer = get_tokenizer(model.base_model.name_or_path)
 
-doc = open("data/sakana_wiki.txt", "r").read()
+doc = (Path(__file__).resolve().parent / "data" / "sakana_wiki.txt").read_text()
 model.internalize(doc)
 
 chat = [{"role": "user", "content": "Tell me about Sakana AI."}]

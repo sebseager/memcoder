@@ -1,0 +1,69 @@
+flask.sessions — Session Handling Module
+
+This module implements Flask's session support. Sessions allow storing information specific to a user from one request to the next, implemented on top of cookies and signed cryptographically using the itsdangerous library.
+
+== Classes ==
+
+SessionMixin
+  Expands a basic dictionary with session attributes.
+  Inherits from MutableMapping[str, Any].
+
+  Properties:
+  - permanent: This reflects the '_permanent' key in the dict.
+    Getter returns self.get("_permanent", False).
+    Setter sets self["_permanent"] = bool(value).
+  - new: Some implementations can detect whether a session is newly created. The mixin default is hard-coded False.
+  - modified: Some implementations can detect changes to the session. The mixin default is hard coded to True.
+  - accessed: Indicates if the session was accessed, even if it was not modified. This is set when the session object is accessed through the request context, including the global session proxy. A Vary: cookie header will be added if this is True. Defaults to False.
+
+SecureCookieSession
+  Base class for sessions based on signed cookies. Inherits from CallbackDict[str, Any] and SessionMixin.
+  This session backend will set the modified and accessed attributes. It cannot reliably track whether a session is new (vs. empty), so new remains hard coded to False.
+
+  Attribute modified is initialized to False (overriding SessionMixin's default of True).
+  The __init__ method sets up an on_update callback that sets self.modified = True whenever the dict is mutated.
+
+NullSession
+  Class used to generate nicer error messages if sessions are not available. Will still allow read-only access to the empty session but fail on setting. Inherits from SecureCookieSession.
+
+  Any mutating operation (__setitem__, __delitem__, clear, pop, popitem, update, setdefault) calls _fail, which raises RuntimeError with message: "The session is unavailable because no secret key was set.  Set the secret_key on the application to something unique and secret."
+
+SessionInterface
+  The basic interface to replace the default session interface. Only methods you have to implement are open_session and save_session.
+  - null_session_class = NullSession
+  - pickle_based = False
+
+  Methods:
+  - make_null_session(app): Creates an instance of null_session_class.
+  - is_null_session(obj): isinstance check against null_session_class.
+  - get_cookie_name(app): Returns app.config["SESSION_COOKIE_NAME"].
+  - get_cookie_domain(app): Returns app.config["SESSION_COOKIE_DOMAIN"]. Not set by default, does not fall back to SERVER_NAME (changed in version 2.3).
+  - get_cookie_path(app): Returns app.config["SESSION_COOKIE_PATH"] or falls back to app.config["APPLICATION_ROOT"].
+  - get_cookie_httponly(app): Returns app.config["SESSION_COOKIE_HTTPONLY"].
+  - get_cookie_secure(app): Returns app.config["SESSION_COOKIE_SECURE"].
+  - get_cookie_samesite(app): Returns app.config["SESSION_COOKIE_SAMESITE"]. Values are 'Strict' or 'Lax'.
+  - get_cookie_partitioned(app): Returns app.config["SESSION_COOKIE_PARTITIONED"]. Added in version 3.1.
+  - get_expiration_time(app, session): Returns datetime.now(timezone.utc) + app.permanent_session_lifetime if session.permanent is True, otherwise returns None.
+  - should_set_cookie(app, session): Returns True if session.modified, or if session.permanent and app.config["SESSION_REFRESH_EACH_REQUEST"] is true.
+  - open_session(app, request): Raises NotImplementedError.
+  - save_session(app, session, response): Raises NotImplementedError.
+
+SecureCookieSessionInterface
+  The default session interface that stores sessions in signed cookies through the itsdangerous module. Inherits from SessionInterface.
+
+  Attributes:
+  - salt = "cookie-session"
+  - digest_method = staticmethod(_lazy_sha1) — wraps hashlib.sha1. The lazy wrapper exists because FIPS builds may not include SHA-1.
+  - key_derivation = "hmac"
+  - serializer = session_json_serializer — This is an instance of TaggedJSONSerializer, which is a compact JSON derived serializer with support for extra Python types such as datetime objects or tuples.
+  - session_class = SecureCookieSession
+
+  Methods:
+  - get_signing_serializer(app): Returns None if app.secret_key is falsy. Otherwise, builds a key list: first appends SECRET_KEY_FALLBACKS, then appends app.secret_key (itsdangerous expects current key at top). Returns URLSafeTimedSerializer with keys, salt, serializer, and signer_kwargs containing key_derivation and digest_method.
+  - open_session(app, request): Gets the signing serializer. Returns None if serializer is None. Gets the cookie value by name. If cookie is empty, returns a new empty session_class(). Computes max_age = int(app.permanent_session_lifetime.total_seconds()). Tries s.loads(val, max_age=max_age). On success, returns session_class(data). On BadSignature exception, returns an empty session_class().
+  - save_session(app, session, response): Gathers all cookie parameters (name, domain, path, secure, partitioned, samesite, httponly). If session.accessed, adds "Cookie" to response.vary. If session is empty and modified, deletes the cookie and adds Vary: Cookie. If session is empty but not modified, returns without setting cookie. If should_set_cookie returns False, returns. Otherwise dumps session to signed value and sets the cookie on the response. Always adds "Cookie" to response.vary at the end.
+
+== Module-level ==
+session_json_serializer = TaggedJSONSerializer()
+
+_lazy_sha1(string=b""): Wraps hashlib.sha1. Exists because FIPS builds may not include SHA-1 and the import would fail.

@@ -1,0 +1,80 @@
+Design Document: flask.sessions — Flask Session Management
+
+1. PURPOSE
+The flask.sessions module implements server-side session state over stateless HTTP using cryptographically signed cookies. It provides a dictionary-like session object per request, serialized into a cookie via the itsdangerous library. The module is designed to be pluggable: any custom backend can replace the default cookie-based implementation by subclassing SessionInterface.
+
+2. PUBLIC API SIGNATURES
+
+  class SessionMixin(MutableMapping[str, Any]):
+    - permanent -> bool  [property, reads self.get("_permanent", False)]
+    - permanent.setter(value: bool) -> None  [sets self["_permanent"] = bool(value)]
+    - new: bool = False  [class attribute, hard-coded]
+    - modified: bool = True  [class attribute, default]
+    - accessed: bool = False  [class attribute, default]
+
+  class SecureCookieSession(CallbackDict[str, Any], SessionMixin):
+    - modified: bool = False  [overrides SessionMixin's True default]
+    - __init__(initial: Mapping[str, Any] | None = None) -> None
+      Registers an on_update callback that sets self.modified = True on any mutation.
+
+  class NullSession(SecureCookieSession):
+    - Any write operation raises RuntimeError with the exact message:
+      "The session is unavailable because no secret key was set.  Set the secret_key on the application to something unique and secret."
+
+  class SessionInterface:
+    - null_session_class = NullSession
+    - pickle_based = False
+    - make_null_session(app: Flask) -> NullSession
+    - is_null_session(obj: object) -> bool
+    - get_cookie_name(app) -> str   [reads SESSION_COOKIE_NAME]
+    - get_cookie_domain(app) -> str | None  [reads SESSION_COOKIE_DOMAIN; no fallback to SERVER_NAME since v2.3]
+    - get_cookie_path(app) -> str   [reads SESSION_COOKIE_PATH, falls back to APPLICATION_ROOT]
+    - get_cookie_httponly(app) -> bool  [reads SESSION_COOKIE_HTTPONLY]
+    - get_cookie_secure(app) -> bool  [reads SESSION_COOKIE_SECURE]
+    - get_cookie_samesite(app) -> str | None  [reads SESSION_COOKIE_SAMESITE]
+    - get_cookie_partitioned(app) -> bool  [reads SESSION_COOKIE_PARTITIONED, added v3.1]
+    - get_expiration_time(app, session) -> datetime | None
+      Returns datetime.now(timezone.utc) + app.permanent_session_lifetime when session.permanent is True; None otherwise.
+    - should_set_cookie(app, session) -> bool
+      Returns session.modified or (session.permanent and app.config["SESSION_REFRESH_EACH_REQUEST"])
+    - open_session(app, request) -> SessionMixin | None  [raises NotImplementedError]
+    - save_session(app, session, response) -> None  [raises NotImplementedError]
+
+  class SecureCookieSessionInterface(SessionInterface):
+    - salt: str = "cookie-session"
+    - digest_method = staticmethod(_lazy_sha1)  [wraps hashlib.sha1 lazily for FIPS compatibility]
+    - key_derivation: str = "hmac"
+    - serializer = session_json_serializer  [TaggedJSONSerializer instance — compact JSON with datetime/tuple support]
+    - session_class = SecureCookieSession
+    - get_signing_serializer(app) -> URLSafeTimedSerializer | None
+    - open_session(app, request) -> SecureCookieSession | None
+    - save_session(app, session, response) -> None
+
+  Module-level:
+    session_json_serializer = TaggedJSONSerializer()
+    _lazy_sha1(string: bytes = b"") -> Any  [deferred hashlib.sha1 for FIPS]
+
+3. KEY INVARIANTS
+- SecureCookieSession.modified starts as False, flips to True on any dict mutation via the on_update callback. This is the opposite of SessionMixin.modified which defaults to True.
+- NullSession allows reads but raises RuntimeError on any write. The exact error message references "secret_key."
+- SessionInterface.pickle_based is always False for the default implementation.
+- get_signing_serializer builds a key list by first extending with SECRET_KEY_FALLBACKS, then appending app.secret_key last (itsdangerous expects the current key at the top of the list, and append places it there).
+- open_session computes max_age as int(app.permanent_session_lifetime.total_seconds()) for signature verification.
+- On a BadSignature exception during open_session, a fresh empty session is returned (not None).
+
+4. COMMON ERROR PATTERNS
+- If no secret_key is configured, get_signing_serializer returns None, open_session returns None, and Flask falls back to NullSession. Any write to that session raises RuntimeError.
+- Mutating nested mutable objects (e.g., a list inside the session dict) does NOT trigger the on_update callback. Developers must manually set session.modified = True.
+- get_cookie_domain no longer falls back to SERVER_NAME as of Flask 2.3. If SESSION_COOKIE_DOMAIN is not explicitly set, Domain parameter is omitted from the Set-Cookie header.
+
+5. INTER-MODULE DEPENDENCIES
+- itsdangerous: URLSafeTimedSerializer for cookie signing, BadSignature for error handling.
+- werkzeug.datastructures.CallbackDict: Base class for SecureCookieSession.
+- flask.json.tag.TaggedJSONSerializer: Serializer for the cookie payload; handles datetime, tuple, and other Python types beyond standard JSON.
+
+6. RESPONSE BEHAVIOR
+- save_session adds "Cookie" to the response Vary header whenever session.accessed is True.
+- If the session dict is empty and was modified (i.e., cleared), the cookie is deleted from the response and Vary: Cookie is added.
+- If the session dict is empty and was NOT modified, save_session returns immediately without touching the response.
+- If should_set_cookie returns False, save_session returns without setting a cookie.
+- Otherwise, the session is serialized via get_signing_serializer().dumps(dict(session)) and set as a cookie with all configured parameters (expires, httponly, domain, path, secure, partitioned, samesite). Vary: Cookie is always added.

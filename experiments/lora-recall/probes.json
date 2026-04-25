@@ -1,0 +1,368 @@
+{
+  "flask_sessions": [
+    {
+      "id": "fs01",
+      "question": "What exact exception does NullSession raise when you try to modify it?",
+      "answer": "RuntimeError",
+      "category": "error_handling"
+    },
+    {
+      "id": "fs02",
+      "question": "What exact string does NullSession raise when you attempt to write to it?",
+      "answer": "The session is unavailable because no secret key was set.  Set the secret_key on the application to something unique and secret.",
+      "category": "error_message"
+    },
+    {
+      "id": "fs03",
+      "question": "What is the value of SecureCookieSessionInterface.salt?",
+      "answer": "cookie-session",
+      "category": "constant"
+    },
+    {
+      "id": "fs04",
+      "question": "What is the value of SecureCookieSessionInterface.key_derivation?",
+      "answer": "hmac",
+      "category": "constant"
+    },
+    {
+      "id": "fs05",
+      "question": "What is the default value of SessionMixin.modified?",
+      "answer": "True",
+      "category": "default_value"
+    },
+    {
+      "id": "fs06",
+      "question": "What is the default value of SecureCookieSession.modified?",
+      "answer": "False",
+      "category": "default_value"
+    },
+    {
+      "id": "fs07",
+      "question": "What is the default value of SessionMixin.new?",
+      "answer": "False",
+      "category": "default_value"
+    },
+    {
+      "id": "fs08",
+      "question": "What is the default value of SessionMixin.accessed?",
+      "answer": "False",
+      "category": "default_value"
+    },
+    {
+      "id": "fs09",
+      "question": "What dict key does the SessionMixin.permanent property read from?",
+      "answer": "_permanent",
+      "category": "implementation"
+    },
+    {
+      "id": "fs10",
+      "question": "What config key does get_cookie_path fall back to if SESSION_COOKIE_PATH is not set?",
+      "answer": "APPLICATION_ROOT",
+      "category": "implementation"
+    },
+    {
+      "id": "fs11",
+      "question": "What header does save_session add to the response when session.accessed is True?",
+      "answer": "Vary: Cookie",
+      "category": "implementation"
+    },
+    {
+      "id": "fs12",
+      "question": "What happens in open_session when a BadSignature exception is caught?",
+      "answer": "It returns a new empty session (session_class())",
+      "category": "error_handling"
+    },
+    {
+      "id": "fs13",
+      "question": "How is max_age computed in SecureCookieSessionInterface.open_session?",
+      "answer": "int(app.permanent_session_lifetime.total_seconds())",
+      "category": "implementation"
+    },
+    {
+      "id": "fs14",
+      "question": "What serializer class is used for the session cookie payload?",
+      "answer": "TaggedJSONSerializer",
+      "category": "type"
+    },
+    {
+      "id": "fs15",
+      "question": "What class does SecureCookieSessionInterface.get_signing_serializer return?",
+      "answer": "URLSafeTimedSerializer",
+      "category": "type"
+    },
+    {
+      "id": "fs16",
+      "question": "What is the value of SessionInterface.pickle_based?",
+      "answer": "False",
+      "category": "constant"
+    },
+    {
+      "id": "fs17",
+      "question": "What base class does SecureCookieSession inherit from besides SessionMixin?",
+      "answer": "CallbackDict",
+      "category": "type"
+    },
+    {
+      "id": "fs18",
+      "question": "Why is _lazy_sha1 used instead of directly referencing hashlib.sha1?",
+      "answer": "FIPS builds may not include SHA-1",
+      "category": "implementation"
+    },
+    {
+      "id": "fs19",
+      "question": "What does should_set_cookie return when the session is not modified but is permanent and SESSION_REFRESH_EACH_REQUEST is true?",
+      "answer": "True",
+      "category": "implementation"
+    },
+    {
+      "id": "fs20",
+      "question": "What does save_session do when the session dict is empty and was modified?",
+      "answer": "It deletes the cookie from the response",
+      "category": "implementation"
+    }
+  ],
+  "click_types": [
+    {
+      "id": "ct01",
+      "question": "What are the three default date format strings used by Click's DateTime type?",
+      "answer": "%Y-%m-%d, %Y-%m-%dT%H:%M:%S, %Y-%m-%d %H:%M:%S",
+      "category": "constant"
+    },
+    {
+      "id": "ct02",
+      "question": "What is the name attribute of IntParamType?",
+      "answer": "integer",
+      "category": "constant"
+    },
+    {
+      "id": "ct03",
+      "question": "What does IntParamType.__repr__() return?",
+      "answer": "INT",
+      "category": "constant"
+    },
+    {
+      "id": "ct04",
+      "question": "What is the name attribute of BoolParamType?",
+      "answer": "boolean",
+      "category": "constant"
+    },
+    {
+      "id": "ct05",
+      "question": "What does BoolParamType.str_to_bool return for the empty string?",
+      "answer": "False",
+      "category": "implementation"
+    },
+    {
+      "id": "ct06",
+      "question": "What does BoolParamType.str_to_bool return when the input string is not recognized?",
+      "answer": "None",
+      "category": "implementation"
+    },
+    {
+      "id": "ct07",
+      "question": "What is the name attribute of IntRange?",
+      "answer": "integer range",
+      "category": "constant"
+    },
+    {
+      "id": "ct08",
+      "question": "What does FloatRange._clamp raise for open boundaries?",
+      "answer": "TypeError",
+      "category": "error_handling"
+    },
+    {
+      "id": "ct09",
+      "question": "What exact string does FloatRange._clamp raise for open boundaries?",
+      "answer": "Can't clamp open float ranges.",
+      "category": "error_message"
+    },
+    {
+      "id": "ct10",
+      "question": "What is the default mode parameter for Click's File type?",
+      "answer": "r",
+      "category": "default_value"
+    },
+    {
+      "id": "ct11",
+      "question": "What is the default errors parameter for Click's File type?",
+      "answer": "strict",
+      "category": "default_value"
+    },
+    {
+      "id": "ct12",
+      "question": "What does File.resolve_lazy_flag return when the value is '-' (stdin/stdout)?",
+      "answer": "False",
+      "category": "implementation"
+    },
+    {
+      "id": "ct13",
+      "question": "What does StringParamType.__repr__() return?",
+      "answer": "STRING",
+      "category": "constant"
+    },
+    {
+      "id": "ct14",
+      "question": "What is the name attribute of StringParamType?",
+      "answer": "text",
+      "category": "constant"
+    },
+    {
+      "id": "ct15",
+      "question": "Complete this exact template string for singular invalid Choice values: _____",
+      "answer": "{value!r} is not {choice}.",
+      "category": "error_message"
+    },
+    {
+      "id": "ct16",
+      "question": "Complete this exact template string for plural invalid Choice values: _____",
+      "answer": "{value!r} is not one of {choices}.",
+      "category": "error_message"
+    },
+    {
+      "id": "ct17",
+      "question": "What does Choice.normalize_choice use for case-insensitive comparison besides casefold?",
+      "answer": "Context.token_normalize_func",
+      "category": "implementation"
+    },
+    {
+      "id": "ct18",
+      "question": "Complete this exact template string for Click number-conversion failure: _____",
+      "answer": "{value!r} is not a valid {number_type}.",
+      "category": "error_message"
+    },
+    {
+      "id": "ct19",
+      "question": "What does BoolParamType.__repr__() return?",
+      "answer": "BOOL",
+      "category": "constant"
+    },
+    {
+      "id": "ct20",
+      "question": "What does File.resolve_lazy_flag return when the mode contains 'w' and lazy is not explicitly set?",
+      "answer": "True",
+      "category": "implementation"
+    }
+  ],
+  "marshmallow_validate": [
+    {
+      "id": "mv01",
+      "question": "Complete this exact string: URL.default_message = \"_____\"",
+      "answer": "Not a valid URL.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv02",
+      "question": "What are the four default URL schemes allowed by the marshmallow URL validator?",
+      "answer": "http, https, ftp, ftps",
+      "category": "constant"
+    },
+    {
+      "id": "mv03",
+      "question": "Complete this exact string: Email.default_message = \"_____\"",
+      "answer": "Not a valid email address.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv04",
+      "question": "What tuple is the DOMAIN_WHITELIST in the Email validator?",
+      "answer": "(\"localhost\",)",
+      "category": "constant"
+    },
+    {
+      "id": "mv05",
+      "question": "What is the value of Range.message_gte?",
+      "answer": "greater than or equal to",
+      "category": "constant"
+    },
+    {
+      "id": "mv06",
+      "question": "What is the value of Range.message_lt?",
+      "answer": "less than",
+      "category": "constant"
+    },
+    {
+      "id": "mv07",
+      "question": "What is the value of Length.message_min?",
+      "answer": "Shorter than minimum length {min}.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv08",
+      "question": "What is the value of Length.message_equal?",
+      "answer": "Length must be {equal}.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv09",
+      "question": "What happens if you pass both equal and min to the Length validator?",
+      "answer": "It raises ValueError",
+      "category": "error_handling"
+    },
+    {
+      "id": "mv10",
+      "question": "Complete this exact string: Equal.default_message = \"_____\"",
+      "answer": "Must be equal to {other}.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv11",
+      "question": "Does the Regexp validator use re.match or re.search?",
+      "answer": "re.match",
+      "category": "implementation"
+    },
+    {
+      "id": "mv12",
+      "question": "Complete this exact string: Regexp.default_message = \"_____\"",
+      "answer": "String does not match expected pattern.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv13",
+      "question": "Complete this exact string: NoneOf.default_message = \"_____\"",
+      "answer": "Invalid input.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv14",
+      "question": "Complete this exact string: OneOf.default_message = \"_____\"",
+      "answer": "Must be one of: {choices}.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv15",
+      "question": "Complete this exact string: ContainsOnly.default_message = \"_____\"",
+      "answer": "One or more of the choices you made was not in: {choices}.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv16",
+      "question": "Complete this exact string: ContainsNoneOf.default_message = \"_____\"",
+      "answer": "One or more of the choices you made was in: {values}.",
+      "category": "error_message"
+    },
+    {
+      "id": "mv17",
+      "question": "What is the value of the module-level constant _UNICODE_LETTERS in marshmallow.validate?",
+      "answer": "\\u00a1-\\uffff",
+      "category": "constant"
+    },
+    {
+      "id": "mv18",
+      "question": "What exception does the NoneOf validator catch silently in its __call__ method?",
+      "answer": "TypeError",
+      "category": "error_handling"
+    },
+    {
+      "id": "mv19",
+      "question": "What does the And validator do when multiple validators fail?",
+      "answer": "It collects all error messages and raises a single ValidationError with all of them",
+      "category": "implementation"
+    },
+    {
+      "id": "mv20",
+      "question": "What exact ValueError string is raised when URL is configured with relative=False and absolute=False?",
+      "answer": "URL validation cannot set both relative and absolute to False.",
+      "category": "error_message"
+    }
+  ]
+}

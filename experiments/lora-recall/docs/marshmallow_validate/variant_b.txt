@@ -1,0 +1,109 @@
+Design Document: marshmallow.validate — Marshmallow Validation Layer
+
+1. PURPOSE
+The marshmallow.validate module provides a composable set of validators for use with marshmallow fields and schemas. Each validator is a callable that either returns the input value (on success) or raises marshmallow.exceptions.ValidationError (on failure). Validators can be combined with the And compositor to aggregate error messages. The module covers URL/email format validation, numeric range checking, string/sequence length constraints, equality checks, regex matching, method predication, and membership tests.
+
+2. PUBLIC API SIGNATURES
+
+  class Validator(ABC):
+    - error: str | None = None  [class attribute]
+    - __repr__() -> str  [returns "<ClassName(args, error=...)>"]
+    - _repr_args() -> str  [override for custom repr content]
+    - __call__(value: Any) -> Any  [abstract]
+
+  class And(Validator):
+    __init__(*validators: types.Validator)
+    Stores validators as a tuple in self.validators.
+
+  class URL(Validator):
+    __init__(*, relative=False, absolute=True, schemes=None, require_tld=True, error=None)
+    default_message = "Not a valid URL."
+    default_schemes = {"http", "https", "ftp", "ftps"}
+
+  class Email(Validator):
+    __init__(*, error=None)
+    default_message = "Not a valid email address."
+    DOMAIN_WHITELIST = ("localhost",)
+    USER_REGEX: re.Pattern  [compiled with re.IGNORECASE | re.UNICODE]
+    DOMAIN_REGEX: re.Pattern  [compiled with re.IGNORECASE | re.UNICODE]
+
+  class Range(Validator):
+    __init__(min=None, max=None, *, min_inclusive=True, max_inclusive=True, error=None)
+    message_gte = "greater than or equal to"
+    message_gt = "greater than"
+    message_lte = "less than or equal to"
+    message_lt = "less than"
+
+  class Length(Validator):
+    __init__(min=None, max=None, *, equal=None, error=None)
+
+  class Equal(Validator):
+    __init__(comparable, *, error=None)
+    default_message = "Must be equal to {other}."
+
+  class Regexp(Validator):
+    __init__(regex, flags=0, *, error=None)
+    default_message = "String does not match expected pattern."
+
+  class Predicate(Validator):
+    __init__(method: str, *, error=None, **kwargs)
+    default_message = "Invalid input."
+
+  class NoneOf(Validator):
+    __init__(iterable, *, error=None)
+    default_message = "Invalid input."
+
+  class OneOf(Validator):
+    __init__(choices, labels=None, *, error=None)
+    default_message = "Must be one of: {choices}."
+    options(valuegetter=str) -> Iterable[tuple[Any, str]]
+
+  class ContainsOnly(OneOf):
+    default_message = "One or more of the choices you made was not in: {choices}."
+
+  class ContainsNoneOf(NoneOf):
+    default_message = "One or more of the choices you made was in: {values}."
+
+3. KEY INVARIANTS
+- All validators return the original value on success, not a transformed copy. Validation is pure side-effect checking.
+- And collects ALL errors from ALL validators before raising a single ValidationError; it does not short-circuit.
+- URL internally caches compiled regex patterns using a RegexMemoizer keyed by (relative, absolute, require_tld). The regex handles: standard domain names with unicode letters (\u00a1-\uffff), "localhost", IPv4 dotted quads, IPv6 in brackets, and optionally dotless hostnames.
+- URL validates the scheme separately by splitting on "://", lowering, and checking against self.schemes before running the regex.
+- URL handles "file" scheme specially: if the URL starts with "file:///", it prepends "file://localhost/" for regex matching.
+- URL raises ValueError("URL validation cannot set both relative and absolute to False.") in __init__ if both are False.
+- Email splits on "@" using rsplit(maxsplit=1), validates the user part with USER_REGEX and the domain with DOMAIN_REGEX. "localhost" is whitelisted and skips domain regex validation.
+- Range.message_min/max/all templates are interpolated at __init__ time with operator words, not at call time. The operator word depends on min_inclusive and max_inclusive settings.
+- Range uses message_all (both bounds message) when BOTH min and max are set but only one bound is violated.
+- Length raises ValueError if equal is provided together with min or max.
+- Length.message_min = "Shorter than minimum length {min}."
+- Length.message_max = "Longer than maximum length {max}."
+- Length.message_equal = "Length must be {equal}."
+- Length.message_all = "Length must be between {min} and {max}."
+- Regexp uses re.match (beginning of string), NOT re.search.
+- NoneOf.__call__ catches TypeError silently for unhashable types (membership test via "in" can raise TypeError).
+- OneOf.__call__ converts TypeError from the "not in" test into a ValidationError.
+- ContainsOnly iterates element-by-element instead of using set.issubset because sets don't handle unhashable types.
+- ContainsOnly and ContainsNoneOf both treat empty sequences as valid.
+- OneOf.options() pads labels with empty strings if fewer labels than choices, and truncates labels if more.
+
+4. COMMON ERROR PATTERNS
+- URL: "Not a valid URL." — raised for empty string, unknown scheme, or regex mismatch.
+- Email: "Not a valid email address." — raised for missing @, invalid local part, or invalid domain.
+- Range: Messages are constructed from templates. Example: "Must be greater than or equal to 5." or "Must be greater than or equal to 0 and less than or equal to 100."
+- Length: "Shorter than minimum length 3." or "Length must be between 3 and 10." or "Length must be 5."
+- Equal: "Must be equal to expected_value."
+- Regexp: "String does not match expected pattern."
+- NoneOf/Predicate: "Invalid input."
+- OneOf: "Must be one of: a, b, c."
+- ContainsOnly: "One or more of the choices you made was not in: a, b, c."
+- ContainsNoneOf: "One or more of the choices you made was in: x, y."
+
+5. INTER-MODULE DEPENDENCIES
+- marshmallow.exceptions.ValidationError: The sole exception type raised by all validators.
+- marshmallow.types: Type aliases (Validator protocol, StrSequenceOrSet).
+- re module: Used by URL, Email, and Regexp validators.
+- operator.attrgetter: Used by OneOf.options() when valuegetter is a string.
+- abc.ABC and abc.abstractmethod: Base class machinery for Validator.
+
+6. MODULE-LEVEL CONSTANT
+_UNICODE_LETTERS = "\u00a1-\uffff" — used in URL and Email regex patterns to support internationalized domain names and hostnames.

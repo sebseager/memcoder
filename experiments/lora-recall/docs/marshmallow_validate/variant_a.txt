@@ -1,0 +1,114 @@
+marshmallow.validate — Validation Classes
+
+Module docstring: "Validation classes for various types of data."
+
+This module provides validator classes for use with marshmallow schemas. All validators inherit from the abstract Validator base class.
+
+== Module Constants ==
+_UNICODE_LETTERS = "\u00a1-\uffff"
+
+== Classes ==
+
+Validator (ABC)
+  Abstract base class for validators. Provides a useful __repr__ implementation. Has class attribute error = None. Abstract method __call__(value).
+  __repr__: Returns "<ClassName(args, error=...)>" where args comes from _repr_args().
+
+And
+  Compose multiple validators and combine their error messages.
+  __init__(*validators): Stores as tuple in self.validators.
+  __call__(value): Runs all validators, collects ValidationError messages (extends for list, appends for dict), then raises a single ValidationError with all collected errors if any. Returns value if all pass.
+
+URL
+  Validates a URL.
+  default_message = "Not a valid URL."
+  default_schemes = {"http", "https", "ftp", "ftps"}
+
+  __init__(relative=False, absolute=True, schemes=None, require_tld=True, error=None):
+    If both relative and absolute are False, raises ValueError("URL validation cannot set both relative and absolute to False.").
+    schemes are lowercased into a set. Defaults to default_schemes.
+
+  Uses an internal RegexMemoizer class that caches compiled regex patterns keyed by (relative, absolute, require_tld).
+
+  __call__(value): Raises ValidationError if value is empty. Extracts scheme by splitting on "://". Checks scheme is in self.schemes. For "file" scheme URLs starting with "file:///", prepends "file://localhost/" for regex matching. Uses re.search (not re.match) for the URL pattern.
+
+  The regex supports: domain names with unicode letters, "localhost", IPv4, IPv6 in brackets [A-F0-9]*:[A-F0-9:]+, and optionally dotless hostnames when require_tld is False.
+
+Email
+  Validates email addresses.
+  default_message = "Not a valid email address."
+  DOMAIN_WHITELIST = ("localhost",)
+
+  Has two compiled regex patterns:
+  - USER_REGEX: Validates the local part (before @). Supports dot-atom and quoted-string formats. Compiled with re.IGNORECASE | re.UNICODE.
+  - DOMAIN_REGEX: Validates the domain part. Supports domain names with unicode letters and literal IPv4 in brackets. Compiled with re.IGNORECASE | re.UNICODE.
+
+  __call__(value): Raises ValidationError if value is empty or has no "@". Splits on "@" using rsplit with maxsplit=1. Validates user part against USER_REGEX. If domain is in DOMAIN_WHITELIST, skips domain validation; otherwise validates against DOMAIN_REGEX.
+
+Range
+  Validates that a value falls within a configurable range.
+  __init__(min=None, max=None, min_inclusive=True, max_inclusive=True, error=None)
+
+  Error message templates (class attributes):
+  - message_min = "Must be {min_op} {{min}}."
+  - message_max = "Must be {max_op} {{max}}."
+  - message_all = "Must be {min_op} {{min}} and {max_op} {{max}}."
+
+  Operator words:
+  - message_gte = "greater than or equal to"
+  - message_gt = "greater than"
+  - message_lte = "less than or equal to"
+  - message_lt = "less than"
+
+  In __init__, message_min/max/all are interpolated with the appropriate operator word based on inclusivity settings.
+
+  __call__(value): For min violation, uses message_min if max is None, otherwise message_all. For max violation, uses message_max if min is None, otherwise message_all.
+
+Length
+  Validates length of a value (uses len(), works for strings, lists, etc.).
+  __init__(min=None, max=None, equal=None, error=None)
+  If equal is provided along with min or max, raises ValueError("The `equal` parameter was provided, maximum or minimum parameter must not be provided.").
+
+  Error messages:
+  - message_min = "Shorter than minimum length {min}."
+  - message_max = "Longer than maximum length {max}."
+  - message_all = "Length must be between {min} and {max}."
+  - message_equal = "Length must be {equal}."
+
+  __call__: If equal is set, checks len(value) != equal. Otherwise checks min/max bounds. Uses message_all when both bounds exist and one is violated.
+
+Equal
+  Validates value equals a comparable.
+  default_message = "Must be equal to {other}."
+  __init__(comparable, error=None)
+
+Regexp
+  Validates value matches a regex using re.match (not re.search — matches at the beginning).
+  default_message = "String does not match expected pattern."
+  __init__(regex, flags=0, error=None): If regex is str or bytes, compiles it. Otherwise uses as-is.
+
+Predicate
+  Calls a named method on the value object. Succeeds if the method returns truthy.
+  default_message = "Invalid input."
+  __init__(method: str, error=None, **kwargs): Additional kwargs are passed to the method.
+
+NoneOf
+  Fails if value is a member of iterable.
+  default_message = "Invalid input."
+  __init__(iterable, error=None): Pre-computes values_text as comma-joined string representations.
+  __call__: Uses "in" operator. Catches TypeError silently (for unhashable types).
+
+OneOf
+  Succeeds if value is a member of choices.
+  default_message = "Must be one of: {choices}."
+  __init__(choices, labels=None, error=None): Pre-computes choices_text and labels_text.
+  __call__: Uses "not in" operator. On TypeError, re-raises as ValidationError.
+  options(valuegetter=str): Returns generator of (value, label) pairs. Pads labels with empty strings if fewer than choices.
+
+ContainsOnly(OneOf)
+  Validates that every element in a sequence is in choices. Empty input is valid.
+  default_message = "One or more of the choices you made was not in: {choices}."
+  Cannot use set.issubset because it doesn't handle unhashable types.
+
+ContainsNoneOf(NoneOf)
+  Fails if any element in a sequence is in iterable. Empty input is valid.
+  default_message = "One or more of the choices you made was in: {values}."
