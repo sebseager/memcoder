@@ -30,6 +30,9 @@ case "$MODE" in
   eval)
     python "$STAGE1B_DIR/scripts/evaluate_stage1b_light.py" "$@"
     ;;
+  full-eval|full_eval)
+    python "$STAGE1B_DIR/scripts/evaluate_stage1b_full.py" "$@"
+    ;;
   all)
     python "$STAGE1B_DIR/scripts/build_stage1b_dataset.py" \
       --max-triples "$MAX_TRIPLES" \
@@ -40,7 +43,7 @@ case "$MODE" in
     python "$STAGE1B_DIR/scripts/evaluate_stage1b_light.py"
     ;;
   *)
-    echo "Invalid MODE=$MODE. Expected build|train|infer|eval|all." >&2
+    echo "Invalid MODE=$MODE. Expected build|train|infer|eval|full-eval|all." >&2
     exit 1
     ;;
 esac

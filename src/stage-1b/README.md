@@ -1,6 +1,6 @@
 # Stage 1b — IFT SHINE on Code
 
-This folder contains the Stage 1b workflow for building code IFT triples, training SHINE with the upstream `ift-c1qa` recipe, running held-out inference, and doing a lightweight non-Docker evaluation.
+This folder contains the Stage 1b workflow for building code IFT triples, training SHINE with the upstream `ift-c1qa` recipe, running held-out inference, doing a lightweight non-Docker evaluation, and running the SWE-rebench Docker harness for pass@1.
 
 ## Outputs
 
@@ -60,3 +60,14 @@ rho = (E - B) / (C - B)
 ```
 
 Use pass@1 values for `B` and `C` when available. The lightweight score is for iteration on HPC outputs; the final paper number should still use the Docker harness.
+
+## Full Docker Evaluation
+
+```bash
+cd src
+MODE=full-eval stage-1b/scripts/run_stage1b.sh --force
+```
+
+This builds SWE-rebench harness submissions from `outputs/stage1b_predictions.jsonl`, runs Docker-backed tests, and writes `outputs/stage1b_full_eval.per_instance.csv` plus `outputs/stage1b_full_eval.summary.json`. Because Stage 1b may evaluate several candidate functions from the same SWE-rebench instance, the evaluator automatically splits submissions into batches with unique `instance_id`s.
+
+Older Stage 1b prediction files may not contain the original SWE-rebench gold patch. The full evaluator backfills it from `nebius/SWE-rebench-leaderboard` by default so tests run with the issue fix plus the candidate function replacement. Use `--no-dataset-metadata` only if you intentionally want to evaluate without that backfill.
