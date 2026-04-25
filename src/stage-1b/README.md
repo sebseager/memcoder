@@ -1,0 +1,73 @@
+# Stage 1b — IFT SHINE on Code
+
+This folder contains the Stage 1b workflow for building code IFT triples, training SHINE with the upstream `ift-c1qa` recipe, running held-out inference, doing a lightweight non-Docker evaluation, and running the SWE-rebench Docker harness for pass@1.
+
+## Outputs
+
+- `data/ift_c1qa_code_train.json`: SHINE-compatible training list with `context`, `conversations`, `contextlen`, and `conversationlen`.
+- `outputs/train_triples.records.jsonl`: auditable source metadata for each training triple.
+- `outputs/heldout_instances.jsonl`: 20 repo-disjoint held-out triples for Stage 1b inference.
+- `checkpoints/<NAME>/train`: Stage 1b checkpoints. The launcher symlinks the Stage 1a `iftpwc` checkpoint as input; it does not copy or edit it.
+
+## Build Triples
+
+```bash
+cd src
+MODE=build stage-1b/scripts/run_stage1b.sh --force
+```
+
+Useful knobs:
+
+```bash
+MODE=build MAX_TRIPLES=1500 HELDOUT=20 stage-1b/scripts/run_stage1b.sh --force
+```
+
+The builder filters SWE-rebench training rows to be repo-disjoint from the Stage 0/1 held-out set, checks out each repo at `base_commit`, applies the instance `gold_patch`, and mines completion targets from the fixed code state. It excludes test files/functions, keeps docstrings in masked inputs while training targets are executable-body-only, and uses stricter quality filters (reference coverage, bounded function size, boilerplate rejection) plus the Stage 1a slicing structure.
+
+## Train
+
+The train wrapper defaults to bf16 autocast, gradient checkpointing, SDPA attention, and disabled `torch.compile` so the Qwen3-8B SHINE run fits on 49GB GPUs without changing the training objective.
+
+```bash
+cd src
+MODE=train NUM_GPUS=1 stage-1b/scripts/run_stage1b.sh
+```
+
+If memory is still tight, try `CONVERSATION_MAX_LEN=3072` before dropping to `2048`. More GPUs improve throughput via DDP, but they do not reduce per-GPU memory because each rank holds a full model replica.
+
+Defaults are one epoch and `lr=1e-5`. The script creates a writable SHINE overlay at `stage-1b/shine_work`, points `data/ift_c1qa.json` to the Stage 1b training JSON, points the required `iftpwc` checkpoint to Stage 1a, and writes new checkpoints under Stage 1b.
+
+## Inference
+
+```bash
+cd src
+MODE=infer stage-1b/scripts/run_stage1b.sh --force
+```
+
+By default this uses the latest `checkpoint-*` under `stage-1b/checkpoints/$NAME/train` and writes `outputs/stage1b_predictions.jsonl`.
+
+## Lightweight Evaluation
+
+```bash
+cd src
+MODE=eval stage-1b/scripts/run_stage1b.sh --baseline-b 0.0 --ceiling-c 0.2
+```
+
+This computes exact match, token F1, BLEU-4, and AST validity without the SWE-rebench Docker harness. It also reports a proxy recovery ratio:
+
+```text
+rho = (E - B) / (C - B)
+```
+
+Use pass@1 values for `B` and `C` when available. The lightweight score is for iteration on HPC outputs; the final paper number should still use the Docker harness.
+
+## Full Docker Evaluation
+
+```bash
+cd src
+MODE=full-eval stage-1b/scripts/run_stage1b.sh --force
+```
+
+This builds SWE-rebench harness submissions from `outputs/stage1b_predictions.jsonl`, runs Docker-backed tests, and writes `outputs/stage1b_full_eval.per_instance.csv` plus `outputs/stage1b_full_eval.summary.json`. Each submission combines `gold_patch` with the reconstructed-function patch, so pass@1 means "the fixed repo still passes after replacing the removed function." Because Stage 1b may evaluate several candidate functions from the same SWE-rebench instance, the evaluator automatically splits submissions into batches with unique `instance_id`s.
+
+Older Stage 1b prediction files may not contain the original SWE-rebench gold patch. The full evaluator backfills it from `nebius/SWE-rebench-leaderboard` by default so tests run with the issue fix plus the candidate function replacement. Use `--no-dataset-metadata` only if you intentionally want to evaluate without that backfill.

@@ -4,3 +4,6 @@
 [submodule "vendor/DyPRAG"]
 	path = vendor/DyPRAG
 	url = https://github.com/Trae1ounG/DyPRAG
+[submodule "vendor/SHINE"]
+	path = vendor/SHINE
+	url = https://github.com/Yewei-Liu/SHINE
