@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import fnmatch
 import json
 import logging
+import os
 import random
 import re
 import subprocess
@@ -19,6 +21,8 @@ from transformers import AutoTokenizer
 
 
 SKIP_PARTS = {".git", ".venv", "venv", "node_modules", "build", "dist", "__pycache__"}
+TEST_FILE_GLOBS = ("test_*.py", "*_test.py")
+TEST_DIR_NAMES = {"test", "tests"}
 
 
 @dataclass(frozen=True)
@@ -54,8 +58,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--context-max-tokens", type=int, default=1024)
     p.add_argument("--conversation-max-tokens", type=int, default=4096)
     p.add_argument("--min-file-tokens", type=int, default=2048)
-    p.add_argument("--min-body-lines", type=int, default=10)
-    p.add_argument("--max-body-lines", type=int, default=80)
+    p.add_argument("--min-body-lines", type=int, default=5)
+    p.add_argument("--max-body-lines", type=int, default=30)
+    p.add_argument("--min-external-refs", type=int, default=2)
+    p.add_argument("--max-external-refs", type=int, default=40)
+    p.add_argument("--max-repeated-literal-ratio", type=float, default=0.45)
+    p.add_argument("--min-slice-coverage", type=float, default=0.50)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--debug-every", type=int, default=25)
     p.add_argument("--force", action="store_true")
@@ -115,18 +123,25 @@ def ensure_repo_checkout(repo: str, commit: str, cache_dir: Path) -> Path:
     return repo_dir
 
 
-def parse_touched_files(patch: str) -> set[str]:
-    out: set[str] = set()
-    for line in patch.splitlines():
-        if line.startswith("+++ b/") or line.startswith("--- a/"):
-            path = line[6:]
-            if path != "/dev/null":
-                out.add(path)
-        elif line.startswith("diff --git "):
-            parts = line.split()
-            if len(parts) >= 4 and parts[2].startswith("a/"):
-                out.add(parts[2][2:])
-    return out
+def apply_unified_patch(repo_dir: Path, patch_text: str) -> bool:
+    if not patch_text.strip():
+        return True
+    commands = (
+        ["git", "-C", str(repo_dir), "apply", "--whitespace=nowarn", "-"],
+        ["git", "-C", str(repo_dir), "apply", "--3way", "--whitespace=nowarn", "-"],
+    )
+    for cmd in commands:
+        proc = subprocess.run(
+            cmd,
+            input=patch_text,
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if proc.returncode == 0:
+            return True
+    return False
 
 
 def iter_python_files(repo_dir: Path):
@@ -135,6 +150,18 @@ def iter_python_files(repo_dir: Path):
             continue
         if path.is_file():
             yield path
+
+
+def is_test_file(rel_path: str) -> bool:
+    parts = rel_path.split("/")
+    if any(part in TEST_DIR_NAMES for part in parts):
+        return True
+    filename = parts[-1] if parts else rel_path
+    return any(fnmatch.fnmatch(filename, pattern) for pattern in TEST_FILE_GLOBS)
+
+
+def is_test_function(name: str) -> bool:
+    return name.startswith("test_")
 
 
 def tree_sitter_positions(source_text: str, parser: Any | None) -> list[tuple[int, int, int]]:
@@ -291,7 +318,88 @@ def function_signature_plus_doc(function_source: str, function_name: str) -> str
     return f'{sig}\n    """{doc.strip(chr(10))}"""'
 
 
-def mask_function(source_text: str, node: ast.AST) -> tuple[str, str, str]:
+def canonicalize_indented_body(
+    body_text: str,
+    *,
+    target_indent: str,
+) -> str:
+    text = body_text.rstrip("\n")
+    if not text.strip():
+        return ""
+    lines = text.splitlines()
+    indents = [re.match(r"^\s*", ln).group(0) for ln in lines if ln.strip()]
+    common_indent = ""
+    if indents:
+        common_indent = indents[0]
+        for indent in indents[1:]:
+            common_indent = common_indent[: len(os.path.commonprefix([common_indent, indent]))]
+    out: list[str] = []
+    for line in lines:
+        if not line.strip():
+            out.append("")
+            continue
+        trimmed = line
+        if common_indent and trimmed.startswith(common_indent):
+            trimmed = trimmed[len(common_indent) :]
+        out.append(f"{target_indent}{trimmed.rstrip()}")
+    return "\n".join(out).rstrip()
+
+
+def executable_body_line_count(source_text: str, node: ast.AST) -> int:
+    lines = source_text.splitlines()
+    if not getattr(node, "body", None):
+        return 0
+    first_stmt = node.body[0]
+    keep_until = int(first_stmt.lineno) - 1
+    if isinstance(first_stmt, ast.Expr) and isinstance(getattr(first_stmt, "value", None), ast.Constant):
+        if isinstance(first_stmt.value.value, str):
+            keep_until = int(getattr(first_stmt, "end_lineno", keep_until))
+    node_end = int(getattr(node, "end_lineno", keep_until))
+    count = 0
+    for idx in range(keep_until, node_end):
+        if idx < 0 or idx >= len(lines):
+            continue
+        stripped = lines[idx].strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        count += 1
+    return count
+
+
+def quality_filter_drop(source_text: str, node: ast.AST, *, repeated_literal_ratio: float) -> str | None:
+    body = list(getattr(node, "body", []))
+    if not body:
+        return "empty_body"
+    executable_stmts = [
+        stmt
+        for stmt in body
+        if not (isinstance(stmt, ast.Expr) and isinstance(getattr(stmt, "value", None), ast.Constant) and isinstance(stmt.value.value, str))
+    ]
+    if not executable_stmts:
+        return "docstring_only"
+    if all(isinstance(stmt, (ast.Import, ast.ImportFrom, ast.Pass)) for stmt in executable_stmts):
+        return "imports_or_pass_only"
+    decorator_text = " ".join(ast.get_source_segment(source_text, dec) or "" for dec in getattr(node, "decorator_list", []))
+    lowered = decorator_text.lower()
+    if "pytest.mark.parametrize" in lowered or "pytest.fixture" in lowered:
+        return "pytest_fixture_parametrize"
+    literals = [
+        c.value
+        for c in ast.walk(node)
+        if isinstance(c, ast.Constant) and isinstance(c.value, (str, int, float, bool))
+    ]
+    if literals:
+        counts: dict[Any, int] = {}
+        for lit in literals:
+            counts[lit] = counts.get(lit, 0) + 1
+        most = max(counts.values())
+        ratio = most / max(len(literals), 1)
+        if ratio > repeated_literal_ratio:
+            return "repeated_literals"
+    return None
+
+
+def mask_function(source_text: str, node: ast.AST) -> tuple[str, str, str, int]:
     lines = source_text.splitlines(keepends=True)
     body_start = int(node.body[0].lineno)
     body_end = int(getattr(node, "end_lineno", body_start))
@@ -306,9 +414,11 @@ def mask_function(source_text: str, node: ast.AST) -> tuple[str, str, str]:
     if not indent:
         indent = re.match(r"^\s*", lines[int(node.lineno) - 1]).group(0) + "    "
     function_source = "".join(lines[int(node.lineno) - 1 : body_end])
-    ground_truth_body = "".join(lines[body_start - 1 : body_end]).rstrip()
+    ground_truth_body_raw = "".join(lines[replace_start - 1 : body_end])
+    ground_truth_body = canonicalize_indented_body(ground_truth_body_raw, target_indent=indent)
     masked_function = "".join(lines[int(node.lineno) - 1 : replace_start - 1] + [f"{indent}pass\n"]).rstrip()
-    return function_source, ground_truth_body, masked_function
+    executable_lines = executable_body_line_count(source_text, node)
+    return function_source, ground_truth_body, masked_function, executable_lines
 
 
 def file_token_count(tokenizer: Any, text: str) -> int:
@@ -444,6 +554,7 @@ def main() -> int:
     shine_items: list[dict[str, Any]] = []
     heldout: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
+    dropped_counts: dict[str, int] = {}
 
     progress = tqdm(raw_rows, desc="Building Stage 1b triples", unit="instance")
     for idx, inst in enumerate(progress, start=1):
@@ -452,6 +563,7 @@ def main() -> int:
         repo = str(inst.get("repo") or inst.get("repository") or "")
         base_commit = str(inst.get("base_commit") or inst.get("commit") or "")
         instance_id = str(inst.get("instance_id") or inst.get("id") or f"train-{idx}")
+        gold_patch = str(inst.get("patch") or inst.get("gold_patch") or "")
         if not repo or not base_commit or repo in eval_repos or instance_id in eval_ids:
             continue
         if inst.get("has_test_patch") is False or int(inst.get("num_modified_files") or 1) != 1:
@@ -462,12 +574,14 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             errors.append({"instance_id": instance_id, "repo": repo, "error": f"checkout_failed: {type(exc).__name__}"})
             continue
+        if not apply_unified_patch(repo_dir, gold_patch):
+            errors.append({"instance_id": instance_id, "repo": repo, "error": "gold_patch_apply_failed"})
+            continue
 
         candidates: list[dict[str, Any]] = []
-        touched = parse_touched_files(str(inst.get("patch") or ""))
         for py_path in iter_python_files(repo_dir):
             rel_path = py_path.relative_to(repo_dir).as_posix()
-            if rel_path in touched:
+            if is_test_file(rel_path):
                 continue
             try:
                 source = py_path.read_text(encoding="utf-8")
@@ -488,20 +602,34 @@ def main() -> int:
                 node = ast_map.get((start_line, start_col))
                 if node is None or not getattr(node, "body", None):
                     continue
+                if is_test_function(node.name):
+                    continue
+                drop_reason = quality_filter_drop(
+                    source,
+                    node,
+                    repeated_literal_ratio=args.max_repeated_literal_ratio,
+                )
+                if drop_reason is not None:
+                    dropped_counts[drop_reason] = dropped_counts.get(drop_reason, 0) + 1
+                    continue
                 body_start = int(node.body[0].lineno)
                 body_end = int(getattr(node, "end_lineno", end_line))
-                body_lines = body_end - body_start + 1
-                if body_lines < args.min_body_lines or body_lines > args.max_body_lines:
-                    continue
                 external_refs = sorted((collect_load_names(node) - collect_local_defs(node) - {node.name}) & defined)
-                if not external_refs:
+                if len(external_refs) < args.min_external_refs or len(external_refs) > args.max_external_refs:
+                    dropped_counts["external_ref_count"] = dropped_counts.get("external_ref_count", 0) + 1
                     continue
-                function_source, ground_truth_body, masked_function = mask_function(source, node)
+                function_source, ground_truth_body, masked_function, executable_lines = mask_function(source, node)
+                if executable_lines < args.min_body_lines or executable_lines > args.max_body_lines:
+                    dropped_counts["executable_line_count"] = dropped_counts.get("executable_line_count", 0) + 1
+                    continue
+                if not ground_truth_body.strip():
+                    dropped_counts["empty_ground_truth_body"] = dropped_counts.get("empty_ground_truth_body", 0) + 1
+                    continue
                 row = {
                     "instance_id": instance_id,
                     "repo": repo,
                     "base_commit": base_commit,
-                    "gold_patch": str(inst.get("patch") or inst.get("gold_patch") or ""),
+                    "gold_patch": gold_patch,
                     "test_patch": str(inst.get("test_patch") or ""),
                     "docker_image": str(inst.get("docker_image") or ""),
                     "test_cmd": str(inst.get("test_cmd") or inst.get("test_command") or ""),
@@ -509,7 +637,21 @@ def main() -> int:
                     "function_name": node.name,
                     "start_line": start_line,
                     "end_line": end_line,
-                    "body_line_count": body_lines,
+                    "target_metadata": {
+                        "file_path": rel_path,
+                        "function_name": node.name,
+                        "start_line": start_line,
+                        "end_line": end_line,
+                    },
+                    "swe_metadata": {
+                        "instance_id": instance_id,
+                        "repo": repo,
+                        "base_commit": base_commit,
+                        "gold_patch": gold_patch,
+                        "test_patch": str(inst.get("test_patch") or ""),
+                    },
+                    "body_line_count": body_end - body_start + 1,
+                    "executable_body_line_count": executable_lines,
                     "file_token_count": tok_count,
                     "external_reference_count": len(external_refs),
                     "external_references": external_refs,
@@ -531,6 +673,9 @@ def main() -> int:
         )
         for cand in candidates[: args.max_functions_per_instance]:
             slice_art = build_slice(cand, tokenizer, args.context_max_tokens)
+            if slice_art.coverage_fraction < args.min_slice_coverage:
+                dropped_counts["slice_coverage"] = dropped_counts.get("slice_coverage", 0) + 1
+                continue
             sig_doc = function_signature_plus_doc(cand["function_source"], cand["function_name"])
             masked_function = cand["masked_function"]
             question = make_question(sig_doc, masked_function)
@@ -554,6 +699,7 @@ def main() -> int:
             rec = {
                 **{k: v for k, v in cand.items() if k not in {"full_file"}},
                 "masked_function": masked_function,
+                "target_format": "indented_body_lines_only",
                 "question": question,
                 "slice_context": slice_art.context_text,
                 "slice_token_count": slice_art.token_count,
@@ -580,12 +726,14 @@ def main() -> int:
         "n_heldout": len(heldout),
         "n_source_rows_seen": len(raw_rows),
         "n_errors": len(errors),
+        "n_candidates_dropped": int(sum(dropped_counts.values())),
         "repo_disjoint_eval_repos": len(eval_repos),
         "output_shine_json": str(args.output_shine_json),
         "output_records_jsonl": str(args.output_records_jsonl),
         "output_heldout_jsonl": str(args.output_heldout_jsonl),
         "config": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
         | {"eval_repos_excluded": sorted(eval_repos)[:50]},
+        "dropped_counts": dropped_counts,
         "errors_sample": errors[:20],
     }
     write_json(args.output_summary_json, summary)

@@ -22,7 +22,7 @@ Useful knobs:
 MODE=build MAX_TRIPLES=1500 HELDOUT=20 stage-1b/scripts/run_stage1b.sh --force
 ```
 
-The builder filters SWE-rebench training rows to be repo-disjoint from the Stage 0/1 held-out set, applies the same basic function filters as Stage 0, and uses the same Stage 1a slicing structure.
+The builder filters SWE-rebench training rows to be repo-disjoint from the Stage 0/1 held-out set, checks out each repo at `base_commit`, applies the instance `gold_patch`, and mines completion targets from the fixed code state. It excludes test files/functions, keeps docstrings in masked inputs while training targets are executable-body-only, and uses stricter quality filters (reference coverage, bounded function size, boilerplate rejection) plus the Stage 1a slicing structure.
 
 ## Train
 
@@ -68,6 +68,6 @@ cd src
 MODE=full-eval stage-1b/scripts/run_stage1b.sh --force
 ```
 
-This builds SWE-rebench harness submissions from `outputs/stage1b_predictions.jsonl`, runs Docker-backed tests, and writes `outputs/stage1b_full_eval.per_instance.csv` plus `outputs/stage1b_full_eval.summary.json`. Because Stage 1b may evaluate several candidate functions from the same SWE-rebench instance, the evaluator automatically splits submissions into batches with unique `instance_id`s.
+This builds SWE-rebench harness submissions from `outputs/stage1b_predictions.jsonl`, runs Docker-backed tests, and writes `outputs/stage1b_full_eval.per_instance.csv` plus `outputs/stage1b_full_eval.summary.json`. Each submission combines `gold_patch` with the reconstructed-function patch, so pass@1 means "the fixed repo still passes after replacing the removed function." Because Stage 1b may evaluate several candidate functions from the same SWE-rebench instance, the evaluator automatically splits submissions into batches with unique `instance_id`s.
 
 Older Stage 1b prediction files may not contain the original SWE-rebench gold patch. The full evaluator backfills it from `nebius/SWE-rebench-leaderboard` by default so tests run with the issue fix plus the candidate function replacement. Use `--no-dataset-metadata` only if you intentionally want to evaluate without that backfill.

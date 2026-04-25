@@ -6,6 +6,7 @@ import ast
 import csv
 import json
 import math
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -105,6 +106,103 @@ def make_signature(masked_function: str) -> str:
     return "\n".join(lines).rstrip()
 
 
+def _line_indent(line: str) -> str:
+    m = re.match(r"^\s*", line)
+    return "" if m is None else m.group(0)
+
+
+def _target_body_indent(masked_function: str) -> str:
+    lines = masked_function.splitlines()
+    if not lines:
+        return "    "
+    last = lines[-1]
+    if last.strip() == "pass":
+        return _line_indent(last) or "    "
+    return "    "
+
+
+def _find_function_node(
+    full_file: str,
+    *,
+    start_line: int,
+    function_name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    try:
+        tree = ast.parse(full_file)
+    except SyntaxError:
+        return None
+
+    best: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if function_name and node.name != function_name:
+            continue
+        decorator_start = min(
+            [getattr(dec, "lineno", node.lineno) for dec in node.decorator_list],
+            default=node.lineno,
+        )
+        end_line = int(getattr(node, "end_lineno", node.lineno))
+        if node.lineno == start_line or decorator_start <= start_line <= end_line:
+            return node
+        if best is None:
+            best = node
+    return best
+
+
+def _target_body_indent_from_full_file(
+    full_file: str,
+    *,
+    start_line: int,
+    function_name: str,
+    masked_function: str,
+) -> str:
+    node = _find_function_node(full_file, start_line=start_line, function_name=function_name)
+    lines = full_file.splitlines()
+    if node is not None and getattr(node, "body", None):
+        body_line_idx = int(node.body[0].lineno) - 1
+        if 0 <= body_line_idx < len(lines):
+            indent = _line_indent(lines[body_line_idx])
+            if indent:
+                return indent
+    return _target_body_indent(masked_function)
+
+
+def normalize_body_prediction(
+    predicted_body: str,
+    masked_function: str,
+    *,
+    target_indent: str | None = None,
+) -> str:
+    text = predicted_body.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n", "", text)
+        text = re.sub(r"\n```$", "", text)
+
+    lines = text.splitlines()
+    while lines and lines[0].strip().lower().startswith(("here's", "the function", "###", "---")):
+        lines = lines[1:]
+
+    target_indent = target_indent or _target_body_indent(masked_function)
+    indents = [_line_indent(line) for line in lines if line.strip()]
+    common_indent = ""
+    if indents:
+        common_indent = indents[0]
+        for indent in indents[1:]:
+            common_indent = os.path.commonprefix([common_indent, indent])
+
+    out: list[str] = []
+    for line in lines:
+        if not line.strip():
+            out.append("")
+            continue
+        trimmed = line
+        if common_indent and line.startswith(common_indent):
+            trimmed = line[len(common_indent) :]
+        out.append(f"{target_indent}{trimmed.rstrip()}")
+    return "\n".join(out).rstrip()
+
+
 def syntax_is_valid(masked_function: str, body: str) -> bool:
     signature = make_signature(masked_function)
     src = signature + "\n" + body.rstrip() + "\n"
@@ -137,9 +235,16 @@ def main() -> int:
     rows = [r for r in read_jsonl(args.predictions_jsonl) if r.get("status", "ok") == "ok"]
     per_instance: list[dict[str, Any]] = []
     for row in rows:
-        pred = normalize_text(str(row.get("predicted_body", "")))
-        ref = normalize_text(str(row.get("ground_truth_body", "")))
         masked = str(row.get("masked_function", ""))
+        full_file = str(row.get("full_file", ""))
+        target_indent = _target_body_indent_from_full_file(
+            full_file,
+            start_line=int(row.get("start_line") or 1),
+            function_name=str(row.get("function_name", "")),
+            masked_function=masked,
+        )
+        pred = normalize_text(normalize_body_prediction(str(row.get("predicted_body", "")), masked, target_indent=target_indent))
+        ref = normalize_text(str(row.get("ground_truth_body", "")))
         per_instance.append(
             {
                 "instance_id": row.get("instance_id", ""),
