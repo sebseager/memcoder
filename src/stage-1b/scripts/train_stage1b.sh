@@ -87,6 +87,46 @@ new = '''    elif cfg.data.source == "ift-c1qa":
 '''
 if old not in text:
     raise SystemExit("Could not patch SHINE ift-c1qa validation branch")
+text = text.replace(old, new)
+
+# Upstream's optimizer filter only excludes "module.metamodel", which is the
+# DDP-prefixed name. With NUM_GPUS=1, frozen base-model params are named
+# "metamodel..." and were accidentally added to AdamW.
+old = '''    grouped_params = [
+        {
+            "params": [p for n, p in ddp_metanet.named_parameters() if (not any(nd in n for nd in no_decay) and not n.startswith("module.metamodel"))],
+            "weight_decay": cfg.optim.weight_decay,
+        },
+        {
+            "params": [p for n, p in ddp_metanet.named_parameters() if (any(nd in n for nd in no_decay) and not n.startswith("module.metamodel"))],
+            "weight_decay": 0.0,
+        },
+        {
+            "params": list(iter_learnable_tensors(metalora) if not USE_ADDITIONAL_METALORA else iter_learnable_tensors(ift_additional_metalora)),
+            "weight_decay": cfg.optim.weight_decay,
+        }
+        # mem_tokens are already part of metanetwork's parameters
+    ]
+'''
+new = '''    named_trainable_params = [(n, p) for n, p in ddp_metanet.named_parameters() if p.requires_grad]
+    grouped_params = [
+        {
+            "params": [p for n, p in named_trainable_params if not any(nd in n for nd in no_decay)],
+            "weight_decay": cfg.optim.weight_decay,
+        },
+        {
+            "params": [p for n, p in named_trainable_params if any(nd in n for nd in no_decay)],
+            "weight_decay": 0.0,
+        },
+        {
+            "params": list(iter_learnable_tensors(metalora) if not USE_ADDITIONAL_METALORA else iter_learnable_tensors(ift_additional_metalora)),
+            "weight_decay": cfg.optim.weight_decay,
+        }
+        # mem_tokens are already part of metanetwork's parameters
+    ]
+'''
+if old not in text:
+    raise SystemExit("Could not patch SHINE optimizer parameter grouping")
 path.write_text(text.replace(old, new), encoding="utf-8")
 PY
 
