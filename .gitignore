@@ -8,3 +8,5 @@ experiments/dyprag_exp1_condition_*.json
 src/stage-0/cache/
 src/stage-1a/checkpoints/
 src/stage-1a/models/
+src/stage-1b/checkpoints/
+src/stage-1b/shine_work/

@@ -28,7 +28,7 @@ The builder filters SWE-rebench training rows to be repo-disjoint from the Stage
 
 ```bash
 cd src
-MODE=train NUM_GPUS=4 stage-1b/scripts/run_stage1b.sh
+MODE=train NUM_GPUS=1 stage-1b/scripts/run_stage1b.sh
 ```
 
 Defaults are one epoch and `lr=1e-5`. The script creates a writable SHINE overlay at `stage-1b/shine_work`, points `data/ift_c1qa.json` to the Stage 1b training JSON, points the required `iftpwc` checkpoint to Stage 1a, and writes new checkpoints under Stage 1b.
