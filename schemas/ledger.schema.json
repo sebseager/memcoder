@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memcoder.local/schemas/ledger.schema.json",
+  "title": "MemCoder artifact ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documents"],
+  "properties": {
+    "documents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["document_id", "difficulty", "topic", "files"],
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["easy", "medium", "hard"]
+          },
+          "topic": {
+            "type": "string"
+          },
+          "topic_slug": {
+            "type": "string"
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["doc", "doc_embedding", "lora", "qa", "qa_examples"],
+            "properties": {
+              "doc": {
+                "type": "string",
+                "pattern": "^(easy|medium|hard)/docs/[^/]+\\.json$"
+              },
+              "doc_embedding": {
+                "type": "null"
+              },
+              "lora": {
+                "type": ["string", "null"],
+                "pattern": "^(easy|medium|hard)/loras/[^/]+\\.pt$"
+              },
+              "lora_variants": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "pattern": "^(easy|medium|hard)/loras/[^/]+\\.pt$"
+                }
+              },
+              "qa": {
+                "type": "string",
+                "pattern": "^(easy|medium|hard)/qas/[^/]+\\.json$"
+              },
+              "qa_examples": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

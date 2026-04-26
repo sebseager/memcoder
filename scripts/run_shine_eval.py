@@ -701,6 +701,89 @@ def _save_lora_dict(base_path: Path, label: str, lora_dict: Any, multi: bool) ->
     return out
 
 
+def _artifact_relative(path: Path, anchor: Path) -> str:
+    try:
+        return path.resolve().relative_to(anchor.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _difficulty_dir_from_doc_path(design_doc_path: Path) -> Path | None:
+    if design_doc_path.parent.name != "docs":
+        return None
+    return design_doc_path.parent.parent
+
+
+def _repo_dir_from_doc_path(design_doc_path: Path) -> Path | None:
+    difficulty_dir = _difficulty_dir_from_doc_path(design_doc_path)
+    if difficulty_dir is None:
+        return None
+    return difficulty_dir.parent
+
+
+def update_ledger(
+    *,
+    design_doc_path: Path,
+    qa_pairs_path: Path,
+    doc_metadata: dict[str, Any],
+    saved_lora_paths: list[tuple[str, Path]],
+) -> Path | None:
+    """Refresh the repo-level ledger.json with canonical artifact paths."""
+    if not saved_lora_paths:
+        return None
+
+    difficulty_dir = _difficulty_dir_from_doc_path(design_doc_path)
+    repo_dir = _repo_dir_from_doc_path(design_doc_path)
+    if difficulty_dir is None or repo_dir is None:
+        LOGGER.warning("Could not infer artifact repo directory from %s", design_doc_path)
+        return None
+
+    document_id = doc_metadata.get("document_id") or design_doc_path.stem
+    difficulty = doc_metadata.get("difficulty") or difficulty_dir.name
+    ledger_path = repo_dir / "ledger.json"
+
+    if ledger_path.exists():
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        if not isinstance(ledger, dict):
+            raise ValueError(f"Ledger must be a JSON object: {ledger_path}")
+    else:
+        ledger = {}
+
+    documents = ledger.get("documents")
+    if not isinstance(documents, dict):
+        documents = {}
+
+    files: dict[str, Any] = {
+        "doc": _artifact_relative(design_doc_path, repo_dir),
+        "doc_embedding": None,
+        "qa": _artifact_relative(qa_pairs_path, repo_dir),
+        "qa_examples": None,
+    }
+    if len(saved_lora_paths) == 1:
+        files["lora"] = _artifact_relative(saved_lora_paths[0][1], repo_dir)
+    else:
+        files["lora"] = None
+        files["lora_variants"] = {
+            label: _artifact_relative(path, repo_dir)
+            for label, path in saved_lora_paths
+        }
+
+    entry: dict[str, Any] = {
+        "document_id": document_id,
+        "difficulty": difficulty,
+        "topic": doc_metadata.get("topic"),
+        "files": files,
+    }
+    if doc_metadata.get("topic_slug"):
+        entry["topic_slug"] = doc_metadata["topic_slug"]
+
+    documents[document_id] = entry
+    ledger = {"documents": documents}
+    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    LOGGER.info("Updated artifact ledger at %s", ledger_path)
+    return ledger_path
+
+
 def select_variants_to_load(
     parsed_conditions: list[tuple[str, str | None]],
     shine_specs: list[dict[str, Any]],
@@ -774,6 +857,7 @@ def main() -> int:
     # the metamodel's mem_tokens state no longer matters.
     variants_to_load = select_variants_to_load(parsed_conditions, shine_specs)
     shine_runs: list[dict[str, Any]] = []
+    saved_lora_paths: list[tuple[str, Path]] = []
     for spec in variants_to_load:
         variant = attach_shine_variant(
             metamodel=metamodel,
@@ -795,10 +879,23 @@ def main() -> int:
             args.context_max_length,
         )
         if args.save_lora_dict is not None:
-            _save_lora_dict(args.save_lora_dict, spec["label"], variant["lora_dict"], multi=multi_mode)
+            saved_path = _save_lora_dict(
+                args.save_lora_dict,
+                spec["label"],
+                variant["lora_dict"],
+                multi=multi_mode,
+            )
+            saved_lora_paths.append((spec["label"], saved_path))
         # Free hypernet + metalora; keep only what QA generation and metadata need.
         release_variant_runtime(variant)
         shine_runs.append(variant)
+
+    update_ledger(
+        design_doc_path=args.design_doc,
+        qa_pairs_path=args.qa_pairs,
+        doc_metadata=doc_metadata,
+        saved_lora_paths=saved_lora_paths,
+    )
 
     # Expand conditions for the QA loop. Always emits "shine:<label>" so the
     # output schema is uniform across single- and multi-mode runs.

@@ -30,12 +30,13 @@ Overview / purpose
 ```text
 artifacts/
   antirez__kilo/
+    repo.json
+    ledger.json
     easy/
       docs/
       qas/
       loras/
       ledger.md
-      lora_store.json
       eval_results.jsonl
 ```
 
@@ -46,7 +47,8 @@ artifacts/
 - [x] Define the design document schema.
 - [x] Define the QA pair schema.
 - [x] Define the ledger entry schema.
-- [x] Define the LoRA store entry schema.
+- [x] Define the artifact ledger schema.
+- [x] Define the repo metadata schema.
 - [x] Define the evaluation result log schema.
 - [x] Decide whether schemas live as JSON Schema files, documented examples, or both.
 
@@ -66,7 +68,7 @@ artifacts/
 - [ ] Generate doc-derived QA pairs from only that design document.
 - [ ] Generate ledger example questions from the same document, disjoint from eval QAs.
 - [ ] Write `ledger.md` for the single LoRA.
-- [ ] Write `lora_store.json` for the single LoRA.
+- [ ] Write `ledger.json` for the single LoRA.
 
 ## SHINE And Model Integration
 
