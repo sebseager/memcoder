@@ -44,6 +44,7 @@ torch = None
 OmegaConf = None
 AutoTokenizer = None
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CUDA_DEFAULT_DEVICE = 0
 
 
 def import_runtime_deps() -> None:
@@ -413,10 +414,10 @@ def resolve_qwen_device(args: argparse.Namespace, multi_mode: bool) -> "torch.de
     if requested == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError("--device cuda was requested but CUDA is unavailable")
-        return torch.device("cuda")
+        return torch.device(f"cuda:{CUDA_DEFAULT_DEVICE}")
     if requested == "cpu":
         return torch.device("cpu")
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(f"cuda:{CUDA_DEFAULT_DEVICE}" if torch.cuda.is_available() else "cpu")
 
 
 def extract_think_and_answer(text: str) -> tuple[str, str]:
@@ -748,7 +749,10 @@ def main() -> int:
             spec["hyper_device"] = qwen_device
 
     if torch.cuda.is_available() and qwen_device.type == "cuda":
-        torch.cuda.set_device(qwen_device)
+        # set_device requires an explicit CUDA index.
+        torch.cuda.set_device(
+            qwen_device.index if qwen_device.index is not None else CUDA_DEFAULT_DEVICE
+        )
 
     document, doc_metadata = load_design_doc(args.design_doc)
     qa_pairs = load_qa_pairs(args.qa_pairs)
