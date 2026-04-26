@@ -23,21 +23,21 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import (
+from memcoder.old.experiments.dyprag.exp_1.config import (
     BUDGET_TOKENS,
     ENABLE_THINKING,
     ORACLE_LORA_DIR,
 )
-from generate_patches import parse_search_replace_blocks, search_replace_to_diff
-from helpers import (
+from memcoder.old.experiments.dyprag.exp_1.generate_patches import parse_search_replace_blocks, search_replace_to_diff
+from memcoder.old.experiments.dyprag.exp_1.helpers import (
     get_file_content_for_instance,
     load_base_model,
     load_swebench_dataset,
     load_token_counts,
     truncate_to_budget,
 )
-from prompts import SYSTEM_PROMPT_SEARCH_REPLACE, make_user_prompt
-from train_oracle import train_one_oracle
+from memcoder.old.experiments.dyprag.exp_1.prompts import SYSTEM_PROMPT_SEARCH_REPLACE, make_user_prompt
+from memcoder.old.experiments.dyprag.exp_1.train_oracle import train_one_oracle
 
 TINY_DIR = Path(__file__).resolve().parent / "results" / "tiny"
 

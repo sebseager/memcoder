@@ -20,8 +20,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import ANALYSIS_DIR, CONDITION_LABELS, CONDITIONS, EVAL_DIR, PATCHES_DIR
-from helpers import load_subsets, load_swebench_dataset, load_token_counts
+from memcoder.old.experiments.dyprag.exp_1.config import ANALYSIS_DIR, CONDITION_LABELS, CONDITIONS, EVAL_DIR, PATCHES_DIR
+from memcoder.old.experiments.dyprag.exp_1.helpers import load_subsets, load_swebench_dataset, load_token_counts
 
 
 def load_eval_results(condition: str) -> dict | None:

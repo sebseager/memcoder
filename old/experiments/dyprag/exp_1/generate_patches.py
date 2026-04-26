@@ -28,7 +28,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import (
+from memcoder.old.experiments.dyprag.exp_1.config import (
     BUDGET_TOKENS,
     ENABLE_THINKING,
     GENERATION_MAX_ATTEMPTS,
@@ -42,7 +42,7 @@ from config import (
     TEMPERATURE,
     TOP_P,
 )
-from helpers import (
+from memcoder.old.experiments.dyprag.exp_1.helpers import (
     get_file_content_for_instance,
     load_base_model,
     load_subsets,
@@ -51,7 +51,7 @@ from helpers import (
     truncate_to_budget,
 )
 from peft import PeftModel
-from prompts import (
+from memcoder.old.experiments.dyprag.exp_1.prompts import (
     SYSTEM_PROMPT_SEARCH_REPLACE,
     SYSTEM_PROMPT_UNIFIED_DIFF,
     make_user_prompt,

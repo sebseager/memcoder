@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import torch
-from config import (
+from memcoder.old.experiments.dyprag.exp_1.config import (
     BUDGET_TOKENS,
     FILE_CACHE_DIR,
     LORA_ALPHA,

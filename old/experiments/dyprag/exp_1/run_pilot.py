@@ -21,11 +21,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import (
+from memcoder.old.experiments.dyprag.exp_1.config import (
     CONDITIONS,
     RESULTS_DIR,
 )
-from helpers import load_subsets, load_token_counts
+from memcoder.old.experiments.dyprag.exp_1.helpers import load_subsets, load_token_counts
 
 PILOT_IDS_FILE = Path(__file__).resolve().parent / "pilot_ids.txt"
 

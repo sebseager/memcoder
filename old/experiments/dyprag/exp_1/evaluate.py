@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import EVAL_DIR, PATCHES_DIR, SWEBENCH_DATASET, SWEBENCH_SPLIT
+from memcoder.old.experiments.dyprag.exp_1.config import EVAL_DIR, PATCHES_DIR, SWEBENCH_DATASET, SWEBENCH_SPLIT
 
 
 def main():

@@ -30,7 +30,7 @@ from transformers import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import (
+from memcoder.old.experiments.dyprag.exp_1.config import (
     LOSS_CURVES_DIR,
     ORACLE_BATCH_SIZE,
     ORACLE_CHUNK_SIZE,
@@ -42,7 +42,7 @@ from config import (
     ORACLE_PATIENCE,
     SEED,
 )
-from helpers import (
+from memcoder.old.experiments.dyprag.exp_1.helpers import (
     cycle_lora,
     get_file_content_for_instance,
     load_base_model,

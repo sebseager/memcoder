@@ -24,8 +24,8 @@ from peft import PeftModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import CAPABILITY_DIR, ENABLE_THINKING, ORACLE_LORA_DIR, SEED
-from helpers import load_base_model, load_subsets
+from memcoder.old.experiments.dyprag.exp_1.config import CAPABILITY_DIR, ENABLE_THINKING, ORACLE_LORA_DIR, SEED
+from memcoder.old.experiments.dyprag.exp_1.helpers import load_base_model, load_subsets
 
 PROBES = [
     {"prompt": "Reply with exactly: ALPHA", "expected": "ALPHA"},
