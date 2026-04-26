@@ -1,0 +1,26 @@
+{
+  "repo_id": "antirez__kilo",
+  "commit": "323d93b29bd89a2cb446de90c4ed4fea1764176e",
+  "document_id": "overview_purpose_1",
+  "topic": "Overview / Purpose",
+  "topic_slug": "overview_purpose",
+  "difficulty": "easy",
+  "generator": "manual_smoke_seed",
+  "prompt_version": "doc_derived_qa_generation_v0",
+  "qa_pairs": [
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0001",
+      "question": "What is kilo and what is its intended purpose?",
+      "answer": "Kilo is a very small terminal text editor in under 1K lines of C, intended as a simple, hackable starting point for building more advanced editors or terminal interfaces.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0002",
+      "question": "Which three keyboard shortcuts are emphasized in kilo's overview?",
+      "answer": "Ctrl-S saves, Ctrl-Q quits, and Ctrl-F searches.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    }
+  ]
+}

@@ -25,7 +25,7 @@ Overview / purpose
 - [x] Document the `target_repos/{owner}__{repo}` convention.
 - [x] Create a `prompts/` directory for standardized generator prompts.
 - [x] Create a reusable config directory with a starter SHINE eval config.
-- [ ] Create the initial artifact directory layout:
+- [x] Create the initial artifact directory layout:
 
 ```text
 artifacts/
@@ -39,16 +39,16 @@ artifacts/
       eval_results.jsonl
 ```
 
-- [ ] Record the source repo identity in the generated artifacts.
+- [x] Record the source repo identity in the generated artifacts.
 
 ## Schemas
 
-- [ ] Define the design document schema.
-- [ ] Define the QA pair schema.
-- [ ] Define the ledger entry schema.
-- [ ] Define the LoRA store entry schema.
-- [ ] Define the evaluation result log schema.
-- [ ] Decide whether schemas live as JSON Schema files, documented examples, or both.
+- [x] Define the design document schema.
+- [x] Define the QA pair schema.
+- [x] Define the ledger entry schema.
+- [x] Define the LoRA store entry schema.
+- [x] Define the evaluation result log schema.
+- [x] Decide whether schemas live as JSON Schema files, documented examples, or both.
 
 ## Prompts
 
@@ -56,13 +56,13 @@ artifacts/
 - [x] Add a design document generation prompt template.
 - [x] Add a doc-derived QA generation prompt template.
 - [x] Add a ledger example question generation prompt template.
-- [ ] Add prompt version identifiers to all generated artifacts.
-- [ ] Run one prompt pass manually on `antirez__kilo` and inspect quality before automation.
+- [x] Add prompt version identifiers to all generated artifacts.
+- [x] Run one prompt pass manually on `antirez__kilo` and inspect quality before automation.
 
 ## Document And QA Generation
 
-- [ ] Generate the first easy design document for `Overview / purpose`.
-- [ ] Keep the design document under the SHINE context limit.
+- [x] Generate the first easy design document for `Overview / purpose`.
+- [x] Keep the design document under the SHINE context limit.
 - [ ] Generate doc-derived QA pairs from only that design document.
 - [ ] Generate ledger example questions from the same document, disjoint from eval QAs.
 - [ ] Write `ledger.md` for the single LoRA.
