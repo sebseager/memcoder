@@ -3,13 +3,25 @@
 
 This script adapts the flow from `vendor/SHINE/inference.ipynb` into a CLI:
 
-- load Qwen + the SHINE metanetwork checkpoint
-- generate a LoRA dictionary from one design document
-- run generated QA pairs under three conditions:
-  - `naive`: question only
-  - `in_context`: design document in the prompt
-  - `shine`: generated LoRA loaded, no document in the prompt
+- load Qwen + the SHINE metanetwork checkpoint(s)
+- generate one LoRA dictionary per checkpoint from one design document
+- run generated QA pairs under conditions:
+  - `naive`:        question only
+  - `in_context`:   design document in the prompt
+  - `shine`:        expands to every configured checkpoint variant
+  - `shine:<label>`: a single named variant
 - write one JSONL record per question/condition
+
+Output schema:
+  - <output>            : JSONL, one record per (qa, condition); slim metadata only.
+  - <output>.meta.json  : sidecar with the full run metadata, joined by `run_id`.
+  - the `condition` field is always `naive`, `in_context`, or `shine:<label>`.
+    Legacy single-checkpoint runs use the label `default`.
+
+Single-GPU mode: pass `--checkpoint-dir DIR` plus `--device {auto,cuda,cpu}`.
+Multi-GPU mode: pass `--qwen-cuda N` plus repeatable
+`--shine-checkpoint label=NAME,path=DIR,cuda=M` flags (or
+`memcoder_eval.shine_checkpoints` in the YAML).
 """
 
 from __future__ import annotations
@@ -21,6 +33,7 @@ import logging
 import os
 import re
 import sys
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -58,7 +71,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint-dir",
         type=Path,
-        help="Checkpoint directory containing metanetwork.pth and metalora.pth.",
+        help="Single-checkpoint mode: directory containing metanetwork.pth and metalora.pth.",
+    )
+    parser.add_argument(
+        "--shine-checkpoint",
+        action="append",
+        default=[],
+        metavar="label=NAME,path=DIR[,cuda=N]",
+        help=(
+            "Multi-checkpoint mode (repeatable). Each occurrence adds a SHINE "
+            "checkpoint as its own condition (`shine:<label>`) hosted on its own GPU. "
+            "Requires --qwen-cuda."
+        ),
+    )
+    parser.add_argument(
+        "--qwen-cuda",
+        type=int,
+        default=None,
+        help="GPU index for the shared Qwen base model when --shine-checkpoint is used.",
     )
     parser.add_argument(
         "--model-path",
@@ -68,13 +98,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--save-lora-dict",
         type=Path,
-        help="Optional path to save the generated LoRA dictionary with torch.save.",
+        help=(
+            "Optional path to save generated LoRA dictionaries with torch.save. "
+            "In multi-checkpoint mode, the variant label is appended to the stem."
+        ),
     )
     parser.add_argument(
         "--conditions",
         nargs="+",
         default=None,
-        choices=["naive", "in_context", "shine"],
+        help="One or more of: naive | in_context | shine | shine:<label>",
     )
     parser.add_argument("--device", choices=["auto", "cuda", "cpu"])
     parser.add_argument("--context-max-length", type=int)
@@ -95,6 +128,23 @@ def parse_args() -> argparse.Namespace:
         help="OmegaConf dotlist override, e.g. --set model.lora_r=8.",
     )
     return parser.parse_args()
+
+
+def parse_condition_token(token: str) -> tuple[str, str | None]:
+    """Parse a condition string into (kind, label).
+
+    Returns (kind, None) for naive | in_context | bare-shine and
+    ("shine", label) for shine:<label>.
+    """
+    if token in ("naive", "in_context"):
+        return token, None
+    if token == "shine":
+        return "shine", None
+    if token.startswith("shine:") and len(token) > len("shine:"):
+        return "shine", token[len("shine:") :]
+    raise ValueError(
+        f"Unknown condition: {token!r}; expected naive | in_context | shine | shine:<label>"
+    )
 
 
 def load_json_or_text(path: Path) -> Any:
@@ -173,6 +223,44 @@ def setup_shine_imports(shine_root: Path) -> None:
     sys.path.insert(0, str(shine_root))
 
 
+def _parse_kv_string(spec: str) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for token in spec.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "=" not in token:
+            raise ValueError(f"Expected key=value tokens in {spec!r}")
+        key, value = token.split("=", 1)
+        parts[key.strip()] = value.strip()
+    return parts
+
+
+def parse_shine_checkpoint_spec(spec: Any) -> dict[str, Any]:
+    if isinstance(spec, str):
+        parts = _parse_kv_string(spec)
+    elif isinstance(spec, dict):
+        parts = {str(k): str(v) for k, v in spec.items()}
+    else:
+        try:
+            parts = {str(k): str(v) for k, v in dict(spec).items()}
+        except Exception as e:
+            raise ValueError(f"Cannot parse shine checkpoint spec: {spec!r}") from e
+
+    if "label" not in parts:
+        raise ValueError(f"shine checkpoint spec missing 'label': {spec!r}")
+    if "path" not in parts:
+        raise ValueError(f"shine checkpoint spec missing 'path': {spec!r}")
+
+    out: dict[str, Any] = {
+        "label": parts["label"],
+        "path": Path(parts["path"]),
+    }
+    if "cuda" in parts and parts["cuda"] != "":
+        out["cuda"] = int(parts["cuda"])
+    return out
+
+
 def load_config(args: argparse.Namespace):
     cfg = OmegaConf.load(args.config)
     if args.overrides:
@@ -206,6 +294,13 @@ def load_config(args: argparse.Namespace):
     )
     args.seed = args.seed or int(eval_cfg.get("seed", cfg.run.get("seed", 42)))
 
+    if args.qwen_cuda is None and "qwen_cuda" in eval_cfg:
+        args.qwen_cuda = int(eval_cfg.get("qwen_cuda"))
+
+    yaml_shine = eval_cfg.get("shine_checkpoints", None)
+    if not args.shine_checkpoint and yaml_shine:
+        args.shine_checkpoint = list(yaml_shine)
+
     missing = [
         name
         for name in ("design_doc", "qa_pairs", "output")
@@ -231,7 +326,59 @@ def load_config(args: argparse.Namespace):
     return cfg
 
 
-def resolve_device(requested: str) -> torch.device:
+def resolve_shine_specs(args: argparse.Namespace) -> tuple[list[dict[str, Any]], bool]:
+    """Return (specs, multi_mode).
+
+    Multi-mode: each spec carries its own hyper_device.
+    Legacy single-mode: one spec with label='default' and hyper_device=None
+    (filled in later from qwen_device).
+    """
+    multi = [parse_shine_checkpoint_spec(s) for s in args.shine_checkpoint]
+    if multi:
+        if args.checkpoint_dir is not None:
+            LOGGER.warning(
+                "Both --checkpoint-dir and --shine-checkpoint are configured; "
+                "--checkpoint-dir is being ignored."
+            )
+            args.checkpoint_dir = None
+        if args.qwen_cuda is None:
+            raise ValueError(
+                "--qwen-cuda is required when --shine-checkpoint is used; "
+                "the shared Qwen base must live on a GPU distinct from each hypernetwork."
+            )
+        used_cuda = {args.qwen_cuda}
+        seen_labels: set[str] = set()
+        for spec in multi:
+            if "cuda" not in spec:
+                raise ValueError(
+                    f"shine checkpoint {spec['label']!r} is missing 'cuda='. Each "
+                    "hypernetwork must live on its own GPU in multi-checkpoint mode."
+                )
+            if spec["cuda"] in used_cuda:
+                raise ValueError(
+                    f"shine checkpoint {spec['label']!r} requests cuda:{spec['cuda']} "
+                    "which is already in use by another component."
+                )
+            if spec["label"] in seen_labels:
+                raise ValueError(f"duplicate shine checkpoint label: {spec['label']!r}")
+            used_cuda.add(spec["cuda"])
+            seen_labels.add(spec["label"])
+            spec["hyper_device"] = torch.device(f"cuda:{spec['cuda']}")
+        return multi, True
+
+    if args.checkpoint_dir is not None:
+        return (
+            [{"label": "default", "path": args.checkpoint_dir, "hyper_device": None}],
+            False,
+        )
+
+    return [], False
+
+
+def resolve_qwen_device(args: argparse.Namespace, multi_mode: bool) -> "torch.device":
+    if multi_mode:
+        return torch.device(f"cuda:{args.qwen_cuda}")
+    requested = args.device
     if requested == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError("--device cuda was requested but CUDA is unavailable")
@@ -262,11 +409,38 @@ def extract_think_and_answer(text: str) -> tuple[str, str]:
     return think, answer
 
 
-def load_shine_runtime(cfg: Any, args: argparse.Namespace, device: torch.device):
-    from metanetwork_family import Metanetwork
-    from utils.myfreeze import freeze
+def _bridge_generate_lora_dict(metanetwork: Any, qwen_device: "torch.device", hyper_device: "torch.device") -> None:
+    """Patch metanetwork.generate_lora_dict so memory_states/plain_output bridge devices.
+
+    No-op when both devices are equal (single-GPU legacy path).
+    """
+    if qwen_device == hyper_device:
+        return
+
+    def generate_lora_dict_split(self, evidence_ids, evidence_attention_mask, metalora,
+                                 use_gradient_checkpoint=False, return_plain=False):
+        evidence_ids = evidence_ids.to(qwen_device)
+        evidence_attention_mask = evidence_attention_mask.to(qwen_device)
+        outputs = self.metamodel(
+            input_ids=evidence_ids,
+            attention_mask=evidence_attention_mask,
+            loradict=metalora,
+            use_gradient_checkpoint=use_gradient_checkpoint,
+        )
+        memory_states = outputs.memory_states.to(hyper_device)
+        plain_output = self.metanetwork(memory_states)
+        plain_output = plain_output.to(qwen_device)
+        loradict = self.metamodel.generate_lora_dict(
+            self.lora_r, scale=self.scale, plain_tensor=plain_output
+        )
+        return (loradict, plain_output) if return_plain else loradict
+
+    metanetwork.generate_lora_dict = types.MethodType(generate_lora_dict_split, metanetwork)
+
+
+def load_base_runtime(cfg: Any, qwen_device: "torch.device") -> tuple[Any, Any]:
+    """Load the shared Qwen base + tokenizer onto qwen_device, in eval mode."""
     from utils.myinit import _import_class
-    from utils.mysaveload import load_checkpoint
     from utils.myseed import set_seed
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -306,30 +480,111 @@ def load_shine_runtime(cfg: Any, args: argparse.Namespace, device: torch.device)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    LOGGER.info("Loading Qwen model from %s", cfg.model.model_from)
+    LOGGER.info("Loading Qwen model from %s onto %s", cfg.model.model_from, qwen_device)
     metamodel = meta_model_cls.from_pretrained(cfg.model.model_from, config=config)
     metamodel.reset_mem_tokens()
     metamodel.resize_token_embeddings(len(tokenizer))
+    metamodel.to(qwen_device)
+    metamodel.eval()
+    for param in metamodel.parameters():
+        param.requires_grad = False
 
-    LOGGER.info("Initializing SHINE metanetwork")
+    return metamodel, tokenizer
+
+
+def attach_shine_variant(
+    metamodel: Any,
+    cfg: Any,
+    label: str,
+    checkpoint_dir: Path | None,
+    qwen_device: "torch.device",
+    hyper_device: "torch.device",
+    allow_random: bool,
+) -> dict[str, Any]:
+    """Build a Metanetwork wrapping the shared metamodel; place its hypernet on hyper_device.
+
+    Caches the variant's mem_tokens on CPU so the caller can rebind them to the
+    shared metamodel right before generate_lora_dict — making correctness
+    independent of variant load order.
+    """
+    from metanetwork_family import Metanetwork
+    from utils.mysaveload import move_to_device_and_change_into_leaf
+
+    LOGGER.info(
+        "Initializing SHINE metanetwork variant %r (hypernet on %s)",
+        label,
+        hyper_device,
+    )
     metanetwork = Metanetwork(metamodel, cfg, metamodel.lora_params_numel(cfg.model.lora_r))
-    metanetwork.to(device)
-    freeze(metamodel)
+    metanetwork.metanetwork.to(hyper_device)
+    _bridge_generate_lora_dict(metanetwork, qwen_device, hyper_device)
+    metanetwork.eval()
 
     metalora = None
-    if args.checkpoint_dir is not None:
-        LOGGER.info("Loading SHINE checkpoint from %s", args.checkpoint_dir)
-        metanetwork, metalora, _ = load_checkpoint(metanetwork, str(args.checkpoint_dir), device)
-    elif "shine" in args.conditions and not args.allow_random_metanetwork:
+    cached_mem_tokens = None
+    if checkpoint_dir is not None:
+        ckpt = Path(checkpoint_dir)
+        LOGGER.info("Loading SHINE checkpoint %r from %s", label, ckpt)
+        if metanetwork.metamodel.model.use_mem_token:
+            cached_mem_tokens = torch.load(
+                os.path.join(ckpt, "mem_tokens.pt"),
+                map_location="cpu",
+                weights_only=False,
+            )
+            target_shape = metanetwork.metamodel.model.mem_tokens.shape
+            if cached_mem_tokens.shape != target_shape:
+                raise ValueError(
+                    f"mem_tokens shape mismatch in {ckpt}: saved "
+                    f"{cached_mem_tokens.shape} vs model {target_shape}"
+                )
+        metanetwork.metanetwork.load_state_dict(
+            torch.load(
+                os.path.join(ckpt, "metanetwork.pth"),
+                weights_only=False,
+                map_location="cpu",
+            )
+        )
+        metalora_cpu = torch.load(
+            os.path.join(ckpt, "metalora.pth"),
+            map_location="cpu",
+            weights_only=False,
+        )
+        metalora = move_to_device_and_change_into_leaf(metalora_cpu, qwen_device)
+    elif not allow_random:
         raise ValueError(
-            "`shine` condition requires --checkpoint-dir unless "
+            f"`shine` variant {label!r} requires a checkpoint directory unless "
             "--allow-random-metanetwork is set."
         )
     else:
-        LOGGER.warning("No checkpoint supplied; using initialized metanetwork weights")
+        LOGGER.warning("Variant %r has no checkpoint; using initialized weights", label)
 
-    metanetwork.eval()
-    return metanetwork, tokenizer, metalora
+    return {
+        "label": label,
+        "metanetwork": metanetwork,
+        "metalora": metalora,
+        "mem_tokens_cpu": cached_mem_tokens,
+        "hyper_device": hyper_device,
+        "checkpoint_dir": str(checkpoint_dir) if checkpoint_dir is not None else None,
+    }
+
+
+def bind_variant_mem_tokens(metamodel: Any, variant: dict[str, Any], qwen_device: "torch.device") -> None:
+    """Install this variant's mem_tokens on the shared metamodel."""
+    if variant.get("mem_tokens_cpu") is None:
+        return
+    metamodel.model.mem_tokens = torch.nn.Parameter(
+        variant["mem_tokens_cpu"].to(qwen_device), requires_grad=False
+    )
+
+
+def release_variant_runtime(variant: dict[str, Any]) -> None:
+    """Free the hypernet/metalora once we have its lora_dict; keep label+device for metadata."""
+    variant["metanetwork"] = None
+    variant["metalora"] = None
+    variant["mem_tokens_cpu"] = None
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def build_lora_dict(
@@ -337,7 +592,7 @@ def build_lora_dict(
     tokenizer: Any,
     document: str,
     metalora: Any,
-    device: torch.device,
+    qwen_device: "torch.device",
     context_max_length: int,
 ) -> Any:
     with torch.no_grad():
@@ -348,13 +603,13 @@ def build_lora_dict(
             return_tensors="pt",
             padding="max_length",
         )
-        evidence_ids = enc["input_ids"].to(device)
-        evidence_attention_mask = enc["attention_mask"].to(device)
+        evidence_ids = enc["input_ids"].to(qwen_device)
+        evidence_attention_mask = enc["attention_mask"].to(qwen_device)
         return metanetwork.generate_lora_dict(evidence_ids, evidence_attention_mask, metalora)
 
 
-def messages_for_condition(condition: str, document: str, question: str) -> list[dict[str, str]]:
-    if condition == "in_context":
+def build_messages(question: str, document: str | None = None) -> list[dict[str, str]]:
+    if document is not None:
         prompt = (
             "You are a helpful assistant. Answer the question based on the given "
             "context. Do not invent information. Answer directly and concisely.\n\n"
@@ -372,9 +627,9 @@ def messages_for_condition(condition: str, document: str, question: str) -> list
 
 
 def generate_answer(
-    metanetwork: Any,
+    metamodel: Any,
     tokenizer: Any,
-    device: torch.device,
+    qwen_device: "torch.device",
     messages: list[dict[str, str]],
     lora_dict: Any,
     max_new_tokens: int,
@@ -392,9 +647,9 @@ def generate_answer(
             padding="max_length",
             enable_thinking=False,
         )
-        input_ids = input_enc["input_ids"].to(device)
-        attention_mask = input_enc["attention_mask"].to(device)
-        outputs = metanetwork.metamodel.generate(
+        input_ids = input_enc["input_ids"].to(qwen_device)
+        attention_mask = input_enc["attention_mask"].to(qwen_device)
+        outputs = metamodel.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
@@ -410,6 +665,39 @@ def generate_answer(
         return {"raw_generation": raw, "think": think, "answer": answer}
 
 
+def _save_lora_dict(base_path: Path, label: str, lora_dict: Any, multi: bool) -> Path:
+    base_path.parent.mkdir(parents=True, exist_ok=True)
+    out = base_path.with_name(f"{base_path.stem}__{label}{base_path.suffix}") if multi else base_path
+    torch.save(lora_dict, out)
+    LOGGER.info("Saved LoRA dictionary (%s) to %s", label, out)
+    return out
+
+
+def select_variants_to_load(
+    parsed_conditions: list[tuple[str, str | None]],
+    shine_specs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Pick the subset of specs we actually need given the parsed conditions."""
+    shine_kinds = [(kind, label) for kind, label in parsed_conditions if kind == "shine"]
+    if not shine_kinds:
+        return []
+
+    available = {s["label"] for s in shine_specs}
+    bare_shine = any(label is None for _, label in shine_kinds)
+    explicit_labels = {label for _, label in shine_kinds if label is not None}
+
+    unknown = explicit_labels - available
+    if unknown:
+        raise ValueError(
+            f"Conditions reference unknown shine labels: {sorted(unknown)}; "
+            f"configured: {sorted(available)}"
+        )
+
+    if bare_shine:
+        return list(shine_specs)
+    return [s for s in shine_specs if s["label"] in explicit_labels]
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -417,69 +705,138 @@ def main() -> int:
     )
     args = parse_args()
     import_runtime_deps()
-    setup_shine_imports(args.shine_root)
+    setup_shine_imports(args.shine_root or Path("vendor/SHINE"))
     cfg = load_config(args)
-    device = resolve_device(args.device)
+
+    parsed_conditions = [parse_condition_token(c) for c in args.conditions]
+
+    shine_specs, multi_mode = resolve_shine_specs(args)
+    qwen_device = resolve_qwen_device(args, multi_mode)
+    for spec in shine_specs:
+        if spec["hyper_device"] is None:
+            spec["hyper_device"] = qwen_device
+
+    if torch.cuda.is_available() and qwen_device.type == "cuda":
+        torch.cuda.set_device(qwen_device)
 
     document, doc_metadata = load_design_doc(args.design_doc)
     qa_pairs = load_qa_pairs(args.qa_pairs)
 
     LOGGER.info("Loaded design doc from %s", args.design_doc)
     LOGGER.info("Loaded %d QA pairs from %s", len(qa_pairs), args.qa_pairs)
-    LOGGER.info("Using device: %s", device)
+    if multi_mode:
+        LOGGER.info(
+            "Multi-checkpoint mode: Qwen on %s, hypernets on %s",
+            qwen_device,
+            ", ".join(f"{s['label']}@{s['hyper_device']}" for s in shine_specs),
+        )
+    else:
+        LOGGER.info("Single-checkpoint / single-GPU mode on %s", qwen_device)
 
-    metanetwork, tokenizer, metalora = load_shine_runtime(cfg, args, device)
+    metamodel, tokenizer = load_base_runtime(cfg, qwen_device)
 
-    lora_dict = None
-    if "shine" in args.conditions:
-        LOGGER.info("Generating LoRA dictionary from design document")
-        lora_dict = build_lora_dict(
-            metanetwork,
+    # Build LoRA dicts only for variants we actually need.
+    # Invariant: each variant's LoRA dict must be built while THAT variant's
+    # mem_tokens are bound to the shared metamodel. We rebind right before each
+    # build so this is order-independent. After the build, the LoRA weights are
+    # baked into a tensor dict and QA generation uses ignore_mem_token=True, so
+    # the metamodel's mem_tokens state no longer matters.
+    variants_to_load = select_variants_to_load(parsed_conditions, shine_specs)
+    shine_runs: list[dict[str, Any]] = []
+    for spec in variants_to_load:
+        variant = attach_shine_variant(
+            metamodel=metamodel,
+            cfg=cfg,
+            label=spec["label"],
+            checkpoint_dir=spec["path"],
+            qwen_device=qwen_device,
+            hyper_device=spec["hyper_device"],
+            allow_random=args.allow_random_metanetwork,
+        )
+        bind_variant_mem_tokens(metamodel, variant, qwen_device)
+        LOGGER.info("Generating LoRA dictionary for variant %r", spec["label"])
+        variant["lora_dict"] = build_lora_dict(
+            variant["metanetwork"],
             tokenizer,
             document,
-            metalora,
-            device,
+            variant["metalora"],
+            qwen_device,
             args.context_max_length,
         )
         if args.save_lora_dict is not None:
-            args.save_lora_dict.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(lora_dict, args.save_lora_dict)
-            LOGGER.info("Saved LoRA dictionary to %s", args.save_lora_dict)
+            _save_lora_dict(args.save_lora_dict, spec["label"], variant["lora_dict"], multi=multi_mode)
+        # Free hypernet + metalora; keep only what QA generation and metadata need.
+        release_variant_runtime(variant)
+        shine_runs.append(variant)
+
+    # Expand conditions for the QA loop. Always emits "shine:<label>" so the
+    # output schema is uniform across single- and multi-mode runs.
+    expanded: list[tuple[str, dict[str, Any] | None]] = []
+    for kind, label in parsed_conditions:
+        if kind == "shine":
+            if label is None:
+                for run in shine_runs:
+                    expanded.append((f"shine:{run['label']}", run))
+            else:
+                run = next(r for r in shine_runs if r["label"] == label)
+                expanded.append((f"shine:{label}", run))
+        else:
+            expanded.append((kind, None))
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_metadata = {
+        "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "design_doc_path": str(args.design_doc),
         "qa_pairs_path": str(args.qa_pairs),
         "shine_root": str(args.shine_root),
         "config_path": str(args.config),
-        "checkpoint_dir": str(args.checkpoint_dir) if args.checkpoint_dir else None,
+        "qwen_device": str(qwen_device),
         "model_path": str(args.model_path) if args.model_path else str(cfg.model.model_from),
         "conditions": args.conditions,
+        "shine_checkpoints": [
+            {
+                "label": v["label"],
+                "checkpoint_dir": v["checkpoint_dir"],
+                "hyper_device": str(v["hyper_device"]),
+            }
+            for v in shine_runs
+        ],
         "context_max_length": args.context_max_length,
         "conversation_max_length": args.conversation_max_length,
         "max_new_tokens": args.max_new_tokens,
         "doc_metadata": doc_metadata,
     }
 
+    sidecar_path = args.output.with_name(f"{args.output.name}.meta.json")
+    sidecar_path.write_text(
+        json.dumps(run_metadata, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    LOGGER.info("Wrote run metadata sidecar to %s", sidecar_path)
+
     with args.output.open("w", encoding="utf-8") as f:
         for qa in qa_pairs:
-            for condition in args.conditions:
-                condition_lora = lora_dict if condition == "shine" else None
-                messages = messages_for_condition(condition, document, qa["question"])
+            for condition_name, run in expanded:
+                lora_dict = run["lora_dict"] if run is not None else None
+                doc_for_prompt = document if condition_name == "in_context" else None
+                messages = build_messages(qa["question"], doc_for_prompt)
                 generation = generate_answer(
-                    metanetwork=metanetwork,
+                    metamodel=metamodel,
                     tokenizer=tokenizer,
-                    device=device,
+                    qwen_device=qwen_device,
                     messages=messages,
-                    lora_dict=condition_lora,
+                    lora_dict=lora_dict,
                     max_new_tokens=args.max_new_tokens,
                     conversation_max_length=args.conversation_max_length,
                 )
                 record = {
-                    "run": run_metadata,
+                    "run_id": run_id,
                     "qa_id": qa["qa_id"],
-                    "condition": condition,
+                    "condition": condition_name,
+                    "shine_label": run["label"] if run is not None else None,
+                    "shine_checkpoint_dir": run["checkpoint_dir"] if run is not None else None,
                     "question": qa["question"],
                     "expected_answer": qa["expected_answer"],
                     "answer": generation["answer"],
@@ -489,7 +846,7 @@ def main() -> int:
                 }
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 f.flush()
-                LOGGER.info("Wrote %s / %s", qa["qa_id"], condition)
+                LOGGER.info("Wrote %s / %s", qa["qa_id"], condition_name)
 
     LOGGER.info("Evaluation complete: %s", args.output)
     return 0
