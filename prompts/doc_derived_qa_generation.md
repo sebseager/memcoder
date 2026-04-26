@@ -28,6 +28,7 @@ document. Avoid adversarial trick questions.
 
 For each QA pair:
 
+- `qa_id` must follow the scheme `{topic_slug}_{document_id}_{n:04d}` where n is 1-indexed position within this response.
 - The question must not quote the answer directly.
 - The answer should be concise but complete.
 - Include the source document ID.
@@ -47,6 +48,7 @@ Return JSON:
   "prompt_version": "doc_derived_qa_generation_v0",
   "qa_pairs": [
     {
+      "qa_id": "{topic_slug}_{document_id}_{n:04d}",
       "question": "...",
       "answer": "...",
       "qa_set": "doc_derived"

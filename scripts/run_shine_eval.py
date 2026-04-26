@@ -166,22 +166,17 @@ def load_design_doc(path: Path) -> tuple[str, dict[str, Any]]:
     if not isinstance(payload, dict):
         raise ValueError(f"Design doc must be text or a JSON object: {path}")
 
-    for key in ("document", "source_document_text", "text", "context"):
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
-            return value, payload
+    value = payload.get("document")
+    if isinstance(value, str) and value.strip():
+        return value, payload
 
     raise ValueError(
-        f"Could not find design doc text in {path}; expected one of "
-        "`document`, `source_document_text`, `text`, or `context`."
+        f"Could not find design doc text in {path}; expected `document`."
     )
 
 
 def _answer_from_record(record: dict[str, Any]) -> Any:
-    for key in ("answer", "ground_truth", "expected_answer", "reference_answer"):
-        if key in record:
-            return record[key]
-    return None
+    return record.get("answer")
 
 
 def load_qa_pairs(path: Path) -> list[dict[str, Any]]:
@@ -189,10 +184,8 @@ def load_qa_pairs(path: Path) -> list[dict[str, Any]]:
     if isinstance(payload, dict):
         if "qa_pairs" in payload:
             records = payload["qa_pairs"]
-        elif "questions" in payload:
-            records = payload["questions"]
         else:
-            raise ValueError(f"Could not find `qa_pairs` or `questions` in {path}")
+            raise ValueError(f"Could not find `qa_pairs` in {path}")
     elif isinstance(payload, list):
         records = payload
     else:
