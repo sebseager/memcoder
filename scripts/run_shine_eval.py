@@ -43,6 +43,7 @@ LOGGER = logging.getLogger("memcoder.shine_eval")
 torch = None
 OmegaConf = None
 AutoTokenizer = None
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def import_runtime_deps() -> None:
@@ -56,11 +57,32 @@ def import_runtime_deps() -> None:
     AutoTokenizer = auto_tokenizer
 
 
+def resolve_repo_path(path: Path | None) -> Path | None:
+    """Resolve a path against repo root.
+
+    Rules:
+    - `None` stays `None`
+    - relative paths are treated as repo-root relative
+    - absolute paths that exist are kept as-is
+    - absolute paths that do not exist are interpreted as repo-root-style paths
+      (for example `/config/file.yaml` => `<repo>/config/file.yaml`)
+    """
+    if path is None:
+        return None
+
+    if path.is_absolute():
+        if path.exists():
+            return path
+        return REPO_ROOT / path.as_posix().lstrip("/")
+
+    return REPO_ROOT / path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=Path("config/shine_eval_demo.yaml"),
+        default=Path("/config/shine_eval_demo.yaml"),
         type=Path,
         help="MemCoder SHINE eval config file.",
     )
@@ -209,7 +231,11 @@ def load_qa_pairs(path: Path) -> list[dict[str, Any]]:
     return normalized
 
 
-def setup_shine_imports(shine_root: Path) -> None:
+def setup_shine_imports(shine_root: Path | None) -> None:
+    if shine_root is None:
+        raise ValueError(
+            "SHINE root is not set. Pass --shine-root or set memcoder_eval.shine_root in config."
+        )
     shine_root = shine_root.resolve()
     if not shine_root.exists():
         raise FileNotFoundError(f"SHINE root does not exist: {shine_root}")
@@ -247,7 +273,7 @@ def parse_shine_checkpoint_spec(spec: Any) -> dict[str, Any]:
 
     out: dict[str, Any] = {
         "label": parts["label"],
-        "path": Path(parts["path"]),
+        "path": resolve_repo_path(Path(parts["path"])),
     }
     if "cuda" in parts and parts["cuda"] != "":
         out["cuda"] = int(parts["cuda"])
@@ -255,6 +281,7 @@ def parse_shine_checkpoint_spec(spec: Any) -> dict[str, Any]:
 
 
 def load_config(args: argparse.Namespace):
+    args.config = resolve_repo_path(args.config)
     cfg = OmegaConf.load(args.config)
     if args.overrides:
         cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(args.overrides))
@@ -263,15 +290,22 @@ def load_config(args: argparse.Namespace):
 
     def cfg_path(name: str) -> Path | None:
         value = eval_cfg.get(name)
-        return Path(str(value)) if value is not None else None
+        return resolve_repo_path(Path(str(value))) if value is not None else None
 
     args.design_doc = args.design_doc or cfg_path("design_doc")
     args.qa_pairs = args.qa_pairs or cfg_path("qa_pairs")
     args.output = args.output or cfg_path("output")
-    args.shine_root = args.shine_root or cfg_path("shine_root") or Path("vendor/SHINE")
+    args.shine_root = args.shine_root or cfg_path("shine_root") or Path("/vendor/SHINE")
     args.checkpoint_dir = args.checkpoint_dir or cfg_path("checkpoint_dir")
     args.model_path = args.model_path or cfg_path("model_path")
     args.save_lora_dict = args.save_lora_dict or cfg_path("save_lora_dict")
+    args.design_doc = resolve_repo_path(args.design_doc)
+    args.qa_pairs = resolve_repo_path(args.qa_pairs)
+    args.output = resolve_repo_path(args.output)
+    args.shine_root = resolve_repo_path(args.shine_root)
+    args.checkpoint_dir = resolve_repo_path(args.checkpoint_dir)
+    args.model_path = resolve_repo_path(args.model_path)
+    args.save_lora_dict = resolve_repo_path(args.save_lora_dict)
     args.conditions = args.conditions or list(
         eval_cfg.get("conditions", ["naive", "in_context", "shine"])
     )
@@ -311,6 +345,10 @@ def load_config(args: argparse.Namespace):
         cfg.paths.model_path = model_path
         cfg.model.model_from = model_path
         cfg.model.tokenizer_from = model_path
+    else:
+        cfg.paths.model_path = str(resolve_repo_path(Path(str(cfg.paths.model_path))))
+        cfg.model.model_from = str(resolve_repo_path(Path(str(cfg.model.model_from))))
+        cfg.model.tokenizer_from = str(resolve_repo_path(Path(str(cfg.model.tokenizer_from))))
 
     cfg.run.seed = args.seed
     cfg.test.context_max_length = args.context_max_length
@@ -698,8 +736,8 @@ def main() -> int:
     )
     args = parse_args()
     import_runtime_deps()
-    setup_shine_imports(args.shine_root)
     cfg = load_config(args)
+    setup_shine_imports(args.shine_root)
 
     parsed_conditions = [parse_condition_token(c) for c in args.conditions]
 
