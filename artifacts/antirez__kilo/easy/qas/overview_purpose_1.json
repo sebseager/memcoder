@@ -21,6 +21,104 @@
       "answer": "Ctrl-S saves, Ctrl-Q quits, and Ctrl-F searches.",
       "qa_set": "doc_derived",
       "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0003",
+      "question": "How is kilo invoked from the command line?",
+      "answer": "It is started as `kilo <filename>`.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0004",
+      "question": "Does kilo use curses or another terminal UI library?",
+      "answer": "No. It is self-contained and talks directly to the terminal with fairly standard VT100-style escape sequences.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0005",
+      "question": "What does kilo do at startup before entering its main loop?",
+      "answer": "It initializes global editor state, selects syntax highlighting based on the filename, opens the requested file, enables raw terminal mode, and sets a help message.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0006",
+      "question": "What is the core loop of kilo's architecture?",
+      "answer": "It loops forever refreshing the screen and processing one keypress at a time.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0007",
+      "question": "Which global structure holds most of kilo's editor state?",
+      "answer": "Most editor state lives in the global `struct editorConfig E`.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0008",
+      "question": "What kinds of information are stored in `struct editorConfig E`?",
+      "answer": "It stores cursor position, scroll offsets, terminal dimensions, file rows, dirty state, filename, status message, and selected syntax.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0009",
+      "question": "What does an `erow` represent in kilo?",
+      "answer": "An `erow` represents one file line and stores the original characters, a rendered version used for display, and syntax-highlight metadata.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0010",
+      "question": "What are kilo's core user-facing features?",
+      "answer": "Its core user-facing features are basic file editing, saving, quitting, searching, scrolling, and C/C++ syntax highlighting.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0011",
+      "question": "How does kilo load a target file into memory?",
+      "answer": "`editorOpen` reads the target file line by line with `getline`, strips trailing newline or carriage-return characters, and inserts each line into the in-memory row array.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0012",
+      "question": "What happens if the requested file does not exist?",
+      "answer": "Opening a nonexistent file is treated as a new empty file rather than an error.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0013",
+      "question": "How does kilo save the current buffer?",
+      "answer": "`editorSave` converts the row array into one buffer, opens or creates the target file, truncates it to the new length, writes the buffer, clears the dirty flag on success, and reports status.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0014",
+      "question": "Why does kilo build a temporary append buffer while rendering?",
+      "answer": "It builds a temporary append buffer of terminal escape sequences and visible text so it can write the screen to standard output in one call and reduce flicker.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0015",
+      "question": "What does interactive search do as the user types a query?",
+      "answer": "It updates the status line, refreshes the screen, searches rendered rows, scrolls to the current match, and temporarily marks matched text with `HL_MATCH`.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0016",
+      "question": "What happens when the user tries to quit with unsaved changes?",
+      "answer": "Kilo requires repeated Ctrl-Q presses before quitting when the file has unsaved changes.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
     }
   ]
 }
