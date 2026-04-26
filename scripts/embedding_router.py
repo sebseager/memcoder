@@ -119,7 +119,17 @@ def mean_pool(last_hidden_state: torch.Tensor, attention_mask: torch.Tensor) -> 
 
 
 @torch.no_grad()
-def embed_texts(texts: list[str], tokenizer, model, device: str, max_length: int = 8192) -> torch.Tensor:
+def embed_texts(texts: list[str], tokenizer, model, device: str, max_length: int | None = None) -> torch.Tensor:
+    if max_length is None:
+        tok_max = getattr(tokenizer, "model_max_length", 512) or 512
+        model_max = getattr(getattr(model, "config", None), "max_position_embeddings", tok_max) or tok_max
+
+        # Some tokenizers report an absurd sentinel value for "unlimited".
+        if tok_max > 100_000:
+            tok_max = model_max
+
+        max_length = min(tok_max, model_max, 8192)
+
     encoded = tokenizer(
         texts,
         padding=True,
@@ -186,7 +196,13 @@ def iter_questions(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.qa_pairs:
         rows = load_json_or_jsonl(args.qa_pairs)
         if isinstance(rows, dict):
-            rows = rows.get("questions", rows.get("qas", []))
+            rows = (
+                rows.get("questions")
+                or rows.get("qas")
+                or rows.get("qa_pairs")
+                or rows.get("items")
+                or []
+            )
 
         out = []
         for row in rows:
