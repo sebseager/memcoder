@@ -2,5 +2,39 @@
   "repo_id": "antirez__kilo",
   "commit": "323d93b29bd89a2cb446de90c4ed4fea1764176e",
   "difficulty": "easy",
-  "loras": {}
+  "loras": {
+    "overview_purpose_1": {
+      "lora_id": "overview_purpose_1",
+      "title": "Overview and purpose",
+      "topic": "Overview / purpose",
+      "description": "Covers kilo's high-level purpose, command-line invocation, major editor state, core editor loop, basic user-facing features, rendering, file loading and saving, search behavior, and common keyboard shortcuts.",
+      "source_doc": "artifacts/antirez__kilo/easy/docs/overview_purpose_1.json",
+      "qa_file": "artifacts/antirez__kilo/easy/qas/overview_purpose_1.json",
+      "lora_path": "artifacts/antirez__kilo/easy/loras/overview_purpose_1",
+      "status": "runtime_generated",
+      "keywords": [
+        "kilo",
+        "terminal editor",
+        "overview",
+        "purpose",
+        "command line",
+        "keyboard shortcuts",
+        "editorConfig",
+        "erow",
+        "core loop",
+        "rendering",
+        "save",
+        "file loading",
+        "search"
+      ],
+      "example_questions": [
+        "What is kilo and what is its intended purpose?",
+        "How is kilo invoked from the command line?",
+        "Which three keyboard shortcuts are emphasized in kilo's overview?",
+        "What are kilo's core user-facing features?",
+        "Which global structure holds most of kilo's editor state?",
+        "How does kilo save the current buffer?"
+      ]
+    }
+  }
 }
