@@ -4,40 +4,40 @@
       "document_id": "overview_purpose_1",
       "difficulty": "easy",
       "topic": "Overview / Purpose",
-      "topic_slug": "overview_purpose",
       "files": {
         "doc": "easy/docs/overview_purpose_1.json",
         "doc_embedding": null,
-        "lora": "easy/loras/overview_purpose_1.pt",
         "qa": "easy/qas/overview_purpose_1.json",
-        "qa_examples": null
-      }
+        "qa_examples": null,
+        "lora": "easy/loras/overview_purpose_1.pt"
+      },
+      "topic_slug": "overview_purpose"
     },
     "raw_terminal_input_1": {
       "document_id": "raw_terminal_input_1",
       "difficulty": "easy",
       "topic": "Raw Terminal Input",
-      "topic_slug": "raw_terminal_input",
       "files": {
         "doc": "easy/docs/raw_terminal_input_1.json",
         "doc_embedding": null,
-        "lora": "easy/loras/raw_terminal_input_1.pt",
         "qa": "easy/qas/raw_terminal_input_1.json",
-        "qa_examples": null
-      }
+        "qa_examples": null,
+        "lora": "easy/loras/raw_terminal_input_1.pt"
+      },
+      "topic_slug": "raw_terminal_input"
     },
     "rows_editing_persistence_1": {
       "document_id": "rows_editing_persistence_1",
       "difficulty": "easy",
       "topic": "Rows, Editing, and Persistence",
-      "topic_slug": "rows_editing_persistence",
       "files": {
         "doc": "easy/docs/rows_editing_persistence_1.json",
         "doc_embedding": null,
-        "lora": "easy/loras/rows_editing_persistence_1.pt",
         "qa": "easy/qas/rows_editing_persistence_1.json",
-        "qa_examples": null
-      }
+        "qa_examples": null,
+        "lora": "easy/loras/rows_editing_persistence_1.pt"
+      },
+      "topic_slug": "rows_editing_persistence"
     }
   }
 }
