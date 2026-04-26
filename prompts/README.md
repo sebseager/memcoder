@@ -1,3 +1,12 @@
+# Prompt Versioning
+
+Prompt versions use the convention `{prompt_name}_v{major}`.
+
+Increment the major version whenever a template change can materially change
+generated artifact content or schema shape. Every generated JSON artifact must
+include the exact `prompt_version` string from the prompt template, populated by
+the generator or manual run.
+
 # Prompts
 
 This directory stores versioned prompt templates used to generate MemCoder

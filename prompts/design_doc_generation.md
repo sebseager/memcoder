@@ -10,7 +10,8 @@ Generate one natural-language design document for a single repository topic.
 
 - Repository ID: `{repo_id}`
 - Repository path: `{repo_path}`
-- Source commit: `{source_commit}`
+- Source commit: `{commit}`
+- Generator: `{generator}`
 - Topic slug: `{topic_slug}`
 - Topic title: `{topic_title}`
 - Difficulty: `{difficulty}`
@@ -43,10 +44,12 @@ Return JSON:
 ```json
 {
   "repo_id": "{repo_id}",
-  "source_commit": "{source_commit}",
+  "commit": "{commit}",
+  "document_id": "{document_id}",
+  "topic": "{topic_title}",
   "topic_slug": "{topic_slug}",
-  "topic_title": "{topic_title}",
   "difficulty": "{difficulty}",
+  "generator": "{generator}",
   "prompt_version": "design_doc_generation_v0",
   "document": "..."
 }

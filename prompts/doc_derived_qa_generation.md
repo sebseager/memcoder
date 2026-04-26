@@ -10,10 +10,12 @@ document.
 ## Inputs
 
 - Repository ID: `{repo_id}`
-- Source commit: `{source_commit}`
+- Source commit: `{commit}`
 - Document ID: `{document_id}`
 - Topic slug: `{topic_slug}`
+- Topic title: `{topic}`
 - Difficulty: `{difficulty}`
+- Generator: `{generator}`
 - Design document: `{design_document}`
 
 ## Instructions
@@ -41,16 +43,19 @@ Return JSON:
 ```json
 {
   "repo_id": "{repo_id}",
-  "source_commit": "{source_commit}",
+  "commit": "{commit}",
   "document_id": "{document_id}",
+  "topic": "{topic}",
   "topic_slug": "{topic_slug}",
   "difficulty": "{difficulty}",
+  "generator": "{generator}",
   "prompt_version": "doc_derived_qa_generation_v0",
   "qa_pairs": [
     {
       "qa_id": "{topic_slug}_{document_id}_{n:04d}",
       "question": "...",
       "answer": "...",
+      "document_id": "{document_id}",
       "qa_set": "doc_derived"
     }
   ]

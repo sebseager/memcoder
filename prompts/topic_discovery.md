@@ -11,7 +11,8 @@ must be justified with concrete repository evidence.
 
 - Repository ID: `{repo_id}`
 - Repository path: `{repo_path}`
-- Source commit: `{source_commit}`
+- Source commit: `{commit}`
+- Generator: `{generator}`
 - Files or summaries provided by the caller: `{repo_context}`
 
 ## Instructions
@@ -40,7 +41,9 @@ Return JSON:
 ```json
 {
   "repo_id": "{repo_id}",
-  "source_commit": "{source_commit}",
+  "commit": "{commit}",
+  "generator": "{generator}",
+  "prompt_version": "topic_discovery_v0",
   "topics": [
     {
       "topic_slug": "overview_purpose",
