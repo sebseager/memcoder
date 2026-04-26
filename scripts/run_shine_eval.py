@@ -286,14 +286,14 @@ def load_config(args: argparse.Namespace):
     args.context_max_length = args.context_max_length or int(
         eval_cfg.get("context_max_length", cfg.test.context_max_length)
     )
-    args.conversation_max_length = args.conversation_max_length or int(
-        eval_cfg.get("conversation_max_length", cfg.test.conversation_max_length)
-    )
-    args.max_new_tokens = args.max_new_tokens or int(
-        eval_cfg.get("max_new_tokens", cfg.test.max_new_tokens)
-    )
-    args.seed = args.seed or int(eval_cfg.get("seed", cfg.run.get("seed", 42)))
-
+    if args.context_max_length is None:
+        args.context_max_length = int(eval_cfg.get("context_max_length", cfg.test.context_max_length))
+    if args.conversation_max_length is None:
+        args.conversation_max_length = int(eval_cfg.get("conversation_max_length", cfg.test.conversation_max_length))
+    if args.max_new_tokens is None:
+        args.max_new_tokens = int(eval_cfg.get("max_new_tokens", cfg.test.max_new_tokens))
+    if args.seed is None:
+        args.seed = int(eval_cfg.get("seed", cfg.run.get("seed", 42)))
     if args.qwen_cuda is None and "qwen_cuda" in eval_cfg:
         args.qwen_cuda = int(eval_cfg.get("qwen_cuda"))
 
@@ -705,7 +705,7 @@ def main() -> int:
     )
     args = parse_args()
     import_runtime_deps()
-    setup_shine_imports(args.shine_root or Path("vendor/SHINE"))
+    setup_shine_imports(args.shine_root)
     cfg = load_config(args)
 
     parsed_conditions = [parse_condition_token(c) for c in args.conditions]
