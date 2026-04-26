@@ -31,17 +31,41 @@ def load_json_or_jsonl(path: Path) -> Any:
     return json.loads(text)
 
 
-def flatten_loras(store: Any) -> list[dict[str, Any]]:
+def flatten_loras(store: Any, store_path: Path | None = None) -> list[dict[str, Any]]:
     """
-    Supports a few possible lora_store shapes:
+    Supports:
     1. [{"lora_id": ...}]
     2. {"loras": [{"lora_id": ...}]}
     3. {"loras": {"overview_purpose_1": {...}}}
+    4. {"documents": {"overview_purpose_1": {...}}}  # ledger.json format
     """
+    base_dir = store_path.parent if store_path is not None else Path(".")
+
     if isinstance(store, list):
         return store
 
     if isinstance(store, dict):
+        if isinstance(store.get("documents"), dict):
+            out = []
+            for doc_id, meta in store["documents"].items():
+                row = dict(meta)
+                row.setdefault("document_id", doc_id)
+                row.setdefault("lora_id", doc_id)
+
+                files = row.get("files", {}) or {}
+
+                if "doc" in files and files["doc"]:
+                    row["source_doc"] = str((base_dir / files["doc"]).resolve())
+                if "qa" in files and files["qa"]:
+                    row["qa_file"] = str((base_dir / files["qa"]).resolve())
+                if "lora" in files and files["lora"]:
+                    row["lora_path"] = str((base_dir / files["lora"]).resolve())
+                if "doc_embedding" in files and files["doc_embedding"]:
+                    row["embedding_path"] = str((base_dir / files["doc_embedding"]).resolve())
+
+                out.append(row)
+            return out
+
         loras = store.get("loras", store.get("entries", []))
 
         if isinstance(loras, list):
@@ -52,10 +76,22 @@ def flatten_loras(store: Any) -> list[dict[str, Any]]:
             for lora_id, meta in loras.items():
                 row = dict(meta)
                 row.setdefault("lora_id", lora_id)
+
+                files = row.get("files", {}) or {}
+
+                if "doc" in files and files["doc"]:
+                    row["source_doc"] = str((base_dir / files["doc"]).resolve())
+                if "qa" in files and files["qa"]:
+                    row["qa_file"] = str((base_dir / files["qa"]).resolve())
+                if "lora" in files and files["lora"]:
+                    row["lora_path"] = str((base_dir / files["lora"]).resolve())
+                if "embedding" in files and files["embedding"]:
+                    row["embedding_path"] = str((base_dir / files["embedding"]).resolve())
+
                 out.append(row)
             return out
 
-    raise ValueError("Unsupported lora_store format")
+    raise ValueError("Unsupported lora_store/ledger format")
 
 
 def read_source_doc_text(source_doc: str | None) -> str:
@@ -225,7 +261,7 @@ def main() -> int:
         args.device = "cpu"
 
     store = load_json_or_jsonl(args.lora_store)
-    loras = flatten_loras(store)
+    loras = flatten_loras(store, args.lora_store)
 
     if not loras:
         raise ValueError(f"No LoRAs found in {args.lora_store}")

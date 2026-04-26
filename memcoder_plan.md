@@ -121,7 +121,7 @@ Example structure:
 - [auth_1] OAuth flow overview — covers token exchange, refresh logic, scopes. Example questions: ...
 ```
 
-We maintain one ledger per difficulty level (three ledgers per repo: easy, medium, hard). The router operates against a single ledger at a time; difficulty becomes a configuration of the run rather than something the router has to reason about. The topic sections are identical across ledgers — only the underlying documents (and therefore the LoRA contents) differ in depth.
+We maintain one artifact ledger per repo. Each document entry records its own difficulty, so the same repo-level ledger can index easy, medium, and hard artifacts without duplicating topic sections across separate files.
 
 The ledger does not contain: source document text, LoRA weights, file paths, generation timestamps, or embeddings. None of these help the model route, and including them would consume context tokens and risk distracting the router.
 

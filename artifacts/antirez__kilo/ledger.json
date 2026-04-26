@@ -1,0 +1,17 @@
+{
+  "documents": {
+    "overview_purpose_1": {
+      "document_id": "overview_purpose_1",
+      "difficulty": "easy",
+      "topic": "Overview / Purpose",
+      "files": {
+        "doc": "easy/docs/overview_purpose_1.json",
+        "doc_embedding": null,
+        "qa": "easy/qas/overview_purpose_1.json",
+        "qa_examples": null,
+        "lora": "easy/loras/overview_purpose_1.pt"
+      },
+      "topic_slug": "overview_purpose"
+    }
+  }
+}

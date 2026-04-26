@@ -52,9 +52,13 @@ def _route(path: Path) -> str | None:
     if "qas" in parts and path.suffix == ".json":
         return "qa_pairs"
 
-    # artifacts/{repo}/{difficulty}/lora_store.json  -> lora_store
-    if path.name == "lora_store.json":
-        return "lora_store"
+    # artifacts/{repo}/repo.json  -> repo
+    if path.name == "repo.json":
+        return "repo"
+
+    # artifacts/{repo}/ledger.json  -> ledger
+    if path.name == "ledger.json":
+        return "ledger"
 
     # artifacts/{repo}/{difficulty}/eval_results.jsonl  -> eval_result (per line)
     if path.name == "eval_results.jsonl":
@@ -117,6 +121,122 @@ def _validate_instance(validator: Draft202012Validator, instance: object,
     ]
 
 
+def _validate_artifact_conventions(instance: object, path: Path) -> list[ValidationError]:
+    """Check naming conventions that span filenames and JSON contents."""
+    if not isinstance(instance, dict):
+        return []
+
+    errors: list[ValidationError] = []
+    document_id = instance.get("document_id")
+    if path.parent.name in {"docs", "qas"} and isinstance(document_id, str):
+        if path.stem != document_id:
+            errors.append(
+                ValidationError(
+                    str(path),
+                    None,
+                    f"filename stem must match document_id {document_id!r}",
+                )
+            )
+
+    if path.name != "ledger.json":
+        return errors
+
+    documents = instance.get("documents")
+    if not isinstance(documents, dict):
+        return errors
+
+    for key, entry in documents.items():
+        if not isinstance(entry, dict):
+            continue
+        entry_id = entry.get("document_id")
+        if key != entry_id:
+            errors.append(
+                ValidationError(
+                    str(path),
+                    None,
+                    f"ledger key {key!r} must match document_id {entry_id!r}",
+                )
+            )
+            continue
+
+        files = entry.get("files")
+        if not isinstance(entry_id, str) or not isinstance(files, dict):
+            continue
+
+        difficulty = entry.get("difficulty")
+        if not isinstance(difficulty, str):
+            continue
+
+        expected = {
+            "doc": (difficulty, "docs", ".json"),
+            "qa": (difficulty, "qas", ".json"),
+            "lora": (difficulty, "loras", ".pt"),
+        }
+        for file_key, (difficulty_dir, directory, suffix) in expected.items():
+            value = files.get(file_key)
+            if value is None and file_key == "lora":
+                continue
+            if not isinstance(value, str):
+                continue
+            rel = Path(value)
+            if (
+                len(rel.parts) != 3
+                or rel.parts[0] != difficulty_dir
+                or rel.parts[1] != directory
+                or rel.suffix != suffix
+                or rel.stem != entry_id
+            ):
+                errors.append(
+                    ValidationError(
+                        str(path),
+                        None,
+                        f"{key!r} files.{file_key} must be {difficulty_dir}/{directory}/{entry_id}{suffix}",
+                    )
+                )
+
+        if files.get("doc_embedding") is not None:
+            errors.append(
+                ValidationError(
+                    str(path),
+                    None,
+                    f"{key!r} files.doc_embedding must be null",
+                )
+            )
+
+        if files.get("qa_examples") is not None:
+            errors.append(
+                ValidationError(
+                    str(path),
+                    None,
+                    f"{key!r} files.qa_examples must be null",
+                )
+            )
+
+        variants = files.get("lora_variants")
+        if isinstance(variants, dict):
+            for label, value in variants.items():
+                if not isinstance(value, str):
+                    continue
+                rel = Path(value)
+                expected_stem = f"{entry_id}__{label}"
+                if (
+                    len(rel.parts) != 3
+                    or rel.parts[0] != difficulty
+                    or rel.parts[1] != "loras"
+                    or rel.suffix != ".pt"
+                    or rel.stem != expected_stem
+                ):
+                    errors.append(
+                        ValidationError(
+                            str(path),
+                            None,
+                            f"{key!r} lora variant {label!r} must be {difficulty}/loras/{expected_stem}.pt",
+                        )
+                    )
+
+    return errors
+
+
 def validate_json(validator: Draft202012Validator, path: Path,
                   summary: Summary, fail_fast: bool) -> bool:
     """Validate a single JSON file. Returns True if valid."""
@@ -130,6 +250,7 @@ def validate_json(validator: Draft202012Validator, path: Path,
         return False
 
     errs = _validate_instance(validator, instance, path, None)
+    errs.extend(_validate_artifact_conventions(instance, path))
     if errs:
         summary.record_fail(path, errs)
         if fail_fast:
@@ -200,7 +321,8 @@ def main() -> None:
     schema_files = {
         "design_doc":        "design_doc.schema.json",
         "qa_pairs":          "qa_pairs.schema.json",
-        "lora_store":        "lora_store.schema.json",
+        "ledger":            "ledger.schema.json",
+        "repo":              "repo.schema.json",
         "eval_result_jsonl": "eval_result.schema.json",   # JSONL, one record per line
         "eval_run_meta":     "eval_run_meta.schema.json",
         "ledger_entry":      "ledger_entry.schema.json",

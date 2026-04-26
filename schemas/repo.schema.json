@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memcoder.local/schemas/repo.schema.json",
+  "title": "MemCoder repository artifact metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["repo_id", "commit"],
+  "properties": {
+    "repo_id": {
+      "type": "string"
+    },
+    "commit": {
+      "type": "string"
+    }
+  }
+}

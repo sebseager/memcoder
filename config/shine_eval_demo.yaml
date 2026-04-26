@@ -15,7 +15,7 @@ memcoder_eval:
   design_doc: artifacts/antirez__kilo/easy/docs/overview_purpose_1.json
   qa_pairs: artifacts/antirez__kilo/easy/qas/overview_purpose_1.json
   output: artifacts/antirez__kilo/easy/eval_results.jsonl
-  save_lora_dict: artifacts/antirez__kilo/easy/loras/overview_purpose_1_lora_dict.pt
+  save_lora_dict: artifacts/antirez__kilo/easy/loras/overview_purpose_1.pt
 
   conditions:
     - naive
