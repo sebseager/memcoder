@@ -25,3 +25,40 @@
 
 1. What goes in the input to the LORA?
 2. How is the output managed and accessed?
+
+## Repository layout
+
+- `vendor/`: third-party implementation dependencies used by this project.
+- `target_repos/`: third-party repositories used as inputs for design-document
+  and QA generation experiments.
+
+Target repositories should be added as git submodules using the path convention:
+
+```text
+target_repos/{owner}__{repo}
+```
+
+For example:
+
+```sh
+git submodule add https://github.com/antirez/kilo target_repos/antirez__kilo
+```
+
+## Running SHINE eval
+
+The initial evaluation script is configured by `config/shine_eval_demo.yaml`,
+which starts from the settings in `vendor/SHINE/inference.ipynb`.
+
+```sh
+python scripts/run_shine_eval.py --config config/shine_eval_demo.yaml
+```
+
+Cluster-specific paths can be edited in the config or overridden on the command
+line:
+
+```sh
+python scripts/run_shine_eval.py \
+  --config config/shine_eval_demo.yaml \
+  --model-path /path/to/Qwen3-8B \
+  --checkpoint-dir /path/to/checkpoint-epoch-2
+```

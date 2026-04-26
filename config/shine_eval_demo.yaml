@@ -1,0 +1,102 @@
+# MemCoder SHINE evaluation config.
+#
+# This starts from the configuration dictionary in
+# `vendor/SHINE/inference.ipynb`, with a `memcoder_eval` section added for
+# paths and run controls that are specific to the MemCoder artifact layout.
+
+memcoder_eval:
+  shine_root: vendor/SHINE
+
+  # Override these on the cluster if your model/checkpoint live elsewhere.
+  model_path: vendor/SHINE/models/Qwen3-8B
+  checkpoint_dir: vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2
+
+  # Initial one-repo, one-topic artifact paths.
+  design_doc: artifacts/antirez__kilo/easy/docs/overview_purpose_1.json
+  qa_pairs: artifacts/antirez__kilo/easy/qas/overview_purpose_1.json
+  output: artifacts/antirez__kilo/easy/eval_results.jsonl
+  save_lora_dict: artifacts/antirez__kilo/easy/loras/overview_purpose_1_lora_dict.pt
+
+  conditions:
+    - naive
+    - in_context
+    - shine
+
+  seed: 42
+  device: cuda
+  context_max_length: 1550
+  conversation_max_length: 5000
+  max_new_tokens: 128
+
+name: 8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150
+mode: train
+resume_global_step: -1
+test_global_step: epoch-2
+
+run:
+  seed: 42
+  use_amp: false
+  gradient_accumulation_steps: 4
+  device: cuda
+  use_gradient_checkpoint: false
+
+paths:
+  model_path: vendor/SHINE/models/Qwen3-8B
+
+data:
+  context_max_length: 1024
+  conversation_max_length: 1024
+  train_batch_size: 1
+  eval_batch_size: 1
+  num_workers: 4
+  source: squad
+
+model:
+  lora_r: 8
+  metalora_r: 128
+  ift_additional_metalora_r: -1
+  num_mem_token: 4
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+  tokenizer_from: vendor/SHINE/models/Qwen3-8B
+  model_from: vendor/SHINE/models/Qwen3-8B
+
+metanetwork:
+  type: transformer
+  method: rl
+  transformer_cfg:
+    encoder_cfg:
+      d_model: 4096
+      nhead: 32
+      dim_feedforward: 8192
+      dropout: 0
+      activation: gelu
+      layer_norm_eps: 0.00001
+      batch_first: true
+      norm_first: false
+      bias: true
+    couple_encoder_cfg:
+      d_model: 4096
+      nhead: 32
+      dim_feedforward: 8192
+      dropout: 0
+      activation: gelu
+      layer_norm_eps: 0.00001
+      batch_first: true
+      norm_first: false
+      bias: true
+    layer_transformer_first: true
+    mean_pool_size: 1
+    num_layers: 4
+    couple_num_layers: 0
+    scale: 0.001
+
+test:
+  context_avg_len: 512
+  context_max_length: 1550
+  conversation_max_length: 5000
+  max_new_tokens: 128
+
+hidden_size: -1
+num_layers: -1
+num_mem_token: 4

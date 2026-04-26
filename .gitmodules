@@ -7,3 +7,6 @@
 [submodule "vendor/SHINE"]
 	path = vendor/SHINE
 	url = https://github.com/Yewei-Liu/SHINE
+[submodule "target_repos/antirez__kilo"]
+	path = target_repos/antirez__kilo
+	url = https://github.com/antirez/kilo
