@@ -189,6 +189,12 @@ def main() -> int:
             print_wrapped(condition, record.get(answer_field, ""), args.width)
             if not args.hide_scores:
                 print(f"  {condition} {format_score(record)}")
+            if condition == "composition" and record.get("composition_method"):
+                print(
+                    "  composition config: "
+                    f"method={record.get('composition_method')}, "
+                    f"scale={record.get('composition_scale')}"
+                )
 
         extra_conditions = sorted(set(runs) - {"individual", "composition", ""})
         for condition in extra_conditions:

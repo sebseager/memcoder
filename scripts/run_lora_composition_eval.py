@@ -67,6 +67,22 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Summary JSON path. Defaults to <output>.summary.json.",
     )
+    parser.add_argument(
+        "--composition-method",
+        choices=["rank_average", "rank_sum"],
+        default="rank_average",
+        help=(
+            "How to compose LoRA dictionaries. rank_average concatenates ranks but "
+            "scales each adapter delta by 1/N; rank_sum preserves the original "
+            "unscaled concat behavior."
+        ),
+    )
+    parser.add_argument(
+        "--composition-scale",
+        type=float,
+        default=1.0,
+        help="Additional multiplier for the composed adapter delta.",
+    )
     parser.add_argument("--skip-generate-loras", action="store_true")
     parser.add_argument(
         "--force-loras",
@@ -121,6 +137,86 @@ def qa_path_for_doc(doc_path: Path, document_id: str) -> Path:
 def lora_path_for_doc(lora_dir: Path, document_id: str, label: str | None) -> Path:
     stem = f"{document_id}__{label}" if label else document_id
     return lora_dir / f"{stem}.pt"
+
+
+def composition_weights(count: int, method: str, scale: float) -> list[float]:
+    if count <= 0:
+        raise ValueError("At least one LoRA is required for composition")
+    if method == "rank_sum":
+        return [scale] * count
+    if method == "rank_average":
+        return [scale / count] * count
+    raise ValueError(f"Unknown composition method: {method}")
+
+
+def compose_lora_dicts(lora_dicts: list[Any], weights: list[float]) -> Any:
+    """Compose LoRAs by rank-concat while weighting each adapter's output delta.
+
+    LoraLinear computes `(x @ A) @ B + C`. Concatenating A/B ranks sums deltas,
+    so averaging means scaling one side of each adapter pair, plus C, by 1/N.
+    """
+    if len(lora_dicts) != len(weights):
+        raise ValueError("lora_dicts and weights must have the same length")
+    if not lora_dicts:
+        raise ValueError("Cannot compose an empty LoRA list")
+
+    def _compose(nodes: list[Any], path: str) -> Any:
+        first = nodes[0]
+        if isinstance(first, dict) and "A" in first and "B" in first:
+            if not all(isinstance(node, dict) and "A" in node and "B" in node for node in nodes):
+                raise TypeError(f"{path}: all leaves must be LoRA A/B dictionaries")
+
+            a_tensors = [node["A"] for node in nodes]
+            b_tensors = [node["B"] for node in nodes]
+            c_tensors = [node.get("C", None) for node in nodes]
+
+            for idx, (a_tensor, b_tensor) in enumerate(zip(a_tensors, b_tensors, strict=True)):
+                if a_tensor is None or b_tensor is None:
+                    raise ValueError(f"{path}: A/B cannot be None for adapter {idx}")
+                if a_tensor.shape[0] != a_tensors[0].shape[0]:
+                    raise ValueError(f"{path}.A: Lb mismatch for adapter {idx}")
+                if b_tensor.shape[0] != b_tensors[0].shape[0]:
+                    raise ValueError(f"{path}.B: Lb mismatch for adapter {idx}")
+                if a_tensor.shape[1] != a_tensors[0].shape[1]:
+                    raise ValueError(f"{path}.A: in_features mismatch for adapter {idx}")
+                if b_tensor.shape[2] != b_tensors[0].shape[2]:
+                    raise ValueError(f"{path}.B: out_features mismatch for adapter {idx}")
+                if a_tensor.shape[2] != b_tensor.shape[1]:
+                    raise ValueError(f"{path}: rank mismatch inside adapter {idx}")
+
+            has_c = [c_tensor is not None for c_tensor in c_tensors]
+            if any(has_c) and not all(has_c):
+                raise ValueError(f"{path}.C: either all adapters must have C or none may have C")
+
+            return {
+                "A": shine_eval.torch.cat(
+                    [a_tensor * weight for a_tensor, weight in zip(a_tensors, weights, strict=True)],
+                    dim=2,
+                ),
+                "B": shine_eval.torch.cat(b_tensors, dim=1),
+                "C": None
+                if not any(has_c)
+                else sum(c_tensor * weight for c_tensor, weight in zip(c_tensors, weights, strict=True)),
+            }
+
+        if isinstance(first, dict):
+            keys = set(first.keys())
+            for idx, node in enumerate(nodes):
+                if not isinstance(node, dict):
+                    raise TypeError(f"{path}: adapter {idx} is not a dictionary")
+                if set(node.keys()) != keys:
+                    raise ValueError(f"{path}: key mismatch for adapter {idx}")
+            return {
+                key: _compose(
+                    [node[key] for node in nodes],
+                    path=f"{path}.{key}" if path else str(key),
+                )
+                for key in first.keys()
+            }
+
+        raise TypeError(f"{path}: unsupported LoRA node type {type(first)}")
+
+    return _compose(lora_dicts, "")
 
 
 def forward_arg(cmd: list[str], flag: str, value: Any) -> None:
@@ -282,7 +378,6 @@ def main() -> int:
     shine_eval.import_runtime_deps()
     cfg = shine_eval.load_config(args)
     shine_eval.setup_shine_imports(args.shine_root)
-    from utils.myloradict import merge_loradicts
 
     if args.qwen_cuda is not None:
         qwen_device = shine_eval.torch.device(f"cuda:{args.qwen_cuda}")
@@ -296,14 +391,24 @@ def main() -> int:
     metamodel, tokenizer = shine_eval.load_base_runtime(cfg, qwen_device)
 
     loras: dict[str, Any] = {}
-    composed_lora = None
     for doc_path, document_id in doc_ids.items():
         path = lora_path_for_doc(args.lora_dir, document_id, args.lora_label)
         if not path.exists():
             raise FileNotFoundError(f"Missing LoRA artifact for {document_id}: {path}")
         lora = shine_eval.torch.load(path, map_location=qwen_device, weights_only=False)
         loras[document_id] = lora
-        composed_lora = merge_loradicts(composed_lora, lora, method="rl")
+    weights = composition_weights(
+        count=len(loras),
+        method=args.composition_method,
+        scale=args.composition_scale,
+    )
+    composed_lora = compose_lora_dicts(list(loras.values()), weights)
+    LOGGER.info(
+        "Composed %d LoRAs with %s weights=%s",
+        len(loras),
+        args.composition_method,
+        ", ".join(f"{weight:.4g}" for weight in weights),
+    )
 
     qa_items: list[dict[str, Any]] = []
     for doc_path, document_id in doc_ids.items():
@@ -352,6 +457,8 @@ def main() -> int:
                     "scores": score_answer(qa["expected_answer"], generation["answer"]),
                     "qa_metadata": qa["metadata"],
                     "composition_document_ids": list(doc_ids.values()) if condition == "composition" else None,
+                    "composition_method": args.composition_method if condition == "composition" else None,
+                    "composition_scale": args.composition_scale if condition == "composition" else None,
                 }
                 records.append(record)
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -365,6 +472,12 @@ def main() -> int:
         "lora_paths": {
             document_id: str(lora_path_for_doc(args.lora_dir, document_id, args.lora_label))
             for document_id in doc_ids.values()
+        },
+        "composition_method": args.composition_method,
+        "composition_scale": args.composition_scale,
+        "composition_weights": {
+            document_id: weight
+            for document_id, weight in zip(doc_ids.values(), weights, strict=True)
         },
         "output": str(args.output),
         "summary": summarize(records),
