@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memcoder.local/schemas/eval_run_meta.schema.json",
+  "title": "MemCoder evaluation run metadata sidecar",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_id",
+    "created_at",
+    "design_doc_path",
+    "qa_pairs_path",
+    "conditions",
+    "doc_metadata"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "design_doc_path": {
+      "type": "string"
+    },
+    "qa_pairs_path": {
+      "type": "string"
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "doc_metadata": {
+      "type": "object",
+      "description": "The full design document JSON payload loaded by run_shine_eval.py."
+    }
+  }
+}

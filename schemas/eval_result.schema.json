@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memcoder.local/schemas/eval_result.schema.json",
+  "title": "MemCoder evaluation result JSONL record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_id",
+    "qa_id",
+    "condition",
+    "question",
+    "expected_answer",
+    "answer",
+    "think",
+    "raw_generation",
+    "qa_metadata"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Joins this JSONL record to the sidecar .meta.json."
+    },
+    "qa_id": {
+      "type": "string"
+    },
+    "condition": {
+      "type": "string",
+      "description": "One of naive, in_context, or shine:<label> as emitted by run_shine_eval.py."
+    },
+    "shine_label": {
+      "type": ["string", "null"]
+    },
+    "shine_checkpoint_dir": {
+      "type": ["string", "null"]
+    },
+    "question": {
+      "type": "string"
+    },
+    "expected_answer": {},
+    "answer": {
+      "type": "string"
+    },
+    "think": {
+      "type": "string"
+    },
+    "raw_generation": {
+      "type": "string"
+    },
+    "qa_metadata": {
+      "type": "object"
+    }
+  }
+}
