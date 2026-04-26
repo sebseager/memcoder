@@ -277,7 +277,7 @@ def parse_shine_checkpoint_spec(spec: Any) -> dict[str, Any]:
     return out
 
 
-def load_config(args: argparse.Namespace):
+def load_config(args: argparse.Namespace, require_eval_paths: bool = True):
     args.config = resolve_repo_path(args.config)
     cfg = OmegaConf.load(args.config)
     if args.overrides:
@@ -325,11 +325,8 @@ def load_config(args: argparse.Namespace):
     if not args.shine_checkpoint and yaml_shine:
         args.shine_checkpoint = list(yaml_shine)
 
-    missing = [
-        name
-        for name in ("design_doc", "qa_pairs", "output")
-        if getattr(args, name) is None
-    ]
+    required_paths = ("design_doc", "qa_pairs", "output") if require_eval_paths else ("design_doc",)
+    missing = [name for name in required_paths if getattr(args, name) is None]
     if missing:
         missing_flags = ", ".join(f"--{name.replace('_', '-')}" for name in missing)
         raise ValueError(
