@@ -5,17 +5,17 @@
 # paths and run controls that are specific to the MemCoder artifact layout.
 
 memcoder_eval:
-  shine_root: /vendor/SHINE
+  shine_root: vendor/SHINE
 
   # Override these on the cluster if your model/checkpoint live elsewhere.
-  model_path: /vendor/SHINE/models/Qwen3-8B
-  checkpoint_dir: /vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2
+  model_path: vendor/SHINE/models/Qwen3-8B
+  checkpoint_dir: vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2
 
   # Initial one-repo, one-topic artifact paths.
-  design_doc: /artifacts/antirez__kilo/easy/docs/overview_purpose_1.json
-  qa_pairs: /artifacts/antirez__kilo/easy/qas/overview_purpose_1.json
-  output: /artifacts/antirez__kilo/easy/eval_results.jsonl
-  save_lora_dict: /artifacts/antirez__kilo/easy/loras/overview_purpose_1_lora_dict.pt
+  design_doc: artifacts/antirez__kilo/easy/docs/overview_purpose_1.json
+  qa_pairs: artifacts/antirez__kilo/easy/qas/overview_purpose_1.json
+  output: artifacts/antirez__kilo/easy/eval_results.jsonl
+  save_lora_dict: artifacts/antirez__kilo/easy/loras/overview_purpose_1_lora_dict.pt
 
   conditions:
     - naive
@@ -41,7 +41,7 @@ run:
   use_gradient_checkpoint: false
 
 paths:
-  model_path: /vendor/SHINE/models/Qwen3-8B
+  model_path: vendor/SHINE/models/Qwen3-8B
 
 data:
   context_max_length: 1024
@@ -58,8 +58,8 @@ model:
   num_mem_token: 4
   metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
   config_class_path: LoraQwen.Qwen3Config
-  tokenizer_from: /vendor/SHINE/models/Qwen3-8B
-  model_from: /vendor/SHINE/models/Qwen3-8B
+  tokenizer_from: vendor/SHINE/models/Qwen3-8B
+  model_from: vendor/SHINE/models/Qwen3-8B
 
 metanetwork:
   type: transformer

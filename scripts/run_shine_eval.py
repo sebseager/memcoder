@@ -64,17 +64,13 @@ def resolve_repo_path(path: Path | None) -> Path | None:
     Rules:
     - `None` stays `None`
     - relative paths are treated as repo-root relative
-    - absolute paths that exist are kept as-is
-    - absolute paths that do not exist are interpreted as repo-root-style paths
-      (for example `/config/file.yaml` => `<repo>/config/file.yaml`)
+    - absolute paths stay absolute, even if they do not exist yet
     """
     if path is None:
         return None
 
     if path.is_absolute():
-        if path.exists():
-            return path
-        return REPO_ROOT / path.as_posix().lstrip("/")
+        return path
 
     return REPO_ROOT / path
 
@@ -83,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=Path("/config/shine_eval_demo.yaml"),
+        default=Path("config/shine_eval_demo.yaml"),
         type=Path,
         help="MemCoder SHINE eval config file.",
     )
@@ -296,7 +292,7 @@ def load_config(args: argparse.Namespace):
     args.design_doc = args.design_doc or cfg_path("design_doc")
     args.qa_pairs = args.qa_pairs or cfg_path("qa_pairs")
     args.output = args.output or cfg_path("output")
-    args.shine_root = args.shine_root or cfg_path("shine_root") or Path("/vendor/SHINE")
+    args.shine_root = args.shine_root or cfg_path("shine_root") or Path("vendor/SHINE")
     args.checkpoint_dir = args.checkpoint_dir or cfg_path("checkpoint_dir")
     args.model_path = args.model_path or cfg_path("model_path")
     args.save_lora_dict = args.save_lora_dict or cfg_path("save_lora_dict")
