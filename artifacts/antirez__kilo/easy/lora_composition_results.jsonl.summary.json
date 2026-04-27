@@ -1,41 +1,42 @@
 {
-  "run_id": "20260427T002050Z",
-  "created_at": "2026-04-27T00:24:56.810061+00:00",
+  "run_id": "20260427T021337Z",
+  "created_at": "2026-04-27T02:17:55.048940+00:00",
   "docs": [
     "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/docs/overview_purpose_1.json",
     "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/docs/raw_terminal_input_1.json",
     "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/docs/rows_editing_persistence_1.json"
   ],
+  "qa_paths": null,
   "lora_paths": {
     "overview_purpose_1": "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/loras/overview_purpose_1.pt",
     "raw_terminal_input_1": "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/loras/raw_terminal_input_1.pt",
     "rows_editing_persistence_1": "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/loras/rows_editing_persistence_1.pt"
   },
   "composition_method": "rank_average",
-  "composition_scale": 0.5,
+  "composition_scale": 1.0,
   "composition_weights": {
-    "overview_purpose_1": 0.16666666666666666,
-    "raw_terminal_input_1": 0.16666666666666666,
-    "rows_editing_persistence_1": 0.16666666666666666
+    "overview_purpose_1": 0.3333333333333333,
+    "raw_terminal_input_1": 0.3333333333333333,
+    "rows_editing_persistence_1": 0.3333333333333333
   },
   "output": "/insomnia001/depts/free/users/sjs2331/memcoder/artifacts/antirez__kilo/easy/lora_composition_results.jsonl",
   "summary": {
     "conditions": {
       "composition": {
-        "count": 42,
-        "avg_token_f1": 0.2585602373118735,
-        "exact_or_contains_rate": 0.023809523809523808
+        "count": 43,
+        "avg_token_f1": 0.22501096780065782,
+        "exact_or_contains_rate": 0.0
       },
       "individual": {
-        "count": 42,
-        "avg_token_f1": 0.27799814673843615,
-        "exact_or_contains_rate": 0.047619047619047616
+        "count": 43,
+        "avg_token_f1": 0.2779908351275422,
+        "exact_or_contains_rate": 0.023255813953488372
       }
     },
     "documents": {
       "overview_purpose_1:composition": {
         "count": 16,
-        "avg_token_f1": 0.26017868320951326,
+        "avg_token_f1": 0.2254202527331733,
         "exact_or_contains_rate": 0.0
       },
       "overview_purpose_1:individual": {
@@ -44,23 +45,23 @@
         "exact_or_contains_rate": 0.0625
       },
       "raw_terminal_input_1:composition": {
-        "count": 13,
-        "avg_token_f1": 0.25637695637695634,
-        "exact_or_contains_rate": 0.07692307692307693
+        "count": 14,
+        "avg_token_f1": 0.23935003792457632,
+        "exact_or_contains_rate": 0.0
       },
       "raw_terminal_input_1:individual": {
-        "count": 13,
-        "avg_token_f1": 0.3055046974670695,
-        "exact_or_contains_rate": 0.07692307692307693
+        "count": 14,
+        "avg_token_f1": 0.24867672091274512,
+        "exact_or_contains_rate": 0.0
       },
       "rows_editing_persistence_1:composition": {
         "count": 13,
-        "avg_token_f1": 0.258751584834311,
+        "avg_token_f1": 0.2090651569810342,
         "exact_or_contains_rate": 0.0
       },
       "rows_editing_persistence_1:individual": {
         "count": 13,
-        "avg_token_f1": 0.18864526031606935,
+        "avg_token_f1": 0.2477045466055668,
         "exact_or_contains_rate": 0.0
       }
     },
@@ -68,341 +69,435 @@
       {
         "qa_id": "overview_purpose_overview_purpose_1_0001",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.31578947368421056,
-        "composition_token_f1": 0.22222222222222224,
-        "delta_token_f1": -0.09356725146198833,
+        "composition_token_f1": 0.2608695652173913,
+        "delta_token_f1": -0.05491990846681927,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0002",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.33333333333333337,
-        "composition_token_f1": 0.588235294117647,
-        "delta_token_f1": 0.2549019607843136,
+        "composition_token_f1": 0.16666666666666669,
+        "delta_token_f1": -0.16666666666666669,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0003",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.6666666666666666,
-        "composition_token_f1": 0.2,
-        "delta_token_f1": -0.4666666666666666,
+        "composition_token_f1": 0.25,
+        "delta_token_f1": -0.41666666666666663,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0004",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.13793103448275862,
-        "composition_token_f1": 0.08695652173913045,
-        "delta_token_f1": -0.05097451274362817,
-        "composition_changed_answer": true
+        "composition_token_f1": 0.13793103448275862,
+        "delta_token_f1": 0.0,
+        "composition_changed_answer": false
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0005",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.4782608695652174,
-        "composition_token_f1": 0.2,
-        "delta_token_f1": -0.2782608695652174,
+        "composition_token_f1": 0.2727272727272727,
+        "delta_token_f1": -0.2055335968379447,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0006",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.16,
-        "composition_token_f1": 0.07407407407407408,
-        "delta_token_f1": -0.08592592592592592,
+        "composition_token_f1": 0.16,
+        "delta_token_f1": 0.0,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0007",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.6666666666666666,
-        "composition_token_f1": 0.4347826086956522,
-        "delta_token_f1": -0.2318840579710144,
+        "composition_token_f1": 0.30769230769230765,
+        "delta_token_f1": -0.358974358974359,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0008",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.39999999999999997,
-        "composition_token_f1": 0.27272727272727276,
-        "delta_token_f1": -0.1272727272727272,
+        "composition_token_f1": 0.2181818181818182,
+        "delta_token_f1": -0.18181818181818177,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0009",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.3870967741935483,
-        "composition_token_f1": 0.21428571428571427,
-        "delta_token_f1": -0.17281105990783405,
+        "composition_token_f1": 0.07692307692307693,
+        "delta_token_f1": -0.3101736972704714,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0010",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.5806451612903226,
-        "composition_token_f1": 0.39999999999999997,
-        "delta_token_f1": -0.18064516129032265,
+        "composition_token_f1": 0.37837837837837834,
+        "delta_token_f1": -0.20226678291194428,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0011",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.38095238095238093,
-        "composition_token_f1": 0.3157894736842105,
-        "delta_token_f1": -0.06516290726817042,
+        "composition_token_f1": 0.34782608695652173,
+        "delta_token_f1": -0.0331262939958592,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0012",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.0,
-        "composition_token_f1": 0.3,
-        "delta_token_f1": 0.3,
+        "composition_token_f1": 0.19047619047619044,
+        "delta_token_f1": 0.19047619047619044,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0013",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.2978723404255319,
-        "composition_token_f1": 0.14634146341463417,
-        "delta_token_f1": -0.15153087701089774,
+        "composition_token_f1": 0.2325581395348837,
+        "delta_token_f1": -0.06531420089064821,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0014",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.12903225806451613,
-        "composition_token_f1": 0.15789473684210525,
-        "delta_token_f1": 0.02886247877758913,
+        "composition_token_f1": 0.36363636363636365,
+        "delta_token_f1": 0.23460410557184752,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0015",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.23076923076923075,
-        "composition_token_f1": 0.2162162162162162,
-        "delta_token_f1": -0.014553014553014554,
+        "composition_token_f1": 0.1714285714285714,
+        "delta_token_f1": -0.05934065934065935,
         "composition_changed_answer": true
       },
       {
         "qa_id": "overview_purpose_overview_purpose_1_0016",
         "document_id": "overview_purpose_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "overview_purpose_1",
         "individual_token_f1": 0.08695652173913043,
-        "composition_token_f1": 0.3333333333333333,
-        "delta_token_f1": 0.24637681159420288,
+        "composition_token_f1": 0.07142857142857142,
+        "delta_token_f1": -0.015527950310559008,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0001",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.25,
-        "composition_token_f1": 0.6666666666666665,
-        "delta_token_f1": 0.4166666666666665,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.44000000000000006,
+        "composition_token_f1": 0.47368421052631576,
+        "delta_token_f1": 0.033684210526315705,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0002",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.5263157894736842,
-        "composition_token_f1": 0.39999999999999997,
-        "delta_token_f1": -0.12631578947368421,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.0,
+        "composition_token_f1": 0.26415094339622636,
+        "delta_token_f1": 0.26415094339622636,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0003",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.5,
-        "composition_token_f1": 0.14285714285714288,
-        "delta_token_f1": -0.3571428571428571,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.5714285714285715,
+        "composition_token_f1": 0.4,
+        "delta_token_f1": -0.17142857142857149,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0004",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.75,
-        "composition_token_f1": 0.0,
-        "delta_token_f1": -0.75,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.11764705882352941,
+        "composition_token_f1": 0.18181818181818182,
+        "delta_token_f1": 0.06417112299465241,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0005",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.0,
-        "composition_token_f1": 0.09090909090909091,
-        "delta_token_f1": 0.09090909090909091,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.4680851063829788,
+        "composition_token_f1": 0.2608695652173913,
+        "delta_token_f1": -0.2072155411655875,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0006",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.22222222222222224,
-        "composition_token_f1": 0.5454545454545454,
-        "delta_token_f1": 0.3232323232323232,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.4,
+        "composition_token_f1": 0.16666666666666666,
+        "delta_token_f1": -0.23333333333333336,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0007",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.05128205128205128,
-        "composition_token_f1": 0.2,
-        "delta_token_f1": 0.14871794871794874,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.2,
+        "composition_token_f1": 0.1111111111111111,
+        "delta_token_f1": -0.0888888888888889,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0008",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.07692307692307691,
-        "composition_token_f1": 0.21428571428571427,
-        "delta_token_f1": 0.13736263736263737,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.10526315789473685,
+        "composition_token_f1": 0.10526315789473685,
+        "delta_token_f1": 0.0,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0009",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.16666666666666666,
-        "composition_token_f1": 0.0,
-        "delta_token_f1": -0.16666666666666666,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.19999999999999998,
+        "composition_token_f1": 0.20512820512820512,
+        "delta_token_f1": 0.005128205128205138,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0010",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.8,
-        "composition_token_f1": 0.5,
-        "delta_token_f1": -0.30000000000000004,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.1111111111111111,
+        "composition_token_f1": 0.25641025641025644,
+        "delta_token_f1": 0.14529914529914534,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0011",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.23529411764705882,
-        "composition_token_f1": 0.16666666666666669,
-        "delta_token_f1": -0.06862745098039214,
-        "composition_changed_answer": true
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.15384615384615383,
+        "composition_token_f1": 0.15384615384615383,
+        "delta_token_f1": 0.0,
+        "composition_changed_answer": false
       },
       {
         "qa_id": "raw_terminal_input_1_0012",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.25,
-        "composition_token_f1": 0.2727272727272727,
-        "delta_token_f1": 0.022727272727272707,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.25531914893617025,
+        "composition_token_f1": 0.26666666666666666,
+        "delta_token_f1": 0.011347517730496415,
         "composition_changed_answer": true
       },
       {
         "qa_id": "raw_terminal_input_1_0013",
         "document_id": "raw_terminal_input_1",
-        "individual_token_f1": 0.14285714285714285,
-        "composition_token_f1": 0.13333333333333333,
-        "delta_token_f1": -0.009523809523809518,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.27272727272727276,
+        "composition_token_f1": 0.27272727272727276,
+        "delta_token_f1": 0.0,
+        "composition_changed_answer": false
+      },
+      {
+        "qa_id": "raw_terminal_input_1_0014",
+        "document_id": "raw_terminal_input_1",
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "raw_terminal_input_1",
+        "individual_token_f1": 0.18604651162790697,
+        "composition_token_f1": 0.23255813953488377,
+        "delta_token_f1": 0.0465116279069768,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0001",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.6,
-        "composition_token_f1": 0.16666666666666669,
-        "delta_token_f1": -0.4333333333333333,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.36000000000000004,
+        "composition_token_f1": 0.2448979591836735,
+        "delta_token_f1": -0.11510204081632655,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0002",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.41379310344827586,
-        "composition_token_f1": 0.5405405405405405,
-        "delta_token_f1": 0.1267474370922646,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.18749999999999997,
+        "composition_token_f1": 0.06896551724137931,
+        "delta_token_f1": -0.11853448275862066,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0003",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.0,
-        "composition_token_f1": 0.0,
-        "delta_token_f1": 0.0,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.18181818181818182,
+        "composition_token_f1": 0.2,
+        "delta_token_f1": 0.018181818181818188,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0004",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.21052631578947367,
-        "composition_token_f1": 0.18181818181818185,
-        "delta_token_f1": -0.02870813397129182,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.25,
+        "composition_token_f1": 0.2222222222222222,
+        "delta_token_f1": -0.02777777777777779,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0005",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.17142857142857143,
-        "composition_token_f1": 0.24390243902439027,
-        "delta_token_f1": 0.07247386759581884,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.15789473684210525,
+        "composition_token_f1": 0.20512820512820512,
+        "delta_token_f1": 0.04723346828609987,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0006",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.0,
-        "composition_token_f1": 0.32,
-        "delta_token_f1": 0.32,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.19047619047619047,
+        "composition_token_f1": 0.4166666666666667,
+        "delta_token_f1": 0.22619047619047622,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0007",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.19047619047619047,
-        "composition_token_f1": 0.38461538461538464,
-        "delta_token_f1": 0.19413919413919417,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.2580645161290323,
+        "composition_token_f1": 0.1,
+        "delta_token_f1": -0.1580645161290323,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0008",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.1764705882352941,
-        "composition_token_f1": 0.2222222222222222,
-        "delta_token_f1": 0.04575163398692811,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.3529411764705882,
+        "composition_token_f1": 0.3793103448275862,
+        "delta_token_f1": 0.026369168356997985,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0009",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.2564102564102564,
-        "composition_token_f1": 0.2325581395348837,
-        "delta_token_f1": -0.023852116875372698,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.3880597014925374,
+        "composition_token_f1": 0.18181818181818182,
+        "delta_token_f1": -0.20624151967435556,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0010",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.0,
-        "composition_token_f1": 0.3888888888888889,
-        "delta_token_f1": 0.3888888888888889,
-        "composition_changed_answer": true
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.07142857142857142,
+        "composition_token_f1": 0.07142857142857142,
+        "delta_token_f1": 0.0,
+        "composition_changed_answer": false
       },
       {
         "qa_id": "rows_editing_persistence_1_0011",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.13793103448275862,
-        "composition_token_f1": 0.19999999999999998,
-        "delta_token_f1": 0.062068965517241365,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.20512820512820512,
+        "composition_token_f1": 0.15384615384615385,
+        "delta_token_f1": -0.051282051282051266,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0012",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.2608695652173913,
-        "composition_token_f1": 0.25,
-        "delta_token_f1": -0.010869565217391297,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.3125,
+        "composition_token_f1": 0.20689655172413793,
+        "delta_token_f1": -0.10560344827586207,
         "composition_changed_answer": true
       },
       {
         "qa_id": "rows_editing_persistence_1_0013",
         "document_id": "rows_editing_persistence_1",
-        "individual_token_f1": 0.03448275862068965,
-        "composition_token_f1": 0.23255813953488372,
-        "delta_token_f1": 0.19807538091419408,
+        "best_individual_condition": "individual",
+        "best_individual_adapter_document_id": "rows_editing_persistence_1",
+        "individual_token_f1": 0.3043478260869565,
+        "composition_token_f1": 0.26666666666666666,
+        "delta_token_f1": -0.03768115942028982,
         "composition_changed_answer": true
       }
     ],
-    "composition_minus_individual_avg_token_f1": -0.01943790942656265,
+    "composition_minus_individual_avg_token_f1": -0.05297986732688437,
     "composition_effective_by_token_f1": false
   }
 }
