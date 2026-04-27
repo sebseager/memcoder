@@ -26,10 +26,14 @@
           "topic_slug": {
             "type": "string"
           },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Short prose summary of the document, written by the scraper. Used by the future embedding pipeline."
+          },
           "files": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["doc", "doc_embedding", "lora", "qa", "qa_examples"],
+            "required": ["doc", "doc_embedding", "qa", "qa_examples"],
             "properties": {
               "doc": {
                 "type": "string",

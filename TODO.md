@@ -100,3 +100,15 @@ artifacts/
 - [ ] Add Qwen-as-router.
 - [ ] Add RAG-over-design-docs baseline.
 - [ ] Add more target repositories.
+- [ ] **Two-checkpoint LoRA comparison script.** Build a separate tool that
+  (a) loads two SHINE checkpoints — the initial pair is
+  `vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2`
+  and `.../train/checkpoint-epoch-1`; (b) bakes a LoRA dict per
+  (document, checkpoint) pair into `easy/loras/<doc_id>__<ckpt_label>.pt`
+  and updates each ledger entry with `lora_variants: {<label>: <path>}`;
+  (c) runs the eval harness's predict + judge phases for each variant
+  separately (or in a unified pass once the harness learns
+  `lora_variants`); (d) emits a side-by-side report. Deferred because the
+  current ledger has no provenance link from a `.pt` file back to the
+  SHINE checkpoint that produced it, and adding that provenance is part
+  of the bake step rather than the eval step.

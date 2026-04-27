@@ -4,9 +4,11 @@
       "document_id": "overview_purpose_1",
       "difficulty": "easy",
       "topic": "Overview / Purpose",
+      "topic_slug": "overview_purpose",
       "files": {
         "doc": "easy/docs/overview_purpose_1.json",
         "doc_embedding": null,
+        "lora": "easy/loras/overview_purpose_1.pt",
         "qa": "easy/qas/overview_purpose_1.json",
         "qa_examples": null
       }

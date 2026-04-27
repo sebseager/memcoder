@@ -1,0 +1,51 @@
+# Two-checkpoint LoRA comparison — kilo easy.
+#
+# Bakes a fresh LoRA per (document, checkpoint) pair from each SHINE
+# checkpoint, runs every QA through both LoRAs, judges with the existing
+# OpenAI judge, and emits a side-by-side report under results/.
+#
+# LoRAs live in GPU memory only — no .pt files are written under
+# artifacts/<repo>/loras/, and ledger.json is not mutated.
+
+run_name: two_ckpt_kilo_v0
+
+# Base SHINE OmegaConf config (model layout, metanetwork dims). Reused
+# instead of re-declaring the full SHINE structure inline.
+shine_base_config: config/shine_eval_demo.yaml
+shine_overrides: []
+
+artifacts:
+  - root: artifacts/antirez__kilo
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+
+# Each hypernetwork is pinned to its own GPU; the shared Qwen base lives
+# on model.qwen_cuda. All three CUDA indices must be distinct.
+checkpoints:
+  - label: iftpwc_epoch2
+    path: vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2
+    cuda: 1
+  - label: train_epoch1
+    path: vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/train/checkpoint-epoch-1
+    cuda: 2
+
+model:
+  qwen_base: vendor/SHINE/models/Qwen3-8B
+  shine_root: vendor/SHINE
+  qwen_cuda: 0
+  context_max_length: 1150
+  conversation_max_length: 5000
+  max_new_tokens: 128
+  seed: 42
+
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: .env
+  concurrency: 8
+  prompt: prompts/llm_judge_grading_v0.md
+  rubric_version: v0
+  taxonomy_version: v0
+  max_retries: 4

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memcoder.local/schemas/judge_result.schema.json",
+  "title": "MemCoder judgment JSONL record",
+  "description": "One row of judgments.jsonl: a prediction row augmented with an LLM-judge block.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_id",
+    "qa_id",
+    "condition",
+    "question",
+    "expected_answer",
+    "answer",
+    "judge"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "qa_id": {
+      "type": "string"
+    },
+    "condition": {
+      "type": "string",
+      "description": "naive | in_context | shine (or shine:<label> for legacy multi-checkpoint runs)."
+    },
+    "question": {
+      "type": "string"
+    },
+    "expected_answer": {},
+    "answer": {
+      "type": "string"
+    },
+    "judge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "rubric_version",
+        "taxonomy_version",
+        "score",
+        "reasoning",
+        "failure_modes"
+      ],
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "rubric_version": {
+          "type": "string"
+        },
+        "taxonomy_version": {
+          "type": "string"
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "failure_modes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "wrong_specifics",
+              "missing_information",
+              "off_topic",
+              "refusal_or_nonresponse",
+              "format_failure",
+              "other"
+            ]
+          }
+        },
+        "failure_mode_notes": {
+          "type": "string"
+        },
+        "raw_response": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
