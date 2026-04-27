@@ -4,10 +4,9 @@ Version: `doc_derived_qa_generation_v1`
 
 ## Purpose
 
-Generate evaluation QA pairs whose answers are explicitly grounded in one
-design document. These QAs measure whether a SHINE LoRA built from the
-document preserves enough information to answer real questions about the
-topic.
+Generate exactly three evaluation QA pairs whose answers are explicitly grounded
+in one design document. These QAs measure whether a SHINE LoRA built from the
+document preserves enough information to answer real questions about the topic.
 
 ## Inputs
 
@@ -22,14 +21,16 @@ topic.
 
 ## Instructions
 
-Generate as many useful QA pairs as the design document can support. Every
-answer must be answerable from the design document alone. Do not use
-outside knowledge or facts from the repository that are absent from the
-document.
+You are a QA subagent in a local orchestrator/subagent workflow. Generate exactly
+3 useful QA pairs. Every answer must be answerable from the design document
+alone. Do not use outside knowledge or facts from the repository that are absent
+from the document.
 
-Questions should be natural developer questions. Prefer questions that
-test specific facts, relationships, responsibilities, or constraints
-described in the document. Avoid adversarial trick questions.
+Questions should be natural developer questions. Prefer questions that test
+specific facts, relationships, responsibilities, or constraints described in the
+document. Avoid adversarial trick questions. If the document supports more than
+3 possible questions, choose the 3 highest-signal questions for evaluating
+whether the document was preserved.
 
 The harness scores answers on a 1–5 integer scale via an LLM judge that
 sees only the question, the ground-truth answer, and the model's answer.

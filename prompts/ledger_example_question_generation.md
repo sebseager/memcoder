@@ -4,10 +4,10 @@ Version: `ledger_example_question_generation_v1`
 
 ## Purpose
 
-Generate routing example questions for a ledger entry. These questions
-help a router (Qwen-as-router or embedding-based) select the right LoRA
-for a given user query. They are **not** evaluation questions and are
-never scored against a model answer.
+Generate a separate routing example question artifact for a ledger entry. These
+questions help a router (Qwen-as-router or embedding-based) select the right
+LoRA for a given user query. They are **not** evaluation questions and are never
+scored against a model answer.
 
 ## Inputs
 
@@ -23,9 +23,10 @@ never scored against a model answer.
 
 ## Instructions
 
-Generate 3 to 5 example questions that this LoRA should be able to
-answer. The questions must be grounded in the design document and must
-be different from the provided evaluation questions.
+You are a routing-example subagent in a local orchestrator/subagent workflow.
+Generate 3 to 5 example questions that this LoRA should be able to answer. The
+questions must be grounded in the design document and must be different from the
+provided evaluation questions.
 
 The goal is **routing, not grading**. The router will see a user query
 and a list of (LoRA ID, example questions) pairs. It picks the LoRA

@@ -58,7 +58,8 @@
                 "pattern": "^(easy|medium|hard)/qas/[^/]+\\.json$"
               },
               "qa_examples": {
-                "type": "null"
+                "type": ["string", "null"],
+                "pattern": "^(easy|medium|hard)/qa_examples/[^/]+\\.json$"
               }
             }
           }

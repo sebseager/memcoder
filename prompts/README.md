@@ -18,10 +18,16 @@ artifacts from target repositories.
 
 Templates:
 
-- `topic_discovery.md` (v0): discover and justify repository topics.
-- `design_doc_generation.md` (**v1**): generate one prose design document for a topic.
-- `doc_derived_qa_generation.md` (**v1**): generate evaluation QA pairs from a design document.
-- `ledger_example_question_generation.md` (**v1**): generate routing example questions that are kept separate from evaluation QAs.
+- `topic_discovery.md` (**v1**): discover and justify repository topics as a
+  first-class artifact with evidence-pack hints for subagents.
+- `orchestrator_artifact_generation.md` (v0): coordinate the local
+  orchestrator/subagent artifact-generation workflow.
+- `design_doc_generation.md` (**v1**): generate one prose design document for a
+  topic plus a short routing/retrieval description.
+- `doc_derived_qa_generation.md` (**v1**): generate exactly three evaluation QA
+  pairs from a design document.
+- `ledger_example_question_generation.md` (**v1**): generate a separate routing
+  example question artifact kept distinct from evaluation QAs.
 - `llm_judge_grading_v0.md`: rubric used by the eval harness's LLM judge phase. Version is in the filename per a different convention because the harness loads it by literal path.
 
 Generated artifacts should record the prompt filename and version used to create
@@ -48,5 +54,6 @@ that prompted the v1 bumps to the doc and QA prompts:
   question without the doc, with examples of weak/leaky question shapes
   to avoid.
 
-`topic_discovery.md` was untouched at v0 — the pilot did not surface any
-findings that materially affect topic discovery.
+`topic_discovery.md` is now v1 for artifact-schema reasons, not because the
+pilot surfaced topic-discovery failures: topic discovery is a first-class
+artifact and includes `evidence_pack_hint` values for local subagents.

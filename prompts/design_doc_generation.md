@@ -4,10 +4,10 @@ Version: `design_doc_generation_v1`
 
 ## Purpose
 
-Generate one natural-language design document for a single repository topic.
-The document will be compressed into a SHINE LoRA and used at inference time
-to answer developer questions about the topic without the document being in
-context.
+Generate one natural-language design document for a single repository topic plus
+a short description of what the document explains. The document will be
+compressed into a SHINE LoRA and used at inference time to answer developer
+questions about the topic without the document being in context.
 
 ## Inputs
 
@@ -19,25 +19,31 @@ context.
 - Topic title: `{topic_title}`
 - Difficulty: `{difficulty}`
 - Token budget: `{token_budget}`
-- Files or summaries provided by the caller: `{repo_context}`
+- Topic-specific evidence pack provided by the orchestrator: `{repo_context}`
 
 ## Instructions
 
-Write a prose design document about the requested topic. The document is
-the *only* thing the SHINE hypernetwork sees about this topic — it must be
-self-contained and factually dense, but **must not become a code listing
-or a catalog of identifiers**. The pilot established that catalog-style
-docs produce LoRAs that degrade the model's output (gibberish loops,
-invented identifiers). Prose-first docs at the same conceptual content
-produce visibly better LoRAs.
+You are a topic subagent in a local orchestrator/subagent workflow. Write a prose
+design document about the requested topic using only the topic-specific evidence
+pack provided by the orchestrator. The document is the *only* thing the SHINE
+hypernetwork sees about this topic — it must be self-contained and factually
+dense, but **must not become a code listing or a catalog of identifiers**. The
+pilot established that catalog-style docs produce LoRAs that degrade the model's
+output (gibberish loops, invented identifiers). Prose-first docs at the same
+conceptual content produce visibly better LoRAs.
 
 Hard requirements:
 
 - Stay strictly under `{token_budget}` tokens.
 - Ground every claim in the provided repository context. Do not speculate
   about behavior that is not in the source material.
+- Explain the purpose of the topic and the important implementation details.
+- Mention concrete files, functions, or data structures when they matter, while
+  following the style requirements below.
 - Write for a developer who needs to answer questions about this
   repository without rereading the code.
+- Include a short `description` field summarizing what questions this document
+  is useful for routing or retrieval.
 
 ### Style requirements (binding — these are the v1 changes)
 
@@ -102,6 +108,7 @@ Return JSON:
   "difficulty": "{difficulty}",
   "generator": "{generator}",
   "prompt_version": "design_doc_generation_v1",
+  "description": "Short summary of what this document explains and what kinds of questions it can answer.",
   "document": "..."
 }
 ```

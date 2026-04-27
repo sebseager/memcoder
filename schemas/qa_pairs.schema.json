@@ -68,5 +68,25 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "prompt_version": {
+            "const": "doc_derived_qa_generation_v1"
+          }
+        },
+        "required": ["prompt_version"]
+      },
+      "then": {
+        "properties": {
+          "qa_pairs": {
+            "minItems": 3,
+            "maxItems": 3
+          }
+        }
+      }
+    }
+  ]
 }

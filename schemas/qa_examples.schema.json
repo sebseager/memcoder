@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memcoder.local/schemas/qa_examples.schema.json",
+  "title": "MemCoder ledger example questions",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "repo_id",
+    "commit",
+    "lora_id",
+    "document_id",
+    "topic",
+    "topic_slug",
+    "generator",
+    "prompt_version",
+    "example_questions"
+  ],
+  "properties": {
+    "repo_id": {
+      "type": "string"
+    },
+    "commit": {
+      "type": "string"
+    },
+    "lora_id": {
+      "type": "string"
+    },
+    "document_id": {
+      "type": "string"
+    },
+    "topic": {
+      "type": "string"
+    },
+    "topic_slug": {
+      "type": "string"
+    },
+    "generator": {
+      "type": "string"
+    },
+    "prompt_version": {
+      "type": "string"
+    },
+    "example_questions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

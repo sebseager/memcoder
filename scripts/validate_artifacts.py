@@ -52,6 +52,14 @@ def _route(path: Path) -> str | None:
     if "qas" in parts and path.suffix == ".json":
         return "qa_pairs"
 
+    # artifacts/{repo}/{difficulty}/qa_examples/{name}.json  -> qa_examples
+    if "qa_examples" in parts and path.suffix == ".json":
+        return "qa_examples"
+
+    # artifacts/{repo}/topics.json  -> topic_discovery
+    if path.name == "topics.json":
+        return "topic_discovery"
+
     # artifacts/{repo}/repo.json  -> repo
     if path.name == "repo.json":
         return "repo"
@@ -128,7 +136,7 @@ def _validate_artifact_conventions(instance: object, path: Path) -> list[Validat
 
     errors: list[ValidationError] = []
     document_id = instance.get("document_id")
-    if path.parent.name in {"docs", "qas"} and isinstance(document_id, str):
+    if path.parent.name in {"docs", "qas", "qa_examples"} and isinstance(document_id, str):
         if path.stem != document_id:
             errors.append(
                 ValidationError(
@@ -170,11 +178,12 @@ def _validate_artifact_conventions(instance: object, path: Path) -> list[Validat
         expected = {
             "doc": (difficulty, "docs", ".json"),
             "qa": (difficulty, "qas", ".json"),
+            "qa_examples": (difficulty, "qa_examples", ".json"),
             "lora": (difficulty, "loras", ".pt"),
         }
         for file_key, (difficulty_dir, directory, suffix) in expected.items():
             value = files.get(file_key)
-            if value is None and file_key == "lora":
+            if value is None and file_key in {"lora", "qa_examples"}:
                 continue
             if not isinstance(value, str):
                 continue
@@ -200,15 +209,6 @@ def _validate_artifact_conventions(instance: object, path: Path) -> list[Validat
                     str(path),
                     None,
                     f"{key!r} files.doc_embedding must be null",
-                )
-            )
-
-        if files.get("qa_examples") is not None:
-            errors.append(
-                ValidationError(
-                    str(path),
-                    None,
-                    f"{key!r} files.qa_examples must be null",
                 )
             )
 
@@ -321,6 +321,8 @@ def main() -> None:
     schema_files = {
         "design_doc":        "design_doc.schema.json",
         "qa_pairs":          "qa_pairs.schema.json",
+        "qa_examples":       "qa_examples.schema.json",
+        "topic_discovery":   "topic_discovery.schema.json",
         "ledger":            "ledger.schema.json",
         "repo":              "repo.schema.json",
         "eval_result_jsonl": "eval_result.schema.json",   # JSONL, one record per line

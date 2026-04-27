@@ -47,10 +47,30 @@
       "type": "string",
       "description": "Prompt template version used to generate the document."
     },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short summary of what this document explains and what kinds of questions it can answer."
+    },
     "document": {
       "type": "string",
       "minLength": 1,
       "description": "The prose document text consumed by the SHINE eval script."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "prompt_version": {
+            "const": "design_doc_generation_v1"
+          }
+        },
+        "required": ["prompt_version"]
+      },
+      "then": {
+        "required": ["description"]
+      }
+    }
+  ]
 }
