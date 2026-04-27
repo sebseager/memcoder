@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "overview_purpose_1",
+  "topic": "Overview / Purpose",
+  "topic_slug": "overview_purpose",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0001",
+      "question": "Which two state-synchronization behaviors does marimo use to prevent notebook state from drifting away from the code?",
+      "answer": "When a cell runs, marimo reruns dependent cells or marks them stale for expensive notebooks, and when a cell is deleted, marimo removes that cell's variables from program memory.",
+      "document_id": "overview_purpose_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0002",
+      "question": "How does the overview document connect expensive-notebook behavior with marimo's ordinary-Python reactivity model?",
+      "answer": "It says expensive-notebook configurations can mark affected cells as stale instead of rerunning them, while reactivity still comes from ordinary Python cells that marimo statically analyzes rather than from special opt-in syntax.",
+      "document_id": "overview_purpose_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0003",
+      "question": "Why is assigning a marimo UI element to a global variable important?",
+      "answer": "A UI element assigned to a global variable can synchronize browser interactions back to Python, so cells that depend on that element rerun with its latest value without callback code.",
+      "document_id": "overview_purpose_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "lora_id": "ai_mcp_pairing_1",
+  "document_id": "ai_mcp_pairing_1",
+  "topic": "AI, MCP, and Agent Pairing",
+  "topic_slug": "ai_mcp_pairing",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How does marimo's AI assistant use live notebook variables as context?",
+    "What does marimo expose through its MCP server endpoint?",
+    "How do MCP client presets affect the marimo chat panel?",
+    "What should a developer do when adding a new marimo AI tool for both backend chat and MCP?",
+    "Why does marimo pair recommend agent skills for working with notebooks?"
+  ]
+}

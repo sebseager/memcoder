@@ -1,0 +1,116 @@
+{
+  "documents": {
+    "overview_purpose_1": {
+      "document_id": "overview_purpose_1",
+      "difficulty": "easy",
+      "topic": "Overview / Purpose",
+      "topic_slug": "overview_purpose",
+      "description": "Explains marimo's purpose as a reactive Python notebook, why it emphasizes reproducibility and app/script reuse, and how its public library supports interactive notebooks.",
+      "files": {
+        "doc": "easy/docs/overview_purpose_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/overview_purpose_1.json",
+        "qa_examples": "easy/qa_examples/overview_purpose_1.json"
+      }
+    },
+    "setup_cli_1": {
+      "document_id": "setup_cli_1",
+      "difficulty": "easy",
+      "topic": "Setup and CLI",
+      "topic_slug": "setup_cli",
+      "description": "Explains how marimo is installed, how the command-line interface introduces editing, running, tutorials, conversion, export, and how the main Click commands route those workflows.",
+      "files": {
+        "doc": "easy/docs/setup_cli_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/setup_cli_1.json",
+        "qa_examples": "easy/qa_examples/setup_cli_1.json"
+      }
+    },
+    "public_interface_1": {
+      "document_id": "public_interface_1",
+      "difficulty": "easy",
+      "topic": "Public Python Interface",
+      "topic_slug": "public_interface",
+      "description": "Explains how marimo exposes its top-level Python API, how the API docs group the interface, and when developers should use key public helpers for apps, markdown, state, outputs, and console capture.",
+      "files": {
+        "doc": "easy/docs/public_interface_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/public_interface_1.json",
+        "qa_examples": "easy/qa_examples/public_interface_1.json"
+      }
+    },
+    "reactive_runtime_dataflow_1": {
+      "document_id": "reactive_runtime_dataflow_1",
+      "difficulty": "easy",
+      "topic": "Reactive Runtime and Dataflow",
+      "topic_slug": "reactive_runtime_dataflow",
+      "description": "Explains how marimo derives a notebook dependency graph from cell definitions and references, how that graph drives reactive execution, stale and disabled behavior, and dataflow visualization.",
+      "files": {
+        "doc": "easy/docs/reactive_runtime_dataflow_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/reactive_runtime_dataflow_1.json",
+        "qa_examples": "easy/qa_examples/reactive_runtime_dataflow_1.json"
+      }
+    },
+    "apps_scripts_wasm_1": {
+      "document_id": "apps_scripts_wasm_1",
+      "difficulty": "easy",
+      "topic": "Apps, Scripts, and WebAssembly",
+      "topic_slug": "apps_scripts_wasm",
+      "description": "Explains how marimo notebooks are run as web apps, ordinary Python scripts, exported artifacts, and browser-only WebAssembly notebooks.",
+      "files": {
+        "doc": "easy/docs/apps_scripts_wasm_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/apps_scripts_wasm_1.json",
+        "qa_examples": "easy/qa_examples/apps_scripts_wasm_1.json"
+      }
+    },
+    "ui_outputs_interactivity_1": {
+      "document_id": "ui_outputs_interactivity_1",
+      "difficulty": "easy",
+      "topic": "UI, Outputs, and Interactivity",
+      "topic_slug": "ui_outputs_interactivity",
+      "description": "Explains how marimo connects interactive UI elements, cell reactivity, markdown and rich outputs, and imperative output updates for app-like notebooks.",
+      "files": {
+        "doc": "easy/docs/ui_outputs_interactivity_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/ui_outputs_interactivity_1.json",
+        "qa_examples": "easy/qa_examples/ui_outputs_interactivity_1.json"
+      }
+    },
+    "sql_data_integrations_1": {
+      "document_id": "sql_data_integrations_1",
+      "difficulty": "easy",
+      "topic": "SQL and Data Integrations",
+      "topic_slug": "sql_data_integrations",
+      "description": "Explains how marimo SQL cells execute queries, return dataframe-like results, discover database connections and schemas, and connect notebook data workflows to external data sources.",
+      "files": {
+        "doc": "easy/docs/sql_data_integrations_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/sql_data_integrations_1.json",
+        "qa_examples": "easy/qa_examples/sql_data_integrations_1.json"
+      }
+    },
+    "ai_mcp_pairing_1": {
+      "document_id": "ai_mcp_pairing_1",
+      "difficulty": "easy",
+      "topic": "AI, MCP, and Agent Pairing",
+      "topic_slug": "ai_mcp_pairing",
+      "description": "Explains how marimo connects its notebook-aware AI assistant, MCP server and client support, external agent pairing, and shared tool registration model.",
+      "files": {
+        "doc": "easy/docs/ai_mcp_pairing_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/ai_mcp_pairing_1.json",
+        "qa_examples": "easy/qa_examples/ai_mcp_pairing_1.json"
+      }
+    }
+  }
+}

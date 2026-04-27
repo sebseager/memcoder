@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "sql_data_integrations_1",
+  "topic": "SQL and Data Integrations",
+  "topic_slug": "sql_data_integrations",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "sql_data_integrations_sql_data_integrations_1_0001",
+      "question": "Why are marimo SQL cells described as part of the Python notebook model instead of a separate SQL-only layer?",
+      "answer": "A SQL cell is syntactic sugar for a Python cell that calls `mo.sql`, so the notebook stays a pure Python script. The SQL is represented as a formatted Python string, letting queries depend on UI controls and other Python values in marimo's reactive graph.",
+      "document_id": "sql_data_integrations_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "sql_data_integrations_sql_data_integrations_1_0002",
+      "question": "How does marimo make Python-defined database connections available to SQL cells?",
+      "answer": "It scans notebook variables for values compatible with its supported engine classes, wraps matching values as query engines or catalog-aware connections, and then exposes those compatible Python connection variables as selectable SQL connections in the notebook.",
+      "document_id": "sql_data_integrations_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "sql_data_integrations_sql_data_integrations_1_0003",
+      "question": "What does marimo do when datasource introspection fails for a detected connection?",
+      "answer": "It logs a warning and still returns a connection entry for the Data Sources panel instead of crashing the notebook, leaving any unavailable database, schema, table, or column details empty.",
+      "document_id": "sql_data_integrations_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

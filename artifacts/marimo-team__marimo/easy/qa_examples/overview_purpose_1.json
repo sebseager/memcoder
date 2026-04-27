@@ -1,0 +1,16 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "lora_id": "overview_purpose_1",
+  "document_id": "overview_purpose_1",
+  "topic": "Overview / Purpose",
+  "topic_slug": "overview_purpose",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "What problem is marimo trying to solve compared with traditional notebooks?",
+    "How does marimo combine Python notebooks with app deployment?",
+    "What kinds of features does the top-level marimo library expose for notebook authors?",
+    "Why does marimo emphasize pure Python notebook files?"
+  ]
+}

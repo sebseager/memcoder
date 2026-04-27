@@ -1,0 +1,182 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "topic_discovery_v1",
+  "seed_topics": [
+    "overview_purpose",
+    "setup_installation",
+    "public_interface"
+  ],
+  "topics": [
+    {
+      "topic_slug": "overview_purpose",
+      "title": "Overview / Purpose",
+      "description": "What marimo is, how it differs from traditional notebooks, and the major user-facing capabilities advertised by the project.",
+      "evidence": [
+        "README.md",
+        "docs/index.md",
+        "docs/getting_started/key_concepts.md",
+        "marimo/__init__.py"
+      ],
+      "evidence_pack_hint": [
+        "README.md",
+        "docs/index.md",
+        "docs/getting_started/key_concepts.md",
+        "marimo/__init__.py"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "setup_cli",
+      "title": "Setup and CLI",
+      "description": "How users install marimo, start tutorials, create or edit notebooks, run notebooks as apps or scripts, convert notebooks, and access optional features.",
+      "evidence": [
+        "docs/getting_started/installation.md",
+        "docs/getting_started/quickstart.md",
+        "docs/cli.md",
+        "marimo/_cli/cli.py",
+        "marimo/_cli/export/commands.py",
+        "marimo/_cli/convert/commands.py"
+      ],
+      "evidence_pack_hint": [
+        "docs/getting_started/installation.md",
+        "docs/getting_started/quickstart.md",
+        "docs/cli.md",
+        "marimo/_cli/cli.py",
+        "marimo/_cli/export/commands.py",
+        "marimo/_cli/convert/commands.py"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "public_interface",
+      "title": "Public Python Interface",
+      "description": "The public marimo library surface exposed through `import marimo as mo`, including app objects, UI/output helpers, state, SQL, runtime helpers, and ASGI integration.",
+      "evidence": [
+        "marimo/__init__.py",
+        "docs/api/index.md",
+        "docs/api/app.md",
+        "docs/api/markdown.md",
+        "docs/api/state.md",
+        "docs/api/outputs.md"
+      ],
+      "evidence_pack_hint": [
+        "marimo/__init__.py",
+        "docs/api/index.md",
+        "docs/api/app.md",
+        "docs/api/markdown.md",
+        "docs/api/state.md",
+        "docs/api/outputs.md"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "reactive_runtime_dataflow",
+      "title": "Reactive Runtime and Dataflow",
+      "description": "How marimo statically analyzes cells, builds a dependency graph, reruns dependent cells, avoids hidden state, and handles stale or disabled cells.",
+      "evidence": [
+        "docs/getting_started/key_concepts.md",
+        "docs/guides/reactivity.md",
+        "docs/guides/editor_features/dataflow.md",
+        "marimo/_runtime/dataflow/graph.py",
+        "marimo/_runtime/dataflow/edges.py",
+        "marimo/_runtime/runner/cell_runner.py"
+      ],
+      "evidence_pack_hint": [
+        "docs/getting_started/key_concepts.md",
+        "docs/guides/reactivity.md",
+        "docs/guides/editor_features/dataflow.md",
+        "marimo/_runtime/dataflow/",
+        "marimo/_runtime/runner/"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "apps_scripts_wasm",
+      "title": "Apps, Scripts, and WebAssembly",
+      "description": "How notebooks become read-only apps, Python scripts, importable modules, exports, galleries, and browser-only WebAssembly notebooks.",
+      "evidence": [
+        "docs/guides/apps.md",
+        "docs/guides/scripts.md",
+        "docs/guides/wasm.md",
+        "marimo/_server/start.py",
+        "marimo/_server/export/exporter.py",
+        "marimo/_pyodide/"
+      ],
+      "evidence_pack_hint": [
+        "docs/guides/apps.md",
+        "docs/guides/scripts.md",
+        "docs/guides/wasm.md",
+        "docs/guides/exporting/",
+        "marimo/_server/start.py",
+        "marimo/_server/export/",
+        "marimo/_pyodide/"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "ui_outputs_interactivity",
+      "title": "UI, Outputs, and Interactivity",
+      "description": "How marimo displays cell outputs, embeds dynamic markdown, exposes UI elements, propagates UI values back to Python, and supports custom or composite UI elements.",
+      "evidence": [
+        "docs/guides/interactivity.md",
+        "docs/guides/outputs.md",
+        "docs/api/outputs.md",
+        "marimo/_plugins/",
+        "marimo/_output/"
+      ],
+      "evidence_pack_hint": [
+        "docs/guides/interactivity.md",
+        "docs/guides/outputs.md",
+        "docs/api/outputs.md",
+        "docs/api/inputs/",
+        "marimo/_plugins/",
+        "marimo/_output/"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "sql_data_integrations",
+      "title": "SQL and Data Integrations",
+      "description": "How SQL cells work, how SQL depends on Python values and returns dataframes, which engines and databases are supported, and where data-related helpers live.",
+      "evidence": [
+        "docs/guides/working_with_data/sql.md",
+        "docs/guides/working_with_data/dataframes.md",
+        "docs/integrations/index.md",
+        "marimo/_sql/",
+        "marimo/_data/"
+      ],
+      "evidence_pack_hint": [
+        "docs/guides/working_with_data/sql.md",
+        "docs/guides/working_with_data/dataframes.md",
+        "docs/integrations/",
+        "marimo/_sql/",
+        "marimo/_data/"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "ai_mcp_pairing",
+      "title": "AI, MCP, and Agent Pairing",
+      "description": "How marimo supports built-in AI assistance, variable-aware prompts, external agent pairing, backend/MCP tools, and MCP server/client integrations.",
+      "evidence": [
+        "docs/guides/editor_features/ai_completion.md",
+        "docs/guides/editor_features/mcp.md",
+        "docs/guides/generate_with_ai/marimo_pair.md",
+        "development_docs/adding_backend_and_mcp_tools.md",
+        "marimo/_ai/",
+        "marimo/_mcp/"
+      ],
+      "evidence_pack_hint": [
+        "docs/guides/editor_features/ai_completion.md",
+        "docs/guides/editor_features/mcp.md",
+        "docs/guides/generate_with_ai/",
+        "development_docs/adding_backend_and_mcp_tools.md",
+        "marimo/_ai/",
+        "marimo/_mcp/"
+      ],
+      "priority": "medium"
+    }
+  ]
+}

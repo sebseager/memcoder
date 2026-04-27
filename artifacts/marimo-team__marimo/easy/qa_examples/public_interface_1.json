@@ -1,0 +1,16 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "lora_id": "public_interface_1",
+  "document_id": "public_interface_1",
+  "topic": "Public Python Interface",
+  "topic_slug": "public_interface",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "What kinds of features does marimo expose from the top-level mo namespace?",
+    "How does the marimo API reference organize public notebook functionality by task?",
+    "What is the public markdown workflow for dynamic content and icon rendering in marimo?",
+    "How can public marimo helpers make stdout or stderr visible as app cell output?"
+  ]
+}
