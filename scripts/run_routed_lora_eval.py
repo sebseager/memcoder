@@ -108,6 +108,11 @@ def parse_args() -> argparse.Namespace:
         help="Evaluate the top-1 LoRA selected by routing results.",
     )
     parser.add_argument(
+        "--include-static-loras",
+        action="store_true",
+        help="Evaluate each individual LoRA as a static non-routed baseline for every question.",
+    )
+    parser.add_argument(
         "--include-routed-topk-composition",
         action="store_true",
         help="Evaluate a uniform composition of the top-k LoRAs selected by routing results.",
@@ -635,6 +640,20 @@ def main() -> int:
                     raise KeyError(
                         f"Routed LoRAs {missing!r} for qa_id={qa.get('qa_id')} "
                         f"not found in loaded LoRAs: {sorted(loras)}"
+                    )
+
+            if args.include_static_loras:
+                for static_lora_id, static_lora_dict in sorted(loras.items()):
+                    run_specs.append(
+                        {
+                            "condition": f"static:{static_lora_id}",
+                            "adapter_document_id": static_lora_id,
+                            "lora_dict": static_lora_dict,
+                            "composition_document_ids": None,
+                            "composition_method": None,
+                            "composition_scale": None,
+                            "routing_metadata": None,
+                        }
                     )
 
             if args.include_routed_top1:
