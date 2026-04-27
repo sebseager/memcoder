@@ -46,6 +46,16 @@ def parse_args() -> argparse.Namespace:
         help="Document to pass through generate_shine_lora.py before evaluation. Repeatable.",
     )
     parser.add_argument(
+        "--qa-pairs",
+        action="append",
+        type=Path,
+        default=None,
+        help=(
+            "QA file to evaluate instead of each document's default sibling QA file. "
+            "Repeatable; records may include required_document_ids for cross-document questions."
+        ),
+    )
+    parser.add_argument(
         "--lora-dir",
         type=Path,
         default=DEFAULT_ARTIFACT_DIR / "loras",
@@ -137,6 +147,93 @@ def qa_path_for_doc(doc_path: Path, document_id: str) -> Path:
 def lora_path_for_doc(lora_dir: Path, document_id: str, label: str | None) -> Path:
     stem = f"{document_id}__{label}" if label else document_id
     return lora_dir / f"{stem}.pt"
+
+
+def _string_list(value: Any, field_name: str) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
+    if isinstance(value, list):
+        items: list[str] = []
+        for idx, item in enumerate(value):
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(f"{field_name}[{idx}] must be a non-empty string")
+            items.append(item.strip())
+        return items
+    raise ValueError(f"{field_name} must be a string or list of strings")
+
+
+def required_document_ids_for_qa(qa: dict[str, Any], fallback_document_id: str) -> list[str]:
+    metadata = qa["metadata"]
+    required_ids = (
+        _string_list(metadata.get("required_document_ids"), "required_document_ids")
+        or _string_list(metadata.get("document_ids"), "document_ids")
+        or _string_list(metadata.get("documents"), "documents")
+    )
+    if required_ids:
+        return required_ids
+
+    document_id = metadata.get("document_id")
+    if isinstance(document_id, str) and document_id.strip():
+        return [document_id.strip()]
+    return [fallback_document_id]
+
+
+def qa_scope_id(qa: dict[str, Any], required_ids: list[str]) -> str:
+    metadata = qa["metadata"]
+    for key in ("composition_scope", "scope_id", "document_id"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "+".join(required_ids)
+
+
+def load_default_qa_items(doc_ids: dict[Path, str]) -> list[dict[str, Any]]:
+    qa_items: list[dict[str, Any]] = []
+    for doc_path, document_id in doc_ids.items():
+        _document, doc_metadata = shine_eval.load_design_doc(doc_path)
+        qa_path = qa_path_for_doc(doc_path, document_id)
+        for qa in shine_eval.load_qa_pairs(qa_path):
+            qa_items.append(
+                {
+                    "document_id": document_id,
+                    "topic": doc_metadata.get("topic"),
+                    "qa": qa,
+                    "qa_pairs_path": str(qa_path),
+                    "individual_document_ids": [document_id],
+                }
+            )
+    return qa_items
+
+
+def load_override_qa_items(qa_paths: list[Path], doc_ids: dict[Path, str]) -> list[dict[str, Any]]:
+    available_doc_ids = set(doc_ids.values())
+    fallback_document_id = next(iter(doc_ids.values()))
+    qa_items: list[dict[str, Any]] = []
+
+    for qa_path in qa_paths:
+        payload = shine_eval.load_json_or_text(qa_path)
+        default_topic = payload.get("topic") if isinstance(payload, dict) else None
+        for qa in shine_eval.load_qa_pairs(qa_path):
+            required_ids = required_document_ids_for_qa(qa, fallback_document_id)
+            unknown_ids = sorted(set(required_ids) - available_doc_ids)
+            if unknown_ids:
+                raise ValueError(
+                    f"{qa_path} / {qa['qa_id']} requires document IDs not included by --doc: "
+                    f"{', '.join(unknown_ids)}"
+                )
+            qa_items.append(
+                {
+                    "document_id": qa_scope_id(qa, required_ids),
+                    "topic": qa["metadata"].get("topic") or default_topic,
+                    "qa": qa,
+                    "qa_pairs_path": str(qa_path),
+                    "individual_document_ids": required_ids,
+                }
+            )
+    return qa_items
 
 
 def composition_weights(count: int, method: str, scale: float) -> list[float]:
@@ -313,23 +410,37 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     comparisons = []
     for qa_id, runs in sorted(by_qa.items()):
-        individual = runs.get("individual")
         composition = runs.get("composition")
-        if individual is None or composition is None:
+        individual_runs = [
+            run
+            for condition, run in runs.items()
+            if condition == "individual" or condition.startswith("individual:")
+        ]
+        if not individual_runs or composition is None:
             continue
-        delta = composition["scores"]["token_f1"] - individual["scores"]["token_f1"]
+        best_individual = max(individual_runs, key=lambda run: run["scores"]["token_f1"])
+        delta = composition["scores"]["token_f1"] - best_individual["scores"]["token_f1"]
         comparisons.append(
             {
                 "qa_id": qa_id,
-                "document_id": individual["document_id"],
-                "individual_token_f1": individual["scores"]["token_f1"],
+                "document_id": composition["document_id"],
+                "best_individual_condition": best_individual["condition"],
+                "best_individual_adapter_document_id": best_individual.get("adapter_document_id"),
+                "individual_token_f1": best_individual["scores"]["token_f1"],
                 "composition_token_f1": composition["scores"]["token_f1"],
                 "delta_token_f1": delta,
-                "composition_changed_answer": normalize_answer(individual["answer"]) != normalize_answer(composition["answer"]),
+                "composition_changed_answer": normalize_answer(best_individual["answer"])
+                != normalize_answer(composition["answer"]),
             }
         )
 
-    individual_avg = aggregate(by_condition.get("individual", []))["avg_token_f1"]
+    individual_items = [
+        item
+        for condition, items in by_condition.items()
+        if condition == "individual" or condition.startswith("individual:")
+        for item in items
+    ]
+    individual_avg = aggregate(individual_items)["avg_token_f1"]
     composition_avg = aggregate(by_condition.get("composition", []))["avg_token_f1"]
     return {
         "conditions": {condition: aggregate(items) for condition, items in sorted(by_condition.items())},
@@ -351,6 +462,7 @@ def main() -> int:
     args = parse_args()
     docs = [repo_path(path) for path in (args.doc or DEFAULT_DOCS)]
     generate_docs = [repo_path(path) for path in (args.generate_doc or DEFAULT_GENERATE_DOCS)]
+    qa_paths = [repo_path(path) for path in args.qa_pairs] if args.qa_pairs else None
     args.lora_dir = repo_path(args.lora_dir)
     args.output = repo_path(args.output)
     args.summary_output = repo_path(args.summary_output) if args.summary_output else args.output.with_name(f"{args.output.name}.summary.json")
@@ -410,19 +522,7 @@ def main() -> int:
         ", ".join(f"{weight:.4g}" for weight in weights),
     )
 
-    qa_items: list[dict[str, Any]] = []
-    for doc_path, document_id in doc_ids.items():
-        _document, doc_metadata = shine_eval.load_design_doc(doc_path)
-        qa_path = qa_path_for_doc(doc_path, document_id)
-        for qa in shine_eval.load_qa_pairs(qa_path):
-            qa_items.append(
-                {
-                    "document_id": document_id,
-                    "topic": doc_metadata.get("topic"),
-                    "qa": qa,
-                    "qa_pairs_path": str(qa_path),
-                }
-            )
+    qa_items = load_override_qa_items(qa_paths, doc_ids) if qa_paths else load_default_qa_items(doc_ids)
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     records: list[dict[str, Any]] = []
@@ -430,22 +530,41 @@ def main() -> int:
     with args.output.open("w", encoding="utf-8") as f:
         for item in qa_items:
             qa = item["qa"]
-            for condition, lora_dict in (
-                ("individual", loras[item["document_id"]]),
-                ("composition", composed_lora),
-            ):
+            run_specs = [
+                {
+                    "condition": "individual" if len(item["individual_document_ids"]) == 1 else f"individual:{document_id}",
+                    "lora_dict": loras[document_id],
+                    "adapter_document_id": document_id,
+                    "composition_document_ids": None,
+                    "composition_method": None,
+                    "composition_scale": None,
+                }
+                for document_id in item["individual_document_ids"]
+            ]
+            run_specs.append(
+                {
+                    "condition": "composition",
+                    "lora_dict": composed_lora,
+                    "adapter_document_id": None,
+                    "composition_document_ids": list(doc_ids.values()),
+                    "composition_method": args.composition_method,
+                    "composition_scale": args.composition_scale,
+                }
+            )
+
+            for run_spec in run_specs:
                 generation = shine_eval.generate_answer(
                     metamodel=metamodel,
                     tokenizer=tokenizer,
                     qwen_device=qwen_device,
                     messages=shine_eval.build_messages(qa["question"]),
-                    lora_dict=lora_dict,
+                    lora_dict=run_spec["lora_dict"],
                     max_new_tokens=args.max_new_tokens,
                     conversation_max_length=args.conversation_max_length,
                 )
                 record = {
                     "run_id": run_id,
-                    "condition": condition,
+                    "condition": run_spec["condition"],
                     "document_id": item["document_id"],
                     "topic": item["topic"],
                     "qa_id": qa["qa_id"],
@@ -456,19 +575,23 @@ def main() -> int:
                     "raw_generation": generation["raw_generation"],
                     "scores": score_answer(qa["expected_answer"], generation["answer"]),
                     "qa_metadata": qa["metadata"],
-                    "composition_document_ids": list(doc_ids.values()) if condition == "composition" else None,
-                    "composition_method": args.composition_method if condition == "composition" else None,
-                    "composition_scale": args.composition_scale if condition == "composition" else None,
+                    "qa_pairs_path": item["qa_pairs_path"],
+                    "required_document_ids": item["individual_document_ids"],
+                    "adapter_document_id": run_spec["adapter_document_id"],
+                    "composition_document_ids": run_spec["composition_document_ids"],
+                    "composition_method": run_spec["composition_method"],
+                    "composition_scale": run_spec["composition_scale"],
                 }
                 records.append(record)
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 f.flush()
-                LOGGER.info("Wrote %s / %s", qa["qa_id"], condition)
+                LOGGER.info("Wrote %s / %s", qa["qa_id"], run_spec["condition"])
 
     summary = {
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "docs": [str(path) for path in docs],
+        "qa_paths": [str(path) for path in qa_paths] if qa_paths else None,
         "lora_paths": {
             document_id: str(lora_path_for_doc(args.lora_dir, document_id, args.lora_label))
             for document_id in doc_ids.values()

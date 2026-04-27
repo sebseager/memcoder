@@ -1,0 +1,24 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "topic": "Fake Beta Plus Gamma",
+  "composition_scope": "fake_beta_profile+fake_gamma_profile",
+  "qa_pairs": [
+    {
+      "qa_id": "needs_two_beta_gamma_0001",
+      "question": "Compare Beta and Gamma: what are their file paths and status colors?",
+      "answer": "Beta uses /srv/fake/lantern/beta_calibration.yaml and status color cobalt; Gamma uses /opt/fake/harbor/gamma_routes.csv and status color violet.",
+      "qa_set": "fake_needs_two_docs",
+      "composition_scope": "fake_beta_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_beta_profile", "fake_gamma_profile"]
+    },
+    {
+      "qa_id": "needs_two_beta_gamma_0002",
+      "question": "What is the sum of Beta's beacon_retry_count and Gamma's harbor_retry_count, and what are their override codenames?",
+      "answer": "The sum is 11 because Beta beacon_retry_count = 4 and Gamma harbor_retry_count = 7; the override codenames are cobalt-reef and violet-anchor.",
+      "qa_set": "fake_needs_two_docs",
+      "composition_scope": "fake_beta_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_beta_profile", "fake_gamma_profile"]
+    }
+  ]
+}

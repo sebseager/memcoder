@@ -1,0 +1,32 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "document_id": "fake_alpha_profile",
+  "topic": "Fake Alpha Profile",
+  "qa_pairs": [
+    {
+      "qa_id": "fake_alpha_profile_0001",
+      "question": "In the Alpha fake service, what are the owner, deployment region, and status color?",
+      "answer": "Ada North owns Alpha, it deploys in north-yard-7, and its status color is amber.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_alpha_profile",
+      "required_document_ids": ["fake_alpha_profile"]
+    },
+    {
+      "qa_id": "fake_alpha_profile_0002",
+      "question": "What are Alpha's build number, intake limit, cinder threshold, and checksum phrase?",
+      "answer": "Alpha has alpha_build_number = 314, intake_limit = 27, cinder_threshold = 8, and checksum phrase amber-314-ember.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_alpha_profile",
+      "required_document_ids": ["fake_alpha_profile"]
+    },
+    {
+      "qa_id": "fake_alpha_profile_0003",
+      "question": "Where does Alpha store its nightly manifest and what codename does it use for manual overrides?",
+      "answer": "Alpha stores its nightly manifest at /var/fake/orbit/alpha_manifest.json and uses the codename ember-gate.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_alpha_profile",
+      "required_document_ids": ["fake_alpha_profile"]
+    }
+  ]
+}

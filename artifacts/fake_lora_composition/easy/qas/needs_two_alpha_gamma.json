@@ -1,0 +1,24 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "topic": "Fake Alpha Plus Gamma",
+  "composition_scope": "fake_alpha_profile+fake_gamma_profile",
+  "qa_pairs": [
+    {
+      "qa_id": "needs_two_alpha_gamma_0001",
+      "question": "Compare Alpha and Gamma: what are their deployment regions and checksum phrases?",
+      "answer": "Alpha deploys in north-yard-7 with checksum phrase amber-314-ember; Gamma deploys in west-pier-5 with checksum phrase violet-159-anchor.",
+      "qa_set": "fake_needs_two_docs",
+      "composition_scope": "fake_alpha_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_gamma_profile"]
+    },
+    {
+      "qa_id": "needs_two_alpha_gamma_0002",
+      "question": "What is the sum of Alpha's cinder_threshold and Gamma's anchor_threshold, and who owns those services?",
+      "answer": "The sum is 19 because Alpha cinder_threshold = 8 and Gamma anchor_threshold = 11; the owners are Ada North and Cyra Quinn.",
+      "qa_set": "fake_needs_two_docs",
+      "composition_scope": "fake_alpha_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_gamma_profile"]
+    }
+  ]
+}

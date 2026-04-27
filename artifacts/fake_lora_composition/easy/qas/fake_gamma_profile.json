@@ -1,0 +1,32 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "document_id": "fake_gamma_profile",
+  "topic": "Fake Gamma Profile",
+  "qa_pairs": [
+    {
+      "qa_id": "fake_gamma_profile_0001",
+      "question": "In the Gamma fake service, what are the owner, deployment region, and status color?",
+      "answer": "Cyra Quinn owns Gamma, it deploys in west-pier-5, and its status color is violet.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_gamma_profile",
+      "required_document_ids": ["fake_gamma_profile"]
+    },
+    {
+      "qa_id": "fake_gamma_profile_0002",
+      "question": "What are Gamma's build number, route limit, anchor threshold, and checksum phrase?",
+      "answer": "Gamma has gamma_build_number = 159, route_limit = 31, anchor_threshold = 11, and checksum phrase violet-159-anchor.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_gamma_profile",
+      "required_document_ids": ["fake_gamma_profile"]
+    },
+    {
+      "qa_id": "fake_gamma_profile_0003",
+      "question": "Where does Gamma store its route table and what codename does it use for manual overrides?",
+      "answer": "Gamma stores its route table at /opt/fake/harbor/gamma_routes.csv and uses the codename violet-anchor.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_gamma_profile",
+      "required_document_ids": ["fake_gamma_profile"]
+    }
+  ]
+}

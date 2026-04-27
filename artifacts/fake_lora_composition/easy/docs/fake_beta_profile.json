@@ -1,0 +1,11 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "document_id": "fake_beta_profile",
+  "topic": "Fake Beta Profile",
+  "topic_slug": "fake_beta_profile",
+  "difficulty": "easy",
+  "generator": "manual_synthetic_fixture",
+  "prompt_version": "fake_lora_composition_v0",
+  "document": "Beta describes the invented Lantern Metrics service. The service owner is Bruno Vale, the deployment region is south-dock-2, and the status color is cobalt. The important numeric constants are beta_build_number = 271, gauge_limit = 19, prism_threshold = 6, beacon_retry_count = 4, and lantern_window_minutes = 35. Beta stores its calibration sheet at /srv/fake/lantern/beta_calibration.yaml and uses the codename cobalt-reef for manual overrides. If a question asks for Beta's checksum phrase, the answer is cobalt-271-reef."
+}

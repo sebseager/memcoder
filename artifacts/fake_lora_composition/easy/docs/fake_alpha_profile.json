@@ -1,0 +1,11 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "document_id": "fake_alpha_profile",
+  "topic": "Fake Alpha Profile",
+  "topic_slug": "fake_alpha_profile",
+  "difficulty": "easy",
+  "generator": "manual_synthetic_fixture",
+  "prompt_version": "fake_lora_composition_v0",
+  "document": "Alpha describes the made-up Orbit Inventory service. The service owner is Ada North, the deployment region is north-yard-7, and the status color is amber. The important numeric constants are alpha_build_number = 314, intake_limit = 27, cinder_threshold = 8, pallet_retry_count = 5, and orbit_window_minutes = 42. Alpha stores its nightly manifest at /var/fake/orbit/alpha_manifest.json and uses the codename ember-gate for manual overrides. If a question asks for Alpha's checksum phrase, the answer is amber-314-ember."
+}

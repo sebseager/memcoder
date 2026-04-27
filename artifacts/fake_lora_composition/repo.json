@@ -1,0 +1,6 @@
+{
+  "repo_id": "fake_lora_composition",
+  "repo_path": null,
+  "commit": "fake-fixture",
+  "description": "Synthetic three-document fixture for LoRA composition smoke evaluations."
+}

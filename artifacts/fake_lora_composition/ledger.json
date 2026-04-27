@@ -1,0 +1,18 @@
+{
+  "repo_id": "fake_lora_composition",
+  "repo_path": null,
+  "commit": "fake-fixture",
+  "difficulty_sets": {
+    "easy": {
+      "docs_dir": "easy/docs",
+      "qas_dir": "easy/qas",
+      "loras_dir": "easy/loras",
+      "results_dir": "easy/results",
+      "document_ids": [
+        "fake_alpha_profile",
+        "fake_beta_profile",
+        "fake_gamma_profile"
+      ]
+    }
+  }
+}

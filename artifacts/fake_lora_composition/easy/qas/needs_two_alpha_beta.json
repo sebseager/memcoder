@@ -1,0 +1,24 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "topic": "Fake Alpha Plus Beta",
+  "composition_scope": "fake_alpha_profile+fake_beta_profile",
+  "qa_pairs": [
+    {
+      "qa_id": "needs_two_alpha_beta_0001",
+      "question": "Compare Alpha and Beta: who owns each service and what are their status colors?",
+      "answer": "Alpha is owned by Ada North and has status color amber; Beta is owned by Bruno Vale and has status color cobalt.",
+      "qa_set": "fake_needs_two_docs",
+      "composition_scope": "fake_alpha_profile+fake_beta_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_beta_profile"]
+    },
+    {
+      "qa_id": "needs_two_alpha_beta_0002",
+      "question": "What is the sum of Alpha's intake_limit and Beta's gauge_limit, and what are the two override codenames?",
+      "answer": "The sum is 46 because Alpha intake_limit = 27 and Beta gauge_limit = 19; the override codenames are ember-gate and cobalt-reef.",
+      "qa_set": "fake_needs_two_docs",
+      "composition_scope": "fake_alpha_profile+fake_beta_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_beta_profile"]
+    }
+  ]
+}

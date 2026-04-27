@@ -1,0 +1,32 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "document_id": "fake_beta_profile",
+  "topic": "Fake Beta Profile",
+  "qa_pairs": [
+    {
+      "qa_id": "fake_beta_profile_0001",
+      "question": "In the Beta fake service, what are the owner, deployment region, and status color?",
+      "answer": "Bruno Vale owns Beta, it deploys in south-dock-2, and its status color is cobalt.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_beta_profile",
+      "required_document_ids": ["fake_beta_profile"]
+    },
+    {
+      "qa_id": "fake_beta_profile_0002",
+      "question": "What are Beta's build number, gauge limit, prism threshold, and checksum phrase?",
+      "answer": "Beta has beta_build_number = 271, gauge_limit = 19, prism_threshold = 6, and checksum phrase cobalt-271-reef.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_beta_profile",
+      "required_document_ids": ["fake_beta_profile"]
+    },
+    {
+      "qa_id": "fake_beta_profile_0003",
+      "question": "Where does Beta store its calibration sheet and what codename does it use for manual overrides?",
+      "answer": "Beta stores its calibration sheet at /srv/fake/lantern/beta_calibration.yaml and uses the codename cobalt-reef.",
+      "qa_set": "fake_single_doc",
+      "document_id": "fake_beta_profile",
+      "required_document_ids": ["fake_beta_profile"]
+    }
+  ]
+}

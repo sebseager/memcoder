@@ -1,0 +1,11 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "document_id": "fake_gamma_profile",
+  "topic": "Fake Gamma Profile",
+  "topic_slug": "fake_gamma_profile",
+  "difficulty": "easy",
+  "generator": "manual_synthetic_fixture",
+  "prompt_version": "fake_lora_composition_v0",
+  "document": "Gamma describes the fictional Harbor Routing service. The service owner is Cyra Quinn, the deployment region is west-pier-5, and the status color is violet. The important numeric constants are gamma_build_number = 159, route_limit = 31, anchor_threshold = 11, harbor_retry_count = 7, and routing_window_minutes = 24. Gamma stores its route table at /opt/fake/harbor/gamma_routes.csv and uses the codename violet-anchor for manual overrides. If a question asks for Gamma's checksum phrase, the answer is violet-159-anchor."
+}

@@ -1,0 +1,32 @@
+{
+  "repo_id": "fake_lora_composition",
+  "commit": "fake-fixture",
+  "topic": "Fake Alpha Plus Beta Plus Gamma",
+  "composition_scope": "fake_alpha_profile+fake_beta_profile+fake_gamma_profile",
+  "qa_pairs": [
+    {
+      "qa_id": "needs_all_three_0001",
+      "question": "List the owners and status colors for Alpha, Beta, and Gamma.",
+      "answer": "Alpha is owned by Ada North and is amber; Beta is owned by Bruno Vale and is cobalt; Gamma is owned by Cyra Quinn and is violet.",
+      "qa_set": "fake_needs_all_three_docs",
+      "composition_scope": "fake_alpha_profile+fake_beta_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_beta_profile", "fake_gamma_profile"]
+    },
+    {
+      "qa_id": "needs_all_three_0002",
+      "question": "What is the total of alpha_build_number, beta_build_number, and gamma_build_number, and what are the three checksum phrases?",
+      "answer": "The total is 744 because 314 + 271 + 159 = 744; the checksum phrases are amber-314-ember, cobalt-271-reef, and violet-159-anchor.",
+      "qa_set": "fake_needs_all_three_docs",
+      "composition_scope": "fake_alpha_profile+fake_beta_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_beta_profile", "fake_gamma_profile"]
+    },
+    {
+      "qa_id": "needs_all_three_0003",
+      "question": "What is the total of the three window durations and which paths store the three fake service files?",
+      "answer": "The total window duration is 101 minutes from 42 + 35 + 24; the paths are /var/fake/orbit/alpha_manifest.json, /srv/fake/lantern/beta_calibration.yaml, and /opt/fake/harbor/gamma_routes.csv.",
+      "qa_set": "fake_needs_all_three_docs",
+      "composition_scope": "fake_alpha_profile+fake_beta_profile+fake_gamma_profile",
+      "required_document_ids": ["fake_alpha_profile", "fake_beta_profile", "fake_gamma_profile"]
+    }
+  ]
+}
