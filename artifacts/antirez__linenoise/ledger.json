@@ -1,0 +1,56 @@
+{
+  "documents": {
+    "overview_purpose_1": {
+      "document_id": "overview_purpose_1",
+      "difficulty": "easy",
+      "topic": "Overview / Purpose",
+      "topic_slug": "overview_purpose",
+      "files": {
+        "doc": "easy/docs/overview_purpose_1.json",
+        "doc_embedding": null,
+        "qa": "easy/qas/overview_purpose_1.json",
+        "qa_examples": null,
+        "lora": "easy/loras/overview_purpose_1.pt"
+      }
+    },
+    "raw_terminal_input_1": {
+      "document_id": "raw_terminal_input_1",
+      "difficulty": "easy",
+      "topic": "Raw Terminal Input",
+      "topic_slug": "raw_terminal_input",
+      "files": {
+        "doc": "easy/docs/raw_terminal_input_1.json",
+        "doc_embedding": null,
+        "qa": "easy/qas/raw_terminal_input_1.json",
+        "qa_examples": null,
+        "lora": "easy/loras/raw_terminal_input_1.pt"
+      }
+    },
+    "history_completion_hints_1": {
+      "document_id": "history_completion_hints_1",
+      "difficulty": "easy",
+      "topic": "History, Completion, and Hints",
+      "topic_slug": "history_completion_hints",
+      "files": {
+        "doc": "easy/docs/history_completion_hints_1.json",
+        "doc_embedding": null,
+        "qa": "easy/qas/history_completion_hints_1.json",
+        "qa_examples": null,
+        "lora": "easy/loras/history_completion_hints_1.pt"
+      }
+    },
+    "refresh_editing_1": {
+      "document_id": "refresh_editing_1",
+      "difficulty": "easy",
+      "topic": "Refresh and Editing",
+      "topic_slug": "refresh_editing",
+      "files": {
+        "doc": "easy/docs/refresh_editing_1.json",
+        "doc_embedding": null,
+        "qa": "easy/qas/refresh_editing_1.json",
+        "qa_examples": null,
+        "lora": "easy/loras/refresh_editing_1.pt"
+      }
+    }
+  }
+}

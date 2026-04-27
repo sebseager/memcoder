@@ -1,0 +1,96 @@
+{
+  "repo_id": "antirez__linenoise",
+  "commit": null,
+  "document_id": "overview_purpose_1",
+  "topic": "Overview / Purpose",
+  "topic_slug": "overview_purpose",
+  "difficulty": "easy",
+  "generator": "manual_doc_derived_seed",
+  "prompt_version": "doc_derived_qa_generation_v0",
+  "qa_pairs": [
+    {
+      "qa_id": "overview_purpose_1_0001",
+      "question": "What is linenoise intended to provide?",
+      "answer": "Linenoise provides small embeddable command-line line editing for interactive prompts without requiring a large readline-style dependency.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0002",
+      "question": "What is the main blocking API function in linenoise?",
+      "answer": "The main blocking API is `linenoise(const char *prompt)`, which returns a heap-allocated line after the user submits input.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0003",
+      "question": "How does a typical application use the result returned by `linenoise()`?",
+      "answer": "It processes the returned line and then frees it, usually with `linenoiseFree()` or `free()`.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0004",
+      "question": "What nonblocking API functions does linenoise expose?",
+      "answer": "It exposes `linenoiseEditStart`, `linenoiseEditFeed`, and `linenoiseEditStop` for multiplexed or event-driven use.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0005",
+      "question": "What kind of state is stored in `struct linenoiseState`?",
+      "answer": "It stores descriptors, prompt and buffer information, cursor position, line length, terminal columns, multiline refresh state, and history index.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0006",
+      "question": "Does linenoise depend on curses for terminal display?",
+      "answer": "No. It writes ANSI or VT100-style terminal escape sequences directly.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0007",
+      "question": "What optional interaction features does linenoise expose?",
+      "answer": "It exposes completion callbacks, hints callbacks, history management, multiline mode, clear-screen support, key-code printing, and mask mode.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0008",
+      "question": "How does the example program demonstrate normal blocking use?",
+      "answer": "It repeatedly calls `linenoise(prompt)`, processes the returned line, adds it to history, saves history, and frees the line.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0009",
+      "question": "Why is linenoise useful for small programs?",
+      "answer": "It provides shell-like editing features through a compact C API without adding a large external line-editing library.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0010",
+      "question": "What is mask mode used for?",
+      "answer": "Mask mode displays asterisks instead of the real typed characters, which is useful for password-style input.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0011",
+      "question": "What does multiline mode change?",
+      "answer": "Multiline mode allows the edited input to span multiple terminal rows and changes how the line is refreshed.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    },
+    {
+      "qa_id": "overview_purpose_1_0012",
+      "question": "What file types are most relevant for understanding linenoise integration?",
+      "answer": "The main files are `linenoise.h`, `linenoise.c`, `README.md`, and `example.c`.",
+      "qa_set": "doc_derived",
+      "document_id": "overview_purpose_1"
+    }
+  ]
+}

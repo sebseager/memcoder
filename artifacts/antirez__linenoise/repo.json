@@ -1,0 +1,8 @@
+{
+  "repo_id": "antirez__linenoise",
+  "repository": "antirez/linenoise",
+  "local_path": "target_repos/antirez__linenoise",
+  "difficulty": "easy",
+  "language": "C",
+  "notes": "Small terminal line-editing library, useful for testing routing across terminal input, history, completion, and refresh/editing topics."
+}

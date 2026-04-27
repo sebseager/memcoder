@@ -1,0 +1,103 @@
+{
+  "repo_id": "antirez__linenoise",
+  "commit": null,
+  "document_id": "refresh_editing_1",
+  "topic": "Refresh and Editing",
+  "topic_slug": "refresh_editing",
+  "difficulty": "easy",
+  "generator": "manual_doc_derived_seed",
+  "prompt_version": "doc_derived_qa_generation_v0",
+  "qa_pairs": [
+    {
+      "qa_id": "refresh_editing_1_0001",
+      "question": "What function inserts typed text into the edit buffer?",
+      "answer": "`linenoiseEditInsert` inserts typed text into the edit buffer.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0002",
+      "question": "When can insertion avoid a full line refresh?",
+      "answer": "It can avoid a full refresh when appending at the end in a simple single-line case with no active hints and enough terminal space.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0003",
+      "question": "What happens when text is inserted in the middle of the line?",
+      "answer": "The tail of the buffer is shifted with `memmove`, the new bytes are copied into place, positions are updated, and the line is refreshed.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0004",
+      "question": "Which functions move the cursor left and right?",
+      "answer": "`linenoiseEditMoveLeft` and `linenoiseEditMoveRight` move the cursor left and right.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0005",
+      "question": "Why are cursor movement functions UTF-8-aware?",
+      "answer": "They must move by logical characters or grapheme clusters instead of raw bytes.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0006",
+      "question": "What does `linenoiseEditDelete` do?",
+      "answer": "It deletes the character at the cursor without moving the cursor position.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0007",
+      "question": "What does `linenoiseEditBackspace` do?",
+      "answer": "It deletes the character before the cursor and moves the cursor left.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0008",
+      "question": "What does Ctrl-W do in the editing logic?",
+      "answer": "It deletes the previous word by scanning backward over spaces and non-space characters.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0009",
+      "question": "What does Ctrl-U do?",
+      "answer": "It clears the whole current line.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0010",
+      "question": "What does Ctrl-K do?",
+      "answer": "It deletes from the cursor to the end of the line.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0011",
+      "question": "Why does linenoise treat ANSI prompt escape sequences as zero-width?",
+      "answer": "Because color escape sequences should not count as visible terminal columns when calculating cursor position.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0012",
+      "question": "What does multiline refresh need to track?",
+      "answer": "It tracks how many rows the previous render used so the old render can be cleared and the updated line can be redrawn.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    },
+    {
+      "qa_id": "refresh_editing_1_0013",
+      "question": "Why might linenoise accept some flicker during refresh?",
+      "answer": "It uses a small set of escape sequences for simplicity and compatibility, which may cause some flicker on slow terminals.",
+      "qa_set": "doc_derived",
+      "document_id": "refresh_editing_1"
+    }
+  ]
+}

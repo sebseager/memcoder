@@ -1,0 +1,103 @@
+{
+  "repo_id": "antirez__linenoise",
+  "commit": null,
+  "document_id": "history_completion_hints_1",
+  "topic": "History, Completion, and Hints",
+  "topic_slug": "history_completion_hints",
+  "difficulty": "easy",
+  "generator": "manual_doc_derived_seed",
+  "prompt_version": "doc_derived_qa_generation_v0",
+  "qa_pairs": [
+    {
+      "qa_id": "history_completion_hints_1_0001",
+      "question": "What API function registers a completion callback?",
+      "answer": "`linenoiseSetCompletionCallback` registers a completion callback.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0002",
+      "question": "How does an application add completion candidates?",
+      "answer": "Inside the completion callback, it calls `linenoiseAddCompletion` with candidate strings.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0003",
+      "question": "What does the example completion callback add when the buffer begins with `h`?",
+      "answer": "It adds `hello` and `hello there`.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0004",
+      "question": "What key normally triggers completion?",
+      "answer": "The Tab key triggers completion when a completion callback is installed.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0005",
+      "question": "How does repeated Tab behave during completion?",
+      "answer": "Repeated Tab cycles through available completion candidates and can beep when the cycle reaches the original buffer state.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0006",
+      "question": "How can a user cancel completion mode?",
+      "answer": "Pressing Escape cancels completion and restores the original buffer display.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0007",
+      "question": "What API function registers a hints callback?",
+      "answer": "`linenoiseSetHintsCallback` registers a hints callback.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0008",
+      "question": "What does a hints callback return?",
+      "answer": "It returns helper text to display beside the current input and can set color and bold attributes.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0009",
+      "question": "In the example, what hint is returned for the input `hello`?",
+      "answer": "The example returns ` World` as the hint for `hello`.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0010",
+      "question": "What API functions manage history persistence?",
+      "answer": "`linenoiseHistorySave` saves history to disk, and `linenoiseHistoryLoad` loads it from disk.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0011",
+      "question": "How does the example program use history?",
+      "answer": "It loads `history.txt` at startup, adds accepted lines to history, and saves the history file after adding a line.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0012",
+      "question": "Which inputs navigate history during editing?",
+      "answer": "Ctrl-P or Up moves to older history entries, while Ctrl-N or Down moves toward newer entries.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    },
+    {
+      "qa_id": "history_completion_hints_1_0013",
+      "question": "What does `linenoiseHistorySetMaxLen` control?",
+      "answer": "It controls the maximum number of history entries retained.",
+      "qa_set": "doc_derived",
+      "document_id": "history_completion_hints_1"
+    }
+  ]
+}

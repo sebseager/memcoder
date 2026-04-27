@@ -1,0 +1,103 @@
+{
+  "repo_id": "antirez__linenoise",
+  "commit": null,
+  "document_id": "raw_terminal_input_1",
+  "topic": "Raw Terminal Input",
+  "topic_slug": "raw_terminal_input",
+  "difficulty": "easy",
+  "generator": "manual_doc_derived_seed",
+  "prompt_version": "doc_derived_qa_generation_v0",
+  "qa_pairs": [
+    {
+      "qa_id": "raw_terminal_input_1_0001",
+      "question": "Why does linenoise switch the terminal into raw mode?",
+      "answer": "It uses raw mode so individual keypresses can be read and handled immediately instead of waiting for canonical line input.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0002",
+      "question": "What function performs the main one-step input handling?",
+      "answer": "`linenoiseEditFeed` performs the main one-step input handling.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0003",
+      "question": "What does `linenoiseEditFeed` return when nonblocking input would block?",
+      "answer": "It returns the sentinel `linenoiseEditMore`, meaning editing should continue and the caller should wait for more input.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0004",
+      "question": "How does linenoise represent arrow keys?",
+      "answer": "Arrow keys arrive as escape sequences, usually beginning with Escape followed by `[` or `O` bytes.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0005",
+      "question": "What do Up and Down arrow keys do in linenoise?",
+      "answer": "They navigate to previous and next history entries.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0006",
+      "question": "What do Left and Right arrow keys do?",
+      "answer": "They move the cursor left and right through the edit buffer.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0007",
+      "question": "How does Enter affect the edit session?",
+      "answer": "Enter completes the line and returns a copy of the current buffer.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0008",
+      "question": "What happens when Ctrl-D is pressed on an empty line?",
+      "answer": "It behaves like end-of-file and returns `NULL` rather than deleting a character.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0009",
+      "question": "What happens when Ctrl-D is pressed on a non-empty line?",
+      "answer": "It deletes the character at the right of the cursor.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0010",
+      "question": "How does linenoise handle multibyte UTF-8 input?",
+      "answer": "It detects the byte length of a UTF-8 character, reads the remaining bytes, and inserts the full sequence as one logical character.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0011",
+      "question": "Why does raw input handling need UTF-8-aware movement?",
+      "answer": "Because visible characters may take multiple bytes, so cursor movement and deletion should not split a multibyte character.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0012",
+      "question": "What does Ctrl-L do?",
+      "answer": "Ctrl-L clears the screen and refreshes the current line.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0013",
+      "question": "What kinds of terminals can be considered unsupported?",
+      "answer": "The implementation has a small unsupported terminal list, including names such as dumb, cons25, and emacs.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    }
+  ]
+}
