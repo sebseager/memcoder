@@ -1,0 +1,112 @@
+# MemCoder SHINE LoRA generation config for marimo artifacts.
+#
+# Consumed by:
+#
+#   python scripts/generate_artifact_loras.py \
+#     --artifact-root artifacts/marimo-team__marimo \
+#     --difficulty easy \
+#     --config config/shine_marimo.yaml
+#
+# Multi-hypernetwork mode requires the shared Qwen base to live on a GPU
+# distinct from each hypernetwork. On a two-GPU machine, use one Qwen copy and
+# one hypernetwork copy.
+
+memcoder_eval:
+  shine_root: vendor/SHINE
+
+  # Override these on the cluster if your model/checkpoint live elsewhere.
+  model_path: vendor/SHINE/models/Qwen3-8B
+
+  # Required in multi-hypernetwork mode; must be distinct from every
+  # shine_checkpoints[*].cuda value.
+  qwen_cuda: 0
+
+  # One hypernetwork checkpoint, pinned to the second GPU. With only CUDA 0 and
+  # CUDA 1 available, the current SHINE loader cannot run two hypernet copies in
+  # parallel because Qwen also needs a distinct GPU.
+  shine_checkpoints:
+    - label: iftpwc_epoch2
+      path: vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2
+      cuda: 1
+
+  conditions:
+    - shine
+
+  seed: 42
+  device: cuda
+  context_max_length: 1150
+  conversation_max_length: 5000
+  max_new_tokens: 128
+
+name: 8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150
+mode: train
+resume_global_step: -1
+test_global_step: epoch-2
+
+run:
+  seed: 42
+  use_amp: false
+  gradient_accumulation_steps: 4
+  device: cuda
+  use_gradient_checkpoint: false
+
+paths:
+  model_path: vendor/SHINE/models/Qwen3-8B
+
+data:
+  context_max_length: 1024
+  conversation_max_length: 1024
+  train_batch_size: 1
+  eval_batch_size: 1
+  num_workers: 4
+  source: squad
+
+model:
+  lora_r: 8
+  metalora_r: 128
+  ift_additional_metalora_r: -1
+  num_mem_token: 4
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+  tokenizer_from: vendor/SHINE/models/Qwen3-8B
+  model_from: vendor/SHINE/models/Qwen3-8B
+
+metanetwork:
+  type: transformer
+  method: rl
+  transformer_cfg:
+    encoder_cfg:
+      d_model: 4096
+      nhead: 32
+      dim_feedforward: 8192
+      dropout: 0
+      activation: gelu
+      layer_norm_eps: 0.00001
+      batch_first: true
+      norm_first: false
+      bias: true
+    couple_encoder_cfg:
+      d_model: 4096
+      nhead: 32
+      dim_feedforward: 8192
+      dropout: 0
+      activation: gelu
+      layer_norm_eps: 0.00001
+      batch_first: true
+      norm_first: false
+      bias: true
+    layer_transformer_first: true
+    mean_pool_size: 1
+    num_layers: 4
+    couple_num_layers: 0
+    scale: 0.001
+
+test:
+  context_avg_len: 512
+  context_max_length: 1150
+  conversation_max_length: 5000
+  max_new_tokens: 128
+
+hidden_size: -1
+num_layers: -1
+num_mem_token: 4
