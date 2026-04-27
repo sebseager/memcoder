@@ -153,7 +153,7 @@ def expected_lora_paths(
     if not difficulty:
         raise ValueError(f"{document_id}: ledger entry missing difficulty")
     base = artifact_root / difficulty / "loras" / f"{document_id}.pt"
-    if multi_mode:
+    if multi_mode and len(shine_specs) > 1:
         return [
             (str(spec["label"]), base.with_name(f"{base.stem}__{spec['label']}{base.suffix}"))
             for spec in shine_specs
@@ -180,7 +180,13 @@ def update_lora_fields(
     def rel(path: Path) -> str:
         return path.resolve().relative_to(artifact_root.resolve()).as_posix()
 
-    if multi_mode:
+    # The eval harness consumes files.lora for the ordinary `shine` condition.
+    # Even if the config used shine_checkpoints syntax, a single generated
+    # variant should be promoted to the canonical lora field.
+    if len(saved_paths) == 1:
+        files["lora"] = rel(saved_paths[0][1])
+        files.pop("lora_variants", None)
+    elif multi_mode:
         files["lora"] = None
         files["lora_variants"] = {label: rel(path) for label, path in saved_paths}
     else:
@@ -307,7 +313,7 @@ def main() -> int:
                 base_path,
                 spec["label"],
                 lora_dict,
-                multi=multi_mode,
+                multi=multi_mode and len(shine_specs) > 1,
             )
             saved_paths.append((str(spec["label"]), saved_path))
             shine_eval.release_variant_runtime(variant)

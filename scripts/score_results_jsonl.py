@@ -273,7 +273,7 @@ def main() -> int:
     try:
         from eval.config import load_run_config
         from eval.judge import run_judging
-        from eval.plots import render_run_plots
+        from eval.plots import render_naive_filtered_plots, render_run_plots
         from eval.report import write_report
 
         _prepare_output_dir(output_dir, force=args.force)
@@ -285,6 +285,7 @@ def main() -> int:
         judgments = run_judging(cfg, output_dir)
         report = write_report(output_dir)
         plots = render_run_plots(output_dir, show_empty=args.show_empty)
+        plots.extend(render_naive_filtered_plots(output_dir))
         plots.extend(render_combined_qa_plots(output_dir))
     except (FileExistsError, FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -69,6 +69,63 @@ def render_run_plots(
     )
 
 
+def render_naive_filtered_plots(
+    run_dir: Path,
+    *,
+    naive_max: int = 2,
+    source: str = "judgments.jsonl",
+) -> list[Path]:
+    """Render plots for QAs where the naive condition scored <= ``naive_max``.
+
+    This filters out questions the base model could already answer without
+    context/LoRA and writes the filtered rows plus summary under
+    ``plots_naive_le<N>/`` inside the run directory.
+    """
+    src = run_dir / source
+    if not src.exists():
+        raise FileNotFoundError(f"{src} not found")
+    rows = _load_judgments(src)
+    if not rows:
+        raise ValueError(f"no rows in {src}")
+
+    naive_score_by_qa = _naive_scores_by_qa(rows)
+    keep_qa_ids = {
+        qa_id for qa_id, score in naive_score_by_qa.items() if score <= naive_max
+    }
+    if not keep_qa_ids:
+        LOGGER.warning(
+            "No questions had naive score <= %d; skipping naive-filtered plots",
+            naive_max,
+        )
+        return []
+
+    filtered = [r for r in rows if r.get("qa_id") in keep_qa_ids]
+    out_dir = run_dir / f"plots_naive_le{naive_max}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    filtered_path = out_dir / "judgments_filtered.jsonl"
+    filtered_path.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in filtered) + "\n",
+        encoding="utf-8",
+    )
+    LOGGER.info("wrote %s", filtered_path)
+
+    suffix = f" (naive score ≤ {naive_max}; n_qa={len(keep_qa_ids)})"
+    plot_paths = render_plots_from_rows(
+        filtered, out_dir=out_dir, title_suffix=suffix
+    )
+    summary_path = _write_naive_filtered_summary(
+        out_dir=out_dir,
+        run_dir=run_dir,
+        naive_max=naive_max,
+        kept_qa_ids=keep_qa_ids,
+        all_qa_count=len(naive_score_by_qa),
+        rows=filtered,
+    )
+    LOGGER.info("wrote %s", summary_path)
+    return [filtered_path, *plot_paths, summary_path]
+
+
 def render_plots_from_rows(
     rows: list[dict[str, Any]],
     *,
@@ -108,6 +165,11 @@ def render_plots_from_rows(
 def load_judgments(path: Path) -> list[dict[str, Any]]:
     """Public wrapper around the internal JSONL reader."""
     return _load_judgments(path)
+
+
+def naive_scores_by_qa(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Public wrapper returning one naive score per QA ID."""
+    return _naive_scores_by_qa(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +216,73 @@ def _scores_by_condition(rows: list[dict[str, Any]]) -> dict[str, list[int]]:
         if isinstance(score, int) and 1 <= score <= 5:
             out[cond].append(score)
     return out
+
+
+def _naive_scores_by_qa(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Return one naive score per qa_id. Picks the first naive row encountered."""
+    out: dict[str, int] = {}
+    for r in rows:
+        if r.get("condition") != "naive":
+            continue
+        qa_id = r.get("qa_id")
+        if not isinstance(qa_id, str) or qa_id in out:
+            continue
+        score = (r.get("judge") or {}).get("score")
+        if isinstance(score, int):
+            out[qa_id] = score
+    return out
+
+
+def _write_naive_filtered_summary(
+    *,
+    out_dir: Path,
+    run_dir: Path,
+    naive_max: int,
+    kept_qa_ids: set[str],
+    all_qa_count: int,
+    rows: list[dict[str, Any]],
+) -> Path:
+    by_cond: dict[str, list[int]] = defaultdict(list)
+    for r in rows:
+        cond = str(r.get("condition") or "")
+        score = (r.get("judge") or {}).get("score")
+        if isinstance(score, int):
+            by_cond[cond].append(score)
+
+    lines: list[str] = []
+    lines.append(f"# Filtered Eval Report — naive score ≤ {naive_max} — {run_dir.name}")
+    lines.append("")
+    lines.append(f"- Source: `{run_dir.name}/judgments.jsonl`")
+    lines.append(
+        f"- Kept QAs: **{len(kept_qa_ids)} / {all_qa_count}** "
+        f"({100.0 * len(kept_qa_ids) / max(all_qa_count, 1):.1f}%)"
+    )
+    lines.append("")
+    lines.append("## Score summary on filtered set")
+    lines.append("")
+    lines.append("| Condition | N | Mean | % score 5 | 1 | 2 | 3 | 4 | 5 |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
+    for cond in sorted(by_cond):
+        scores = by_cond[cond]
+        n = len(scores)
+        mean = sum(scores) / n if n else 0.0
+        pct5 = 100.0 * sum(1 for s in scores if s == 5) / n if n else 0.0
+        hist = Counter(scores)
+        lines.append(
+            f"| `{cond}` | {n} | {mean:.2f} | {pct5:.1f}% "
+            f"| {hist.get(1, 0)} | {hist.get(2, 0)} | {hist.get(3, 0)} "
+            f"| {hist.get(4, 0)} | {hist.get(5, 0)} |"
+        )
+    lines.append("")
+    lines.append(
+        f"Filter rule: keep only questions where the **naive** condition "
+        f"judge score is ≤ {naive_max}. This isolates questions that require "
+        "document-specific knowledge to answer well."
+    )
+
+    path = out_dir / "summary.md"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 # ---------------------------------------------------------------------------

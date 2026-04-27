@@ -26,7 +26,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from eval.config import load_run_config, load_snapshot  # noqa: E402
 from eval.judge import run_judging  # noqa: E402
-from eval.plots import render_run_plots  # noqa: E402
+from eval.plots import render_naive_filtered_plots, render_run_plots  # noqa: E402
 from eval.report import write_report  # noqa: E402
 from eval.runner import run_predictions  # noqa: E402
 
@@ -58,6 +58,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     report = write_report(args.run_dir)
     print(report)
     plot_paths = render_run_plots(args.run_dir)
+    plot_paths.extend(render_naive_filtered_plots(args.run_dir))
     for p in plot_paths:
         print(p)
     return 0
@@ -72,6 +73,7 @@ def _cmd_all(args: argparse.Namespace) -> int:
     run_judging(snapshot_cfg, run_dir)
     write_report(run_dir)
     render_run_plots(run_dir)
+    render_naive_filtered_plots(run_dir)
     print(run_dir)
     return 0
 
