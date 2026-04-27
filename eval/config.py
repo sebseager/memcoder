@@ -56,9 +56,17 @@ class JudgeConfig:
 
 @dataclass
 class EmbeddingConfig:
-    """Placeholder; populated when embedding routing is wired up."""
+    """Embedding-routing inputs.
+
+    ``model`` records which embedder produced the routing JSONLs (informational
+    only). ``routing_results`` is the list of pre-computed cosine-retrieval
+    files consumed by ``EmbeddingRouter``. ``top_k`` controls how many LoRA
+    ids are recorded per decision; the runner still applies a single LoRA.
+    """
 
     model: str | None = None
+    routing_results: list[Path] = field(default_factory=list)
+    top_k: int = 1
 
 
 @dataclass
@@ -140,6 +148,12 @@ def load_run_config(path: Path) -> RunConfig:
     judge = _parse_judge(_require(raw, "judge", "run config"))
     embedding = _parse_embedding(raw.get("embedding") or {})
 
+    if routing == "embedding" and not embedding.routing_results:
+        raise ValueError(
+            "routing: embedding requires embedding.routing_results to list at "
+            "least one pre-computed JSONL path"
+        )
+
     return RunConfig(
         run_name=run_name,
         timestamp=_make_timestamp(),
@@ -212,7 +226,19 @@ def _parse_embedding(raw: Any) -> EmbeddingConfig:
     if not isinstance(raw, dict):
         raise ValueError("embedding must be a mapping")
     model = raw.get("model")
-    return EmbeddingConfig(model=str(model) if model else None)
+    routing_results: list[Path] = []
+    for entry in _as_list(raw.get("routing_results")):
+        resolved = resolve_repo_path(Path(entry))
+        if resolved is None:
+            raise ValueError(
+                f"could not resolve embedding.routing_results path: {entry!r}"
+            )
+        routing_results.append(resolved)
+    return EmbeddingConfig(
+        model=str(model) if model else None,
+        routing_results=routing_results,
+        top_k=int(raw.get("top_k", 1)),
+    )
 
 
 def _to_snapshot(cfg: RunConfig) -> dict[str, Any]:
@@ -243,7 +269,11 @@ def _to_snapshot(cfg: RunConfig) -> dict[str, Any]:
             "metamodel_class_path": cfg.model.metamodel_class_path,
             "config_class_path": cfg.model.config_class_path,
         },
-        "embedding": {"model": cfg.embedding.model},
+        "embedding": {
+            "model": cfg.embedding.model,
+            "routing_results": [str(p) for p in cfg.embedding.routing_results],
+            "top_k": cfg.embedding.top_k,
+        },
         "judge": {
             "provider": cfg.judge.provider,
             "model": cfg.judge.model,
@@ -302,8 +332,11 @@ def load_snapshot(run_dir: Path) -> RunConfig:
         taxonomy_version=str(judge_raw["taxonomy_version"]),
         max_retries=int(judge_raw["max_retries"]),
     )
+    emb_raw = raw["embedding"]
     embedding = EmbeddingConfig(
-        model=str(raw["embedding"]["model"]) if raw["embedding"].get("model") else None
+        model=str(emb_raw["model"]) if emb_raw.get("model") else None,
+        routing_results=[Path(p) for p in (emb_raw.get("routing_results") or [])],
+        top_k=int(emb_raw.get("top_k", 1)),
     )
     return RunConfig(
         run_name=str(raw["run_name"]),

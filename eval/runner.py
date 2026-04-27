@@ -37,13 +37,17 @@ def run_predictions(cfg: RunConfig) -> Path:
 
     documents = list(iter_documents(cfg))
     LOGGER.info("Selected %d document(s) for evaluation", len(documents))
-    _validate_documents_for_conditions(documents, cfg.conditions)
+    _validate_documents_for_conditions(documents, cfg.conditions, cfg.routing)
 
     model_module.ensure_runtime()
     model_module.setup_shine_imports(cfg.model.shine_root)
     qwen_device = model_module.resolve_qwen_device(cfg.model.qwen_cuda)
     metamodel, tokenizer = model_module.load_qwen_runtime(cfg.model, qwen_device)
-    router = make_router(cfg.routing)
+    router = make_router(
+        cfg.routing,
+        routing_results_paths=cfg.embedding.routing_results,
+        top_k=cfg.embedding.top_k,
+    )
 
     run_id = _make_run_id()
     manifest = _build_manifest(cfg, run_id, qwen_device, documents)
@@ -56,60 +60,73 @@ def run_predictions(cfg: RunConfig) -> Path:
     rows_written = 0
     with predictions_path.open("w", encoding="utf-8") as out:
         for doc in documents:
-            shine_decision: RoutingDecision | None = None
-            lora_dict = None
-            if "shine" in cfg.conditions and doc.lora_path is not None:
-                # Pick once per doc — oracle returns a deterministic decision
-                # per (doc, qa) but the chosen LoRA is constant per doc.
-                first_qa = doc.qa_pairs[0] if doc.qa_pairs else QAPair("", "", None)
-                shine_decision = router.select(doc, first_qa)
-                lora_dict = model_module.load_lora_dict(shine_decision.lora_path, qwen_device)
-            elif "shine" in cfg.conditions and doc.lora_path is None:
-                LOGGER.warning(
-                    "Skipping shine condition for %s: ledger has no files.lora",
-                    doc.document_id,
-                )
+            current_lora_path: Path | None = None
+            current_lora_dict = None
+            try:
+                for qa in doc.qa_pairs:
+                    shine_decision: RoutingDecision | None = None
+                    if "shine" in cfg.conditions:
+                        shine_decision = router.select(doc, qa)
+                        if shine_decision is None:
+                            LOGGER.warning(
+                                "Skipping shine for %s/%s: router %r returned no decision",
+                                doc.document_id,
+                                qa.qa_id,
+                                cfg.routing,
+                            )
+                        elif shine_decision.lora_path != current_lora_path:
+                            if current_lora_dict is not None:
+                                model_module.free_lora_dict(current_lora_dict)
+                                current_lora_dict = None
+                            current_lora_path = shine_decision.lora_path
+                            current_lora_dict = model_module.load_lora_dict(
+                                current_lora_path, qwen_device
+                            )
 
-            for qa in doc.qa_pairs:
-                for cond in cfg.conditions:
-                    if cond == "shine" and lora_dict is None:
-                        continue
-                    row = _run_one(
-                        run_id=run_id,
-                        cfg=cfg,
-                        doc=doc,
-                        qa=qa,
-                        condition=cond,
-                        metamodel=metamodel,
-                        tokenizer=tokenizer,
-                        qwen_device=qwen_device,
-                        lora_dict=lora_dict if cond == "shine" else None,
-                        shine_decision=shine_decision if cond == "shine" else None,
-                    )
-                    out.write(json.dumps(row, ensure_ascii=False) + "\n")
-                    out.flush()
-                    rows_written += 1
-                    LOGGER.info(
-                        "Wrote %s / %s / %s",
-                        doc.document_id,
-                        qa.qa_id,
-                        cond,
-                    )
-
-            if lora_dict is not None:
-                model_module.free_lora_dict(lora_dict)
-                lora_dict = None
+                    for cond in cfg.conditions:
+                        if cond == "shine" and (
+                            shine_decision is None or current_lora_dict is None
+                        ):
+                            continue
+                        row = _run_one(
+                            run_id=run_id,
+                            cfg=cfg,
+                            doc=doc,
+                            qa=qa,
+                            condition=cond,
+                            metamodel=metamodel,
+                            tokenizer=tokenizer,
+                            qwen_device=qwen_device,
+                            lora_dict=current_lora_dict if cond == "shine" else None,
+                            shine_decision=shine_decision if cond == "shine" else None,
+                        )
+                        out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                        out.flush()
+                        rows_written += 1
+                        LOGGER.info(
+                            "Wrote %s / %s / %s",
+                            doc.document_id,
+                            qa.qa_id,
+                            cond,
+                        )
+            finally:
+                if current_lora_dict is not None:
+                    model_module.free_lora_dict(current_lora_dict)
+                    current_lora_dict = None
+                    current_lora_path = None
 
     LOGGER.info("Predictions complete: %d rows -> %s", rows_written, predictions_path)
     return predictions_path
 
 
 def _validate_documents_for_conditions(
-    documents: list[DocumentRecord], conditions: list[str]
+    documents: list[DocumentRecord], conditions: list[str], routing: str
 ) -> None:
     if not documents:
         raise ValueError("no documents matched the artifacts selectors")
-    if "shine" in conditions:
+    # Only oracle gates on per-doc files.lora; embedding routing can serve a
+    # qa from a LoRA baked from any other doc.
+    if "shine" in conditions and routing == "oracle":
         with_lora = sum(1 for d in documents if d.lora_path is not None)
         if with_lora == 0:
             LOGGER.warning(

@@ -1,0 +1,65 @@
+# MemCoder evaluation harness — kilo easy v0, embedding-routed.
+#
+# Mirrors kilo_easy_v0.yaml but swaps `routing: oracle` for `routing: embedding`
+# and points at pre-computed cosine-retrieval JSONLs. The routing JSONLs are
+# produced ahead of time by `scripts/embedding_router.py`, e.g.:
+#
+#     uv run python scripts/embedding_router.py \
+#       --lora-store artifacts/antirez__kilo/ledger.json \
+#       --qa-pairs   artifacts/antirez__kilo/easy/qas/overview_purpose_1.json \
+#       --output     artifacts/antirez__kilo/easy/routing_results.qwen3.overview_purpose_1.top1.jsonl \
+#       --top-k 1
+#
+# repeated once per qa file. Each row in those JSONLs carries a `qa_id` and a
+# ranked list of LoRAs (with absolute `lora_path`s); the EmbeddingRouter looks
+# up `qa.qa_id` and serves the top-1 path. Questions without an entry are
+# skipped under the `shine` condition (naive/in_context rows still write).
+
+run_name: kilo_easy_v0_embedding
+
+artifacts:
+  - root: artifacts/antirez__kilo
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+
+conditions: [naive, in_context, shine]
+
+routing: embedding
+
+embedding:
+  # Recorded for traceability — must match the embedder used to generate
+  # the routing_results files below.
+  model: Qwen/Qwen3-Embedding-0.6B
+  # One JSONL per source qa file is the expected layout, but a single
+  # combined JSONL also works. Order does not matter; later rows for a
+  # duplicate qa_id win and a warning is logged.
+  routing_results:
+    - artifacts/antirez__kilo/easy/routing_results.qwen3.overview_purpose_1.top1.jsonl
+    - artifacts/antirez__kilo/easy/routing_results.qwen3.raw_terminal_input_1.top1.jsonl
+    - artifacts/antirez__kilo/easy/routing_results.qwen3.rows_editing_persistence_1.top1.jsonl
+  # The runner applies a single LoRA per (doc, qa); top_k > 1 only widens
+  # the `selected_lora_ids` list recorded in predictions.jsonl for analysis.
+  top_k: 1
+
+model:
+  qwen_base: /home/mms2309/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
+  shine_root: vendor/SHINE
+  qwen_cuda: 0
+  conversation_max_length: 5000
+  max_new_tokens: 512
+  seed: 42
+  lora_r: 8
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: .env
+  concurrency: 8
+  prompt: prompts/llm_judge_grading_v1.md
+  rubric_version: v1
+  taxonomy_version: v1
+  max_retries: 4
