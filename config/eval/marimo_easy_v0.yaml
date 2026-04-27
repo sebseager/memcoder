@@ -1,0 +1,43 @@
+# MemCoder evaluation harness — marimo easy v0.
+#
+# Assumes SHINE LoRAs have already been generated and recorded in
+# artifacts/marimo-team__marimo/ledger.json. Run predictions after baking LoRAs;
+# the shine condition is skipped for ledger entries whose files.lora is null.
+
+run_name: marimo_easy_v0
+
+artifacts:
+  - root: artifacts/marimo-team__marimo
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+
+conditions: [naive, in_context, shine]
+routing: oracle
+
+model:
+  # Absolute path to the local HF cache snapshot. Match kilo_easy_v0 unless
+  # your cluster/model cache path differs.
+  qwen_base: /home/mms2309/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
+  shine_root: vendor/SHINE
+  qwen_cuda: 0
+  conversation_max_length: 5000
+  max_new_tokens: 128
+  seed: 42
+  lora_r: 8
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+
+embedding:
+  model: null
+
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: .env
+  concurrency: 8
+  prompt: prompts/llm_judge_grading_v0.md
+  rubric_version: v0
+  taxonomy_version: v0
+  max_retries: 4
