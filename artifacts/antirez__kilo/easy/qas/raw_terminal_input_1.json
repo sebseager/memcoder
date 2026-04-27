@@ -1,0 +1,103 @@
+{
+  "repo_id": "antirez__kilo",
+  "commit": "323d93b29bd89a2cb446de90c4ed4fea1764176e",
+  "document_id": "raw_terminal_input_1",
+  "topic": "Raw Terminal Input",
+  "topic_slug": "raw_terminal_input",
+  "difficulty": "easy",
+  "generator": "cursor_gpt_5_5_manual",
+  "prompt_version": "doc_derived_qa_generation_v0",
+  "qa_pairs": [
+    {
+      "qa_id": "raw_terminal_input_1_0001",
+      "question": "Which function enables kilo's raw terminal mode?",
+      "answer": "`enableRawMode` enables kilo's raw terminal mode.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0002",
+      "question": "Where does kilo keep the original terminal settings so it can restore them?",
+      "answer": "It stores the original settings in the file-scope `orig_termios` variable.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0003",
+      "question": "What does `enableRawMode` do if raw mode is already active?",
+      "answer": "It returns success immediately without changing the terminal settings again.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0004",
+      "question": "What errno does the raw-mode fatal path set?",
+      "answer": "The fatal path sets `errno` to `ENOTTY`.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0005",
+      "question": "Which input flags are cleared when kilo configures raw mode?",
+      "answer": "It clears `BRKINT`, `ICRNL`, `INPCK`, `ISTRIP`, and `IXON`.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0006",
+      "question": "Which local terminal flags does kilo turn off for raw input?",
+      "answer": "It turns off `ECHO`, `ICANON`, `IEXTEN`, and `ISIG`.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0007",
+      "question": "Why are `VMIN` and `VTIME` set to 0 and 1?",
+      "answer": "They make reads responsive by allowing a read to return after a 100 ms timeout when no byte is available.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0008",
+      "question": "How does `editorReadKey` handle the first byte of input?",
+      "answer": "It loops until `read(fd, &c, 1)` returns a byte, and exits if `read` reports an error.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0009",
+      "question": "What internal key code does kilo return for `ESC [ A`?",
+      "answer": "It returns `ARROW_UP`.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0010",
+      "question": "Which extended escape sequences map to delete, page up, and page down?",
+      "answer": "`ESC [ 3 ~` maps to delete, `ESC [ 5 ~` maps to page up, and `ESC [ 6 ~` maps to page down.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0011",
+      "question": "What terminal query does `getCursorPosition` send?",
+      "answer": "It sends `ESC [6n` and expects a cursor-position response.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0012",
+      "question": "Why does `updateWindowSize` subtract two from `E.screenrows`?",
+      "answer": "It reserves two terminal rows for kilo's status UI.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0013",
+      "question": "Which signal handler updates kilo's dimensions after a terminal resize?",
+      "answer": "`handleSigWinCh` handles `SIGWINCH`, updates the stored size, clamps the cursor, and refreshes the screen.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    }
+  ]
+}
