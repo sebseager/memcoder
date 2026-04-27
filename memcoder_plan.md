@@ -55,6 +55,27 @@ The pilot must show, at minimum:
 
 If SHINE tracks close to In-context, proceed to the full pipeline. If SHINE is much closer to Naive than to In-context, pause and diagnose before committing more effort. Possible diagnoses include: SHINE failing to preserve specific factual detail, Qwen3-8B base model failures unrelated to SHINE, or document/QA quality issues.
 
+### 4.3 Pilot status (live)
+
+The eval harness is implemented under `eval/` with the CLI at
+`scripts/run_eval.py` (subcommands `predict`, `judge`, `report`, `all`),
+plus a dedicated bake script at `scripts/generate_shine_lora.py`. Run
+configs live in `config/eval/<run_name>.yaml`; one config per run.
+
+First pilot run lives at `results/kilo_easy_v0_20260427T0037/` on
+`antirez__kilo` with three easy docs (`overview_purpose_1`,
+`raw_terminal_input_1`, `rows_editing_persistence_1`), oracle routing,
+and conditions `naive | in_context | shine`. A second run with two of the
+docs rewritten in lean prose (and matching QAs) is in progress to test
+the code-density hypothesis described in §18.
+
+The pilot has surfaced two important findings that feed back into the
+plan: doc code-density appears to drive LoRA quality (see §18), and
+doc-derived QAs frequently leak into pretrained knowledge — they are
+answerable without the document at all, which dilutes the naive/shine
+gap (see §18). Both are reflected as risks rather than non-goals; the
+project continues.
+
 ## 5. Topic Set Construction
 
 Each repository gets its own topic set, built as follows:
@@ -101,6 +122,13 @@ All three sets are stored with metadata indicating their origin, the topic(s) th
 For each design document, generate a LoRA via the SHINE hypernetwork in a single forward pass. Each LoRA is registered in two artifacts: a ledger (model-facing) and a LoRA store (system-facing).
 
 ### 8.1 Ledger (model-facing artifact)
+
+> **Status (v0):** the markdown ledger described below is a Qwen-as-router
+> prerequisite and is **not yet implemented**. The current artifact set
+> ships only a structured `artifacts/<repo>/ledger.json` (described in
+> §8.2 — closer to the LoRA store than to a model-facing ledger). The
+> markdown ledger will be generated programmatically from the JSON store
+> when Qwen-as-router work begins.
 
 The ledger is a flat markdown file. Topics are second-level headings; each LoRA appears as a bullet under the topic it belongs to. The ledger is read directly by the local model during Qwen-as-router runs and is intended to be human-readable for debugging.
 
@@ -167,15 +195,18 @@ For each strategy, k is varied (k = 1, 2, 3, possibly more). When k > 1, the ret
 
 ## 12. Evaluation
 
-**Scoring.** Answer correctness is judged by an LLM-as-judge using a stronger model than Qwen3-8B (e.g., Claude or a comparable frontier model). The judge receives the question, the ground-truth answer, and the model's answer, and outputs:
-- A correctness score (rubric to be defined during the pilot — at minimum, correct / partially correct / incorrect).
-- A failure-mode tag drawn from the taxonomy below (when the answer is not fully correct).
-- A brief justification.
+**Scoring.** Answer correctness is judged by an LLM-as-judge using a stronger model than Qwen3-8B (v0: OpenAI `gpt-5.1`). The judge receives the question, the ground-truth answer, and the model's answer (no source document — pure substance check), and emits structured JSON conforming to `schemas/judge_result.schema.json`:
+- An integer **score** on a 1–5 scale (resolved from the original "to-be-defined rubric"; see prompt at `prompts/llm_judge_grading_v0.md` for the rubric definition).
+- A free-text **reasoning** field, encouraged to elaborate.
+- A list of **failure_modes** drawn from the taxonomy below (required when score < 5; empty when score == 5).
+- An optional **failure_mode_notes** for `other`.
 
-LLM-as-judge has known failure modes (favoring verbose answers, leniency on near-misses, run-to-run drift). We mitigate by:
-- Hand-grading a sample of 30–50 questions to validate judge calibration before trusting it on the full eval.
-- Logging the judge's full output for spot-checking.
-- Reporting token-level F1 (matching the SHINE paper) as a secondary metric for sanity-checking and direct comparability to published results.
+The judge prompt explicitly instructs leniency on phrasing / equivalent paraphrases and strictness on specifics (wrong identifiers, values, names). The harness post-processes: clears tags on score==5; auto-tags `other` if score<5 returned no tags.
+
+LLM-as-judge has known failure modes (favoring verbose answers, leniency on near-misses, run-to-run drift). v0 mitigation:
+- Logging the judge's full output for spot-checking (`judgments.jsonl` row carries `judge.reasoning` and `judge.raw_response`).
+- Aggregation report (`report.md`) and per-doc heatmap plots for outlier inspection.
+- **Not implemented (v0):** hand-graded calibration set, token-level F1 secondary metric. Hand-grading was explicitly deferred — we rely on the judge with leniency baked into the prompt. F1 may be added later if needed for direct comparability to the SHINE paper.
 
 **Per-question logging.** Every evaluation run logs, per question:
 - Question, ground-truth answer, model answer.
@@ -185,15 +216,31 @@ LLM-as-judge has known failure modes (favoring verbose answers, leniency on near
 - F1 and exact-match scores.
 - Wall-clock time and any errors.
 
-**Failure mode taxonomy** (built and refined during the pilot, frozen before main eval; emitted by the LLM judge per question):
-- Answer hallucinated (no relation to source).
-- Right entity, wrong attribute.
-- Right topic, wrong specific fact.
-- Retrieval miss (correct LoRA not retrieved).
-- Composition failure (multiple LoRAs averaged, result degraded).
-- LoRA preservation failure (correct LoRA loaded but did not preserve relevant detail).
-- Question genuinely unanswerable from any document.
-- Other (with free-text note).
+**Failure mode taxonomy (v0, taxonomy_version `v0`).** Multi-label, applied
+when score is in {1, 2, 3, 4}; cleared when score == 5.
+
+- `wrong_specifics` — Right concept or topic but specific names, values,
+  or details are wrong. Subsumes the originally-planned `hallucinated`
+  tag — fabricated specifics land here. Also subsumes "right entity,
+  wrong attribute" and "right topic, wrong specific fact".
+- `missing_information` — Key required facts omitted.
+- `off_topic` — Answer addresses a different question.
+- `refusal_or_nonresponse` — Model declined, said it didn't know, or
+  returned empty.
+- `format_failure` — Substance roughly there but unparseable, truncated,
+  or in the wrong format.
+- `other` — Use only when no tag above fits; populate `failure_mode_notes`.
+
+The originally-planned `retrieval miss`, `composition failure`, and
+`LoRA preservation failure` tags were dropped from the per-answer
+taxonomy: those describe *which condition / which routing produced this
+answer*, not *what shape of error this answer has*. They belong in run
+metadata (already captured: `condition`, `routing.strategy`,
+`routing.selected_lora_ids`) and are derivable post-hoc by joining tags
+to those fields. The originally-planned "genuinely unanswerable" tag was
+dropped because the eval harness does not surface unanswerable
+questions to the judge — the QA generator is responsible for filtering
+those out before they reach the eval.
 
 ## 13. Experimental Matrix
 
@@ -206,11 +253,35 @@ This is a large matrix. We start with easy-difficulty documents only on 2–3 re
 
 The following must be built early and shared across all workstreams:
 
-- **Evaluation harness.** A single function that takes (question, retrieval-method, model-config, k) and returns a logged result. All experiments call this.
-- **Ledger and LoRA store schemas.** The ledger markdown format and the LoRA store schema (JSON or SQLite) are agreed before any artifacts are written.
-- **Versioning.** Every generated artifact (document, LoRA, embedding) is timestamped and tied to a manifest recording the prompts and code version used to generate it.
-- **Storage layout.** Decide upfront where artifacts live (suggested: `artifacts/{repo}/{generator}/{topic}/{difficulty}/...`) and document it.
-- **Reproducibility.** It must be possible to reproduce a single result from logs without re-running the full pipeline.
+- **Evaluation harness.** Implemented as `eval/` (Python package) and
+  `scripts/run_eval.py` (CLI). Run config is a self-contained YAML at
+  `config/eval/<run_name>.yaml` listing artifacts to evaluate, model
+  paths, conditions, routing, and judge configuration. Subcommands:
+  `predict` (Qwen + pre-baked LoRA → `predictions.jsonl`),
+  `judge` (OpenAI `gpt-5.1` → `judgments.jsonl`),
+  `report` (per-condition aggregation → `report.md` + auto-rendered
+  plots), `all` (predict → judge → report). Every invocation writes a
+  fresh non-resumable `results/<run_name>_<YYYYMMDDTHHMM>/` directory.
+- **Ledger and LoRA store schemas.** v0 ships JSON schemas under
+  `schemas/`: `ledger.schema.json`, `eval_result.schema.json`,
+  `judge_result.schema.json`, `qa_pairs.schema.json`,
+  `design_doc.schema.json`. Markdown ledger (model-facing, for
+  Qwen-as-router) is deferred until that workstream begins; see §8.1
+  status note.
+- **Versioning.** Every generated artifact records `generator`,
+  `prompt_version`, source `commit`, and `repo_id`. Eval runs snapshot
+  their resolved config to `<run-dir>/run_config.yaml` and a
+  `manifest.json` carrying timestamp, git SHA, model paths, and the
+  per-doc input record.
+- **Storage layout.** Actual layout is
+  `artifacts/{repo}/{difficulty}/{docs|qas|loras}/<doc_id>.{json|pt}`.
+  The originally-suggested `{generator}` and `{topic}` directory levels
+  were dropped — `generator` is recorded inside each artifact's JSON,
+  and topic is encoded in the `document_id` (`{topic_slug}_{n}`).
+- **Reproducibility.** A single judged row is fully reproducible from
+  `<run-dir>/predictions.jsonl` (input + raw model output) plus
+  `<run-dir>/run_config.yaml` (model paths, seeds, prompt path) and the
+  pre-baked LoRA `.pt` referenced in the row's `lora_path`.
 
 ## 15. Workstream Decomposition
 
@@ -248,21 +319,73 @@ These streams have dependencies (B and C need outputs from A; C needs outputs fr
 
 ## 17. Open Questions to Resolve Early
 
-- What is the tolerance for the pilot decision gate (how close to In-context is "close enough")?
+- ~~What is the correctness rubric the LLM judge should use (binary,
+  three-point, finer)?~~ **Resolved:** integer 1–5 (`gpt-5.1`,
+  `rubric_version` and `taxonomy_version` both `v0`). Rubric in
+  `prompts/llm_judge_grading_v0.md`.
+- ~~How do we score answers when the ground-truth answer is a list,
+  code reference, or numeric value?~~ **Resolved (operational):** judge
+  prompt instructs leniency on phrasing, strictness on specifics. Pilot
+  spot-checks indicate this works for prose-style answers and is
+  reasonable for short code-token answers. Outstanding nuance: judge
+  can be too lenient when a vague-but-plausible answer overlaps a
+  loosely-worded ground truth — see §18 risk on QA quality.
+- What is the tolerance for the pilot decision gate (how close to
+  In-context is "close enough")? **Partially answered by pilot:** on
+  the unfiltered kilo `easy` set, in-context is 4.93 and shine is 2.40
+  (≈ naive 2.52). On the doc-specific subset (questions where naive
+  scored ≤ 2), shine 2.19 vs naive 1.65 — shine wins on the questions
+  that actually require the document. A formal threshold still needs
+  picking before the main eval.
 - Final composition of the universal topic seed.
-- How do we handle blind QAs that have no clean ground-truth LoRA mapping (relevant for evaluating routing accuracy)?
-- What is the right value of N (documents per (repo, topic, difficulty) tuple)?
-- How do we score answers when the ground-truth answer is a list, code reference, or numeric value (where the LLM judge or F1 may be misleading)?
-- What is the correctness rubric the LLM judge should use (binary, three-point, finer)?
+- How do we handle blind QAs that have no clean ground-truth LoRA
+  mapping (relevant for evaluating routing accuracy)?
+- What is the right value of N (documents per (repo, topic, difficulty)
+  tuple)?
 
 ## 18. Risks and Mitigations
 
-- **SHINE compression loses critical detail.** Pilot detects this. Mitigation: split topics into more, smaller LoRAs.
-- **RAG-over-docs beats SHINE.** Possible. Mitigation: identify dimensions where SHINE wins (latency at QA time, ability to compose, etc.) and highlight those even if F1 is comparable.
-- **Qwen-generated docs are much worse than CC-generated docs.** This would weaken the privacy story. Mitigation: explicitly evaluate; report honestly even if the gap is large.
-- **LoRA composition does not work.** Likely partially. Mitigation: fall back to top-1 routing as the default, treat composition as a research finding rather than a system requirement.
-- **Topic discovery is unreliable across repos.** Mitigation: structure-derived topics provide a floor; discovered topics are additive and can be evaluated separately.
-- **Scope creep.** Mitigation: the non-goals section is firm. Anything outside it requires explicit team agreement.
+- **SHINE compression loses critical detail.** Pilot detects this.
+  Mitigation: split topics into more, smaller LoRAs.
+- **Code-density of docs degrades SHINE compression. (Pilot finding.)**
+  Docs that catalog identifiers, flag names, or escape codes produce
+  visibly worse SHINE outputs (gibberish loops, invented identifiers)
+  than prose-first docs at the same conceptual content, even though all
+  three pilot docs fit comfortably under SHINE's 1150-token cap. The
+  in-context ceiling stays high for code-dense docs (so the *document*
+  contains the info), but the *LoRA* doesn't preserve it. Mitigation:
+  write design docs in prose-first style with backtick density at or
+  below the `overview_purpose_1` reference (~2.5%); avoid enumeration
+  of constants, flags, or struct fields; describe purpose alongside
+  the named entity rather than listing entities. Currently being
+  validated by an A/B re-bake of two kilo docs in lean-prose form.
+- **QA quality leaks into pretrained knowledge. (Pilot finding.)**
+  Doc-derived QAs frequently ask questions that Qwen3-8B can answer
+  from pretrained knowledge alone — standard ANSI escape codes,
+  self-documenting function names like `editorInsertNewline`, generic
+  editor conventions. On the kilo pilot, 21% of naive answers scored
+  ≥ 4 without the doc. This dilutes the naive vs shine gap and inflates
+  the apparent strength of the naive baseline. Mitigation: (a) filter
+  the QA set post-hoc to questions naive scored ≤ N
+  (`scripts/plot_naive_hard.py` does this for analysis); (b) generate
+  QAs that test conceptual understanding which depends on the specific
+  document, not on general LLM knowledge — verbatim identifier-recall
+  questions are dangerous because their answers are often inferable
+  from the identifier name itself.
+- **RAG-over-docs beats SHINE.** Possible. Mitigation: identify
+  dimensions where SHINE wins (latency at QA time, ability to compose,
+  etc.) and highlight those even if F1 is comparable.
+- **Qwen-generated docs are much worse than CC-generated docs.** This
+  would weaken the privacy story. Mitigation: explicitly evaluate;
+  report honestly even if the gap is large.
+- **LoRA composition does not work.** Likely partially. Mitigation:
+  fall back to top-1 routing as the default, treat composition as a
+  research finding rather than a system requirement.
+- **Topic discovery is unreliable across repos.** Mitigation:
+  structure-derived topics provide a floor; discovered topics are
+  additive and can be evaluated separately.
+- **Scope creep.** Mitigation: the non-goals section is firm. Anything
+  outside it requires explicit team agreement.
 
 ## 19. Additional Thoughts (post-v1 ideas)
 

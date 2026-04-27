@@ -5,97 +5,104 @@
   "topic": "Raw Terminal Input",
   "topic_slug": "raw_terminal_input",
   "difficulty": "easy",
-  "generator": "cursor_gpt_5_5_manual",
+  "generator": "claude_opus_4_7_rewrite_lean_prose",
   "prompt_version": "doc_derived_qa_generation_v0",
   "qa_pairs": [
     {
       "qa_id": "raw_terminal_input_1_0001",
-      "question": "Which function enables kilo's raw terminal mode?",
-      "answer": "`enableRawMode` enables kilo's raw terminal mode.",
+      "question": "Why does kilo handle terminal input itself instead of using curses?",
+      "answer": "Kilo handles terminal input itself rather than relying on curses or another UI library, so it stays self-contained.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0002",
-      "question": "Where does kilo keep the original terminal settings so it can restore them?",
-      "answer": "It stores the original settings in the file-scope `orig_termios` variable.",
+      "question": "What does `enableRawMode` do at startup?",
+      "answer": "It captures the current terminal settings, registers a cleanup hook so they can be restored on exit, and applies a modified attribute set tuned for byte-by-byte interactive editing.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0003",
-      "question": "What does `enableRawMode` do if raw mode is already active?",
-      "answer": "It returns success immediately without changing the terminal settings again.",
+      "question": "Where are the original terminal settings kept so they can be restored later?",
+      "answer": "They are kept in a file-scope variable so the cleanup hook has them when the process ends.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0004",
-      "question": "What errno does the raw-mode fatal path set?",
-      "answer": "The fatal path sets `errno` to `ENOTTY`.",
+      "question": "What does `enableRawMode` do if raw mode is already active?",
+      "answer": "It returns successfully without touching the terminal again.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0005",
-      "question": "Which input flags are cleared when kilo configures raw mode?",
-      "answer": "It clears `BRKINT`, `ICRNL`, `INPCK`, `ISTRIP`, and `IXON`.",
+      "question": "When does `enableRawMode` take its fatal path, and what does it do?",
+      "answer": "When standard input is not a TTY, or when the system calls for reading or writing the terminal attributes fail. It sets `errno` and returns `-1`.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0006",
-      "question": "Which local terminal flags does kilo turn off for raw input?",
-      "answer": "It turns off `ECHO`, `ICANON`, `IEXTEN`, and `ISIG`.",
+      "question": "What kinds of line-based comforts does raw mode disable so each keypress arrives as a raw byte?",
+      "answer": "Echo, canonical line buffering, signal generation from keys like Ctrl-C, and extended input processing are all disabled.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0007",
-      "question": "Why are `VMIN` and `VTIME` set to 0 and 1?",
-      "answer": "They make reads responsive by allowing a read to return after a 100 ms timeout when no byte is available.",
+      "question": "Why is output post-processing turned off in raw mode?",
+      "answer": "So kilo can emit precise control sequences without the terminal modifying them.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0008",
-      "question": "How does `editorReadKey` handle the first byte of input?",
-      "answer": "It loops until `read(fd, &c, 1)` returns a byte, and exits if `read` reports an error.",
+      "question": "How is read latency tuned for an interactive editor?",
+      "answer": "The terminal is configured so that a read can return after roughly a tenth of a second when no byte is available, rather than blocking.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0009",
-      "question": "What internal key code does kilo return for `ESC [ A`?",
-      "answer": "It returns `ARROW_UP`.",
+      "question": "What does `editorReadKey` do?",
+      "answer": "It keeps polling for an initial byte and exits the editor if the underlying read reports an error.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0010",
-      "question": "Which extended escape sequences map to delete, page up, and page down?",
-      "answer": "`ESC [ 3 ~` maps to delete, `ESC [ 5 ~` maps to page up, and `ESC [ 6 ~` maps to page down.",
+      "question": "How does kilo handle terminal escape sequences for special keys?",
+      "answer": "It decodes the trailing bytes and returns an internal soft key code rather than the raw escape characters.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0011",
-      "question": "What terminal query does `getCursorPosition` send?",
-      "answer": "It sends `ESC [6n` and expects a cursor-position response.",
+      "question": "Which keys does kilo recognize through escape sequences?",
+      "answer": "Bare escapes, the four arrow keys, page up and page down, home and end, and the delete key.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0012",
-      "question": "Why does `updateWindowSize` subtract two from `E.screenrows`?",
-      "answer": "It reserves two terminal rows for kilo's status UI.",
+      "question": "What does kilo do when the standard ioctl-based window-size query does not yield a column count?",
+      "answer": "It falls back to a cursor-query trick: it parks the cursor in the bottom-right corner, asks the terminal where the cursor ended up via `getCursorPosition`, and parses the row and column out of the reply.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     },
     {
       "qa_id": "raw_terminal_input_1_0013",
-      "question": "Which signal handler updates kilo's dimensions after a terminal resize?",
-      "answer": "`handleSigWinCh` handles `SIGWINCH`, updates the stored size, clamps the cursor, and refreshes the screen.",
+      "question": "Why does kilo reserve two rows at the bottom of the terminal?",
+      "answer": "For its status line and message area.",
+      "qa_set": "doc_derived",
+      "document_id": "raw_terminal_input_1"
+    },
+    {
+      "qa_id": "raw_terminal_input_1_0014",
+      "question": "How does kilo react to terminal resize events?",
+      "answer": "A `SIGWINCH` handler updates the stored dimensions, clamps the cursor if it now sits outside the screen, and refreshes the display so the user sees the new layout immediately.",
       "qa_set": "doc_derived",
       "document_id": "raw_terminal_input_1"
     }

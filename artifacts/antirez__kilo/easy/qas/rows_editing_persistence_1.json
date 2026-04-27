@@ -5,97 +5,97 @@
   "topic": "Rows, Editing, and Persistence",
   "topic_slug": "rows_editing_persistence",
   "difficulty": "easy",
-  "generator": "cursor_gpt_5_5_manual",
+  "generator": "claude_opus_4_7_rewrite_lean_prose",
   "prompt_version": "doc_derived_qa_generation_v0",
   "qa_pairs": [
     {
       "qa_id": "rows_editing_persistence_1_0001",
-      "question": "Where does kilo store the array of editable file rows?",
-      "answer": "It stores the array of `erow` structures in `E.row`.",
+      "question": "How does kilo represent the editable file in memory?",
+      "answer": "As an in-memory array of `erow` structures, each carrying the original characters of the line, a parallel rendered version, syntax-highlight metadata, and a small flag tracking whether the previous line ended inside a multiline comment.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0002",
-      "question": "What are `chars` and `render` in an `erow`?",
-      "answer": "`chars` is the original row text, while `render` is the display-oriented version used for the screen.",
+      "question": "Why does each row store both an original character buffer and a rendered version?",
+      "answer": "Because what shows on screen is not always the same as what is on disk; the rendered view exists for display.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0003",
-      "question": "Why does `editorUpdateRow` build a rendered string?",
-      "answer": "It builds a rendered string because screen columns can differ from file characters, especially when tabs expand.",
+      "question": "How are tab characters displayed inside a row?",
+      "answer": "They are expanded into spaces up to the next eight-column tab stop so cursor positioning and highlighting line up with the visible output.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0004",
-      "question": "How does kilo render tab characters inside a row?",
-      "answer": "It expands each tab into spaces until the next 8-column tab stop.",
+      "question": "What does `editorUpdateRow` do?",
+      "answer": "When a row's underlying characters change, it rebuilds the rendered string and recomputes the highlight bytes for that row.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0005",
-      "question": "What does `editorInsertRow` do when inserting into the middle of the file?",
-      "answer": "It grows the row array, shifts later rows with `memmove`, increments shifted row indices, initializes the new row, updates it, increments `E.numrows`, and marks the file dirty.",
+      "question": "What happens when a new row is inserted through `editorInsertRow`?",
+      "answer": "The row array is reallocated, later rows shift down with their indices fixed, the new row's buffers are initialized, the rendered view is recomputed, and the file is marked dirty.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0006",
-      "question": "Which helper frees a row's heap-allocated fields before row deletion?",
-      "answer": "`editorFreeRow` frees the row's `render`, `chars`, and `hl` allocations.",
+      "question": "What does `editorFreeRow` release before a row is deleted?",
+      "answer": "The row's heap allocations for the original text, the rendered buffer, and the highlight bytes.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0007",
-      "question": "What happens if `editorRowInsertChar` is asked to insert beyond the current row length?",
-      "answer": "It pads the row with spaces up to the requested column before inserting the new character.",
+      "question": "What happens if `editorRowInsertChar` is asked to insert a character past the current end of a line?",
+      "answer": "It first pads the row with spaces up to the requested column, then writes the character.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0008",
       "question": "How does `editorInsertChar` translate the visible cursor into a file position?",
-      "answer": "It adds the row and column scroll offsets to `E.cy` and `E.cx` to compute the file row and file column.",
+      "answer": "It translates the visible cursor and scroll offsets into a file row and column, and creates an empty row at the end of the file when typing past the last line.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0009",
       "question": "What does `editorInsertNewline` do when the cursor is in the middle of a row?",
-      "answer": "It splits the current row at the cursor, inserts the right-hand text as a new row, truncates and updates the original row, and moves the cursor to the next line.",
+      "answer": "It splits the row at the cursor: the right half becomes a new row beneath the original, the original is truncated and its render data refreshed, and the cursor moves to the start of the new line.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0010",
-      "question": "How does `editorDelChar` behave at column zero?",
-      "answer": "It appends the current row to the previous row, deletes the current row, moves the cursor up, and adjusts horizontal scrolling.",
+      "question": "How does `editorDelChar` behave when the cursor is at column zero?",
+      "answer": "It joins the current row to the previous one by appending the text and then deleting the original.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0011",
       "question": "What does `editorOpen` do when the requested file does not exist?",
-      "answer": "If `errno` is `ENOENT`, it returns `1` and leaves the buffer empty so the filename can be saved later.",
+      "answer": "It returns success, leaves the buffer empty, and lets the user save under that name later.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0012",
-      "question": "How does `editorRowsToString` serialize rows for saving?",
-      "answer": "It copies each row's contents into one heap buffer and appends a newline after every row.",
+      "question": "How does `editorRowsToString` serialize the in-memory rows for saving?",
+      "answer": "It concatenates all rows with a newline between each.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     },
     {
       "qa_id": "rows_editing_persistence_1_0013",
-      "question": "What file operations does `editorSave` use before reporting success?",
-      "answer": "It opens or creates the file, truncates it to the new length with `ftruncate`, writes the full buffer, closes the file, clears `E.dirty`, and reports bytes written.",
+      "question": "What does `editorSave` do before reporting success?",
+      "answer": "It opens or creates the target file, truncates it to the exact new length, writes the buffer in one call, closes the file, clears the dirty flag, and reports the number of bytes written.",
       "qa_set": "doc_derived",
       "document_id": "rows_editing_persistence_1"
     }
