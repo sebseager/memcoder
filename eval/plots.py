@@ -44,7 +44,9 @@ def render_run_plots(
     run_dir: Path,
     *,
     source: str = "judgments.jsonl",
+    out_dir: Path | None = None,
     show_empty: bool = False,
+    title_suffix: str = "",
 ) -> list[Path]:
     """Render all plots for ``run_dir`` and return their paths.
 
@@ -58,6 +60,29 @@ def render_run_plots(
     rows = _load_judgments(src)
     if not rows:
         raise ValueError(f"no rows in {src}")
+    return render_plots_from_rows(
+        rows,
+        out_dir=out_dir or run_dir,
+        show_empty=show_empty,
+        title_suffix=title_suffix,
+    )
+
+
+def render_plots_from_rows(
+    rows: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    show_empty: bool = False,
+    title_suffix: str = "",
+) -> list[Path]:
+    """Render plots from already-loaded judgment rows.
+
+    Used by ad-hoc filtering scripts that want to plot a subset of the run
+    without writing a sidecar file at the standard location.
+    """
+    if not rows:
+        raise ValueError("no rows to plot")
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     conditions = _present_conditions(rows, include_empty=show_empty)
     LOGGER.info(
@@ -68,15 +93,20 @@ def render_run_plots(
     )
 
     out_paths: list[Path] = []
-    out_paths.append(_plot_score_distribution(rows, conditions, run_dir))
-    out_paths.append(_plot_mean_score(rows, conditions, run_dir))
-    out_paths.append(_plot_failure_modes(rows, conditions, run_dir))
-    heatmap = _plot_per_document_heatmap(rows, conditions, run_dir)
+    out_paths.append(_plot_score_distribution(rows, conditions, out_dir, title_suffix))
+    out_paths.append(_plot_mean_score(rows, conditions, out_dir, title_suffix))
+    out_paths.append(_plot_failure_modes(rows, conditions, out_dir, title_suffix))
+    heatmap = _plot_per_document_heatmap(rows, conditions, out_dir, title_suffix)
     if heatmap is not None:
         out_paths.append(heatmap)
     for p in out_paths:
         LOGGER.info("wrote %s", p)
     return out_paths
+
+
+def load_judgments(path: Path) -> list[dict[str, Any]]:
+    """Public wrapper around the internal JSONL reader."""
+    return _load_judgments(path)
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +148,10 @@ def _scores_by_condition(rows: list[dict[str, Any]]) -> dict[str, list[int]]:
 # ---------------------------------------------------------------------------
 
 def _plot_score_distribution(
-    rows: list[dict[str, Any]], conditions: list[str], run_dir: Path
+    rows: list[dict[str, Any]],
+    conditions: list[str],
+    out_dir: Path,
+    title_suffix: str = "",
 ) -> Path:
     scores = _scores_by_condition(rows)
     fig, ax = plt.subplots(figsize=(8.5, 5.0))
@@ -143,11 +176,11 @@ def _plot_score_distribution(
     ax.set_xticklabels([str(s) for s in score_levels])
     ax.set_xlabel("Judge score (1–5)")
     ax.set_ylabel("Count")
-    ax.set_title("Score distribution per condition")
+    ax.set_title(f"Score distribution per condition{title_suffix}")
     ax.legend(title="Condition")
     ax.grid(axis="y", alpha=0.3)
 
-    out = run_dir / "scores_per_condition.png"
+    out = out_dir / "scores_per_condition.png"
     fig.tight_layout()
     fig.savefig(out, dpi=150)
     plt.close(fig)
@@ -159,7 +192,10 @@ def _plot_score_distribution(
 # ---------------------------------------------------------------------------
 
 def _plot_mean_score(
-    rows: list[dict[str, Any]], conditions: list[str], run_dir: Path
+    rows: list[dict[str, Any]],
+    conditions: list[str],
+    out_dir: Path,
+    title_suffix: str = "",
 ) -> Path:
     scores = _scores_by_condition(rows)
 
@@ -195,7 +231,7 @@ def _plot_mean_score(
     ax.set_xticklabels(conditions)
     ax.set_ylim(0, 5.5)
     ax.set_ylabel("Mean judge score")
-    ax.set_title("Mean score per condition (error bars: 95% CI)")
+    ax.set_title(f"Mean score per condition (error bars: 95% CI){title_suffix}")
     ax.grid(axis="y", alpha=0.3)
 
     for bar, m, n in zip(bars, means, ns):
@@ -208,7 +244,7 @@ def _plot_mean_score(
             fontsize=9,
         )
 
-    out = run_dir / "mean_score_per_condition.png"
+    out = out_dir / "mean_score_per_condition.png"
     fig.tight_layout()
     fig.savefig(out, dpi=150)
     plt.close(fig)
@@ -220,7 +256,10 @@ def _plot_mean_score(
 # ---------------------------------------------------------------------------
 
 def _plot_failure_modes(
-    rows: list[dict[str, Any]], conditions: list[str], run_dir: Path
+    rows: list[dict[str, Any]],
+    conditions: list[str],
+    out_dir: Path,
+    title_suffix: str = "",
 ) -> Path:
     counts: dict[str, Counter] = {c: Counter() for c in conditions}
     for r in rows:
@@ -249,11 +288,13 @@ def _plot_failure_modes(
     ax.set_xticks(x)
     ax.set_xticklabels(FAILURE_MODES, rotation=20, ha="right")
     ax.set_ylabel("Count")
-    ax.set_title("Failure modes per condition (multi-label, scores < 5 only)")
+    ax.set_title(
+        f"Failure modes per condition (multi-label, scores < 5 only){title_suffix}"
+    )
     ax.legend(title="Condition")
     ax.grid(axis="y", alpha=0.3)
 
-    out = run_dir / "failure_modes_per_condition.png"
+    out = out_dir / "failure_modes_per_condition.png"
     fig.tight_layout()
     fig.savefig(out, dpi=150)
     plt.close(fig)
@@ -265,7 +306,10 @@ def _plot_failure_modes(
 # ---------------------------------------------------------------------------
 
 def _plot_per_document_heatmap(
-    rows: list[dict[str, Any]], conditions: list[str], run_dir: Path
+    rows: list[dict[str, Any]],
+    conditions: list[str],
+    out_dir: Path,
+    title_suffix: str = "",
 ) -> Path | None:
     by_doc_cond: dict[tuple[str, str], list[int]] = defaultdict(list)
     docs: list[str] = []
@@ -301,7 +345,7 @@ def _plot_per_document_heatmap(
     ax.set_xticklabels(conditions)
     ax.set_yticks(np.arange(len(docs)))
     ax.set_yticklabels(docs)
-    ax.set_title("Mean judge score by (document, condition)")
+    ax.set_title(f"Mean judge score by (document, condition){title_suffix}")
 
     for i in range(len(docs)):
         for j in range(len(conditions)):
@@ -314,7 +358,7 @@ def _plot_per_document_heatmap(
             ax.text(j, i, txt, ha="center", va="center", color=color, fontsize=10)
 
     fig.colorbar(im, ax=ax, label="Mean score")
-    out = run_dir / "per_document_heatmap.png"
+    out = out_dir / "per_document_heatmap.png"
     fig.tight_layout()
     fig.savefig(out, dpi=150)
     plt.close(fig)
