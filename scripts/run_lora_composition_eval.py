@@ -25,6 +25,9 @@ DEFAULT_DOCS = [
     DEFAULT_ARTIFACT_DIR / "docs" / "raw_terminal_input_1.json",
     DEFAULT_ARTIFACT_DIR / "docs" / "rows_editing_persistence_1.json",
 ]
+DEFAULT_EXTRA_QA_PAIRS = [
+    DEFAULT_ARTIFACT_DIR / "qas" / "needs_all_three.json",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -232,6 +235,17 @@ def load_override_qa_items(qa_paths: list[Path], doc_ids: dict[Path, str]) -> li
                     "individual_document_ids": required_ids,
                 }
             )
+    return qa_items
+
+
+def load_qa_items(qa_paths: list[Path] | None, doc_ids: dict[Path, str]) -> list[dict[str, Any]]:
+    if qa_paths:
+        return load_override_qa_items(qa_paths, doc_ids)
+
+    qa_items = load_default_qa_items(doc_ids)
+    extra_paths = [repo_path(path) for path in DEFAULT_EXTRA_QA_PAIRS if repo_path(path).exists()]
+    if extra_paths:
+        qa_items.extend(load_override_qa_items(extra_paths, doc_ids))
     return qa_items
 
 
@@ -523,7 +537,7 @@ def main() -> int:
         ", ".join(f"{weight:.4g}" for weight in weights),
     )
 
-    qa_items = load_override_qa_items(qa_paths, doc_ids) if qa_paths else load_default_qa_items(doc_ids)
+    qa_items = load_qa_items(qa_paths, doc_ids)
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     records: list[dict[str, Any]] = []
@@ -533,7 +547,7 @@ def main() -> int:
             qa = item["qa"]
             run_specs = [
                 {
-                    "condition": "individual" if len(item["individual_document_ids"]) == 1 else f"individual:{document_id}",
+                    "condition": f"individual:{document_id}",
                     "lora_dict": loras[document_id],
                     "adapter_document_id": document_id,
                     "composition_document_ids": None,

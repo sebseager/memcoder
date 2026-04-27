@@ -105,6 +105,20 @@ def format_score(record: dict[str, Any]) -> str:
     return f"score: token_f1={token_f1_text}, exact_or_contains={contains_text}"
 
 
+def is_individual_condition(condition: str) -> bool:
+    return condition == "individual" or condition.startswith("individual:")
+
+
+def condition_sort_key(condition: str) -> tuple[int, str]:
+    if is_individual_condition(condition):
+        return (0, condition)
+    if condition == "composition":
+        return (1, condition)
+    if condition:
+        return (2, condition)
+    return (3, condition)
+
+
 def print_wrapped(label: str, value: Any, width: int) -> None:
     text = str(value if value is not None else "<missing>")
     prefix = f"  {label}: "
@@ -160,12 +174,20 @@ def main() -> int:
     shown = 0
     for item in items:
         runs = item["runs"]
-        individual = runs.get("individual")
         composition = runs.get("composition")
-        individual_answer = normalize_text((individual or {}).get("answer"))
         composition_answer = normalize_text((composition or {}).get("answer"))
+        individual_answers = [
+            normalize_text(record.get("answer"))
+            for condition, record in runs.items()
+            if is_individual_condition(condition)
+        ]
 
-        if args.only_changed and individual_answer == composition_answer:
+        if (
+            args.only_changed
+            and composition is not None
+            and individual_answers
+            and all(answer == composition_answer for answer in individual_answers)
+        ):
             continue
 
         shown += 1
@@ -179,7 +201,9 @@ def main() -> int:
         print_wrapped("question", item.get("question", ""), args.width)
         print_wrapped("expected", item.get("expected_answer", ""), args.width)
 
-        for condition in ("individual", "composition"):
+        for condition in sorted(runs, key=condition_sort_key):
+            if not condition:
+                continue
             record = runs.get(condition)
             if record is None:
                 print(f"  {condition}: <missing>")
@@ -195,14 +219,6 @@ def main() -> int:
                     f"method={record.get('composition_method')}, "
                     f"scale={record.get('composition_scale')}"
                 )
-
-        extra_conditions = sorted(set(runs) - {"individual", "composition", ""})
-        for condition in extra_conditions:
-            record = runs[condition]
-            answer_field = "raw_generation" if args.show_raw else "answer"
-            print_wrapped(condition, record.get(answer_field, ""), args.width)
-            if not args.hide_scores:
-                print(f"  {condition} {format_score(record)}")
 
         print()
 

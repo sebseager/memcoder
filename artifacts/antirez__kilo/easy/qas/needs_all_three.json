@@ -1,0 +1,56 @@
+{
+  "repo_id": "antirez__kilo",
+  "commit": "323d93b29bd89a2cb446de90c4ed4fea1764176e",
+  "topic": "Kilo Cross-Document Integration",
+  "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+  "qa_pairs": [
+    {
+      "qa_id": "kilo_needs_all_three_0001",
+      "question": "Across Kilo's startup, terminal setup, and editing model, what are the main steps that get the editor ready to process one keypress at a time?",
+      "answer": "Kilo initializes the global `struct editorConfig E`, selects syntax highlighting from the filename, opens the requested file into `erow` rows, enables raw mode with `enableRawMode`, stores the terminal dimensions with two rows reserved for status UI, sets a help/status message, and then refreshes the screen while processing one keypress at a time.",
+      "qa_set": "kilo_needs_all_three_docs",
+      "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+      "required_document_ids": ["overview_purpose_1", "raw_terminal_input_1", "rows_editing_persistence_1"]
+    },
+    {
+      "qa_id": "kilo_needs_all_three_0002",
+      "question": "How do raw terminal input, rendered rows, and the screen refresh path work together so Kilo can display tabs and cursor positions correctly?",
+      "answer": "Raw mode lets `editorReadKey` receive bytes directly instead of line-buffered terminal input. The row layer keeps both original characters and a rendered version where tabs expand to eight-column stops, and `editorRefreshScreen` draws from rendered rows through an append buffer, positioning the cursor using scroll offsets and tab-expanded coordinates.",
+      "qa_set": "kilo_needs_all_three_docs",
+      "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+      "required_document_ids": ["overview_purpose_1", "raw_terminal_input_1", "rows_editing_persistence_1"]
+    },
+    {
+      "qa_id": "kilo_needs_all_three_0003",
+      "question": "Trace the lifecycle of opening a missing file, typing into it, and saving it, including the terminal and row-model pieces involved.",
+      "answer": "Opening a missing file is treated as a new empty buffer under the requested filename. With raw mode enabled, each typed printable character arrives as an immediate keypress, `editorInsertChar` creates an empty row when needed and delegates to row helpers, row updates rebuild rendered text and mark the file dirty, and `editorSave` serializes all rows with newlines, creates or truncates the target file, writes the buffer, clears the dirty flag on success, and reports status.",
+      "qa_set": "kilo_needs_all_three_docs",
+      "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+      "required_document_ids": ["overview_purpose_1", "raw_terminal_input_1", "rows_editing_persistence_1"]
+    },
+    {
+      "qa_id": "kilo_needs_all_three_0004",
+      "question": "What state does Kilo preserve or restore around interactive operations, spanning raw mode, search, and row edits?",
+      "answer": "For raw mode, Kilo captures the original terminal settings in a file-scope variable and registers cleanup so they are restored on exit. During interactive search, it saves the cursor and scroll position so Escape can restore them. During row edits, it keeps row indices, original text, rendered text, highlight bytes, and dirty state consistent as rows are inserted, deleted, split, joined, or updated.",
+      "qa_set": "kilo_needs_all_three_docs",
+      "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+      "required_document_ids": ["overview_purpose_1", "raw_terminal_input_1", "rows_editing_persistence_1"]
+    },
+    {
+      "qa_id": "kilo_needs_all_three_0005",
+      "question": "How does Kilo avoid relying on external terminal UI behavior while still supporting resizing, status UI, and persistent edits?",
+      "answer": "Kilo avoids curses by using raw termios input and VT100-style escape sequences itself. It queries or infers the window size, reserves two rows for status and messages, handles `SIGWINCH` by updating dimensions, clamping the cursor, and refreshing, and keeps persistent edits in an `erow` array that `editorSave` writes back to disk.",
+      "qa_set": "kilo_needs_all_three_docs",
+      "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+      "required_document_ids": ["overview_purpose_1", "raw_terminal_input_1", "rows_editing_persistence_1"]
+    },
+    {
+      "qa_id": "kilo_needs_all_three_0006",
+      "question": "Compare how Kilo handles Ctrl-Q, Ctrl-C, and deletion, using details from the command dispatcher, raw terminal input, and row editing behavior.",
+      "answer": "`editorProcessKeypress` handles Ctrl-Q as quit and requires repeated presses when the buffer is dirty, while Ctrl-C is ignored to avoid accidental data loss; raw mode also disables terminal signal generation from keys like Ctrl-C so Kilo receives the byte itself. Deletion is handled through editor row logic: backspace at the start of the file does nothing, within a row deletes the character to the left, and at column zero joins the current row to the previous one.",
+      "qa_set": "kilo_needs_all_three_docs",
+      "composition_scope": "overview_purpose_1+raw_terminal_input_1+rows_editing_persistence_1",
+      "required_document_ids": ["overview_purpose_1", "raw_terminal_input_1", "rows_editing_persistence_1"]
+    }
+  ]
+}

@@ -37,6 +37,7 @@ CONDITION_COLORS = {
     "naive": "#d96f6f",
     "in_context": "#4f8cc9",
     "shine": "#5cb85c",
+    "composition": "#5cb85c",
 }
 
 
@@ -129,8 +130,20 @@ def _load_judgments(path: Path) -> list[dict[str, Any]]:
 def _present_conditions(rows: list[dict[str, Any]], include_empty: bool) -> list[str]:
     counter = Counter(str(r.get("condition") or "") for r in rows)
     ordered = [c for c in CONDITION_ORDER if include_empty or counter.get(c, 0) > 0]
-    extras = sorted(c for c in counter if c not in CONDITION_ORDER)
-    return ordered + extras
+    individual = sorted(c for c in counter if c == "individual" or c.startswith("individual:"))
+    composition = ["composition"] if counter.get("composition", 0) > 0 else []
+    extras = sorted(
+        c
+        for c in counter
+        if c not in CONDITION_ORDER and c not in individual and c not in composition
+    )
+    return ordered + individual + composition + extras
+
+
+def _condition_color(condition: str) -> str:
+    if condition == "individual" or condition.startswith("individual:"):
+        return "#6f9fd8"
+    return CONDITION_COLORS.get(condition, "#999")
 
 
 def _scores_by_condition(rows: list[dict[str, Any]]) -> dict[str, list[int]]:
@@ -168,7 +181,7 @@ def _plot_score_distribution(
             counts,
             width=width,
             label=cond,
-            color=CONDITION_COLORS.get(cond),
+            color=_condition_color(cond),
             edgecolor="white",
         )
 
@@ -223,12 +236,12 @@ def _plot_mean_score(
         x,
         means,
         yerr=cis,
-        color=[CONDITION_COLORS.get(c, "#999") for c in conditions],
+        color=[_condition_color(c) for c in conditions],
         edgecolor="white",
         capsize=6,
     )
     ax.set_xticks(x)
-    ax.set_xticklabels(conditions)
+    ax.set_xticklabels(conditions, rotation=20, ha="right")
     ax.set_ylim(0, 5.5)
     ax.set_ylabel("Mean judge score")
     ax.set_title(f"Mean score per condition (error bars: 95% CI){title_suffix}")
@@ -281,7 +294,7 @@ def _plot_failure_modes(
             bars_y,
             width=width,
             label=cond,
-            color=CONDITION_COLORS.get(cond),
+            color=_condition_color(cond),
             edgecolor="white",
         )
 
@@ -342,7 +355,7 @@ def _plot_per_document_heatmap(
     im = ax.imshow(matrix, vmin=1, vmax=5, cmap=cmap, aspect="auto")
 
     ax.set_xticks(np.arange(len(conditions)))
-    ax.set_xticklabels(conditions)
+    ax.set_xticklabels(conditions, rotation=20, ha="right")
     ax.set_yticks(np.arange(len(docs)))
     ax.set_yticklabels(docs)
     ax.set_title(f"Mean judge score by (document, condition){title_suffix}")
