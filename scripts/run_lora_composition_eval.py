@@ -25,7 +25,6 @@ DEFAULT_DOCS = [
     DEFAULT_ARTIFACT_DIR / "docs" / "raw_terminal_input_1.json",
     DEFAULT_ARTIFACT_DIR / "docs" / "rows_editing_persistence_1.json",
 ]
-DEFAULT_GENERATE_DOCS = DEFAULT_DOCS[1:]
 
 
 def parse_args() -> argparse.Namespace:
@@ -461,7 +460,7 @@ def main() -> int:
     )
     args = parse_args()
     docs = [repo_path(path) for path in (args.doc or DEFAULT_DOCS)]
-    generate_docs = [repo_path(path) for path in (args.generate_doc or DEFAULT_GENERATE_DOCS)]
+    generate_docs = [repo_path(path) for path in args.generate_doc] if args.generate_doc else docs
     qa_paths = [repo_path(path) for path in args.qa_pairs] if args.qa_pairs else None
     args.lora_dir = repo_path(args.lora_dir)
     args.output = repo_path(args.output)
@@ -472,7 +471,9 @@ def main() -> int:
     if not args.skip_generate_loras:
         generated: set[Path] = set()
         for doc_path in generate_docs:
-            if doc_path not in generated:
+            document_id = document_id_from_doc(doc_path)
+            expected_lora = lora_path_for_doc(args.lora_dir, document_id, args.lora_label)
+            if (args.force_loras or not expected_lora.exists()) and doc_path not in generated:
                 generate_lora(doc_path, args)
                 generated.add(doc_path)
         for doc_path, document_id in doc_ids.items():
