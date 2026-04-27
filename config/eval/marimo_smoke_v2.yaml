@@ -1,0 +1,39 @@
+# Smoke-test config: one marimo doc, all three conditions, new v2 defaults
+# (adapted prompt for shine, detail prompt for naive + in_context, v1 judge).
+# Used to verify the new defaults flow end-to-end without surprises.
+
+run_name: marimo_smoke_v2
+
+artifacts:
+  - root: artifacts/marimo-team__marimo
+    difficulties: [easy]
+    document_ids: [overview_purpose_1]
+    topics: []
+
+conditions: [naive, in_context, shine]
+routing: oracle
+
+model:
+  qwen_base: /home/mms2309/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
+  shine_root: vendor/SHINE
+  qwen_cuda: 0
+  conversation_max_length: 5000
+  max_new_tokens: 256
+  seed: 42
+  lora_r: 8
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+
+embedding:
+  model: null
+
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: .env
+  concurrency: 8
+  prompt: prompts/llm_judge_grading_v1.md
+  rubric_version: v1
+  taxonomy_version: v1
+  max_retries: 4

@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "setup_cli_1",
+  "topic": "Setup and CLI",
+  "topic_slug": "setup_cli",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "setup_cli_setup_cli_1_0001",
+      "question": "What first-time-user actions does marimo's root CLI help emphasize instead of only listing commands mechanically?",
+      "answer": "It highlights launching the intro tutorial, editing a new notebook, running a notebook as an app, and asking the tutorial command for its own help.",
+      "document_id": "setup_cli_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "setup_cli_setup_cli_1_0002",
+      "question": "How does the edit command decide what notebook or directory to open when started from the CLI?",
+      "answer": "It can use a supplied filename, directory, validated URL, or piped notebook contents on Unix-like systems; if no name is supplied, it opens the current working directory, and missing notebook files are created as empty files.",
+      "document_id": "setup_cli_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "setup_cli_setup_cli_1_0003",
+      "question": "Which export paths run a marimo app before writing output, and what restriction does watch mode have?",
+      "answer": "HTML exports and output-including Jupyter exports run the app first so notebook arguments can affect results. Watch mode is supported only when an output file is provided.",
+      "document_id": "setup_cli_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

@@ -140,7 +140,9 @@ def _run_one(
     shine_decision: RoutingDecision | None,
 ) -> dict[str, Any]:
     doc_for_prompt = doc.doc_text if condition == "in_context" else None
-    messages = model_module.build_messages(qa.question, doc_for_prompt)
+    messages = model_module.build_messages(
+        qa.question, doc_for_prompt, condition=condition
+    )
 
     started = time.perf_counter()
     generation = model_module.generate_answer(

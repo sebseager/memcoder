@@ -9,9 +9,12 @@
       "files": {
         "doc": "easy/docs/overview_purpose_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/overview_purpose_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/overview_purpose_1.json",
-        "qa_examples": "easy/qa_examples/overview_purpose_1.json"
+        "qa_examples": "easy/qa_examples/overview_purpose_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/overview_purpose_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "setup_cli_1": {
@@ -23,9 +26,12 @@
       "files": {
         "doc": "easy/docs/setup_cli_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/setup_cli_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/setup_cli_1.json",
-        "qa_examples": "easy/qa_examples/setup_cli_1.json"
+        "qa_examples": "easy/qa_examples/setup_cli_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/setup_cli_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "public_interface_1": {
@@ -37,9 +43,12 @@
       "files": {
         "doc": "easy/docs/public_interface_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/public_interface_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/public_interface_1.json",
-        "qa_examples": "easy/qa_examples/public_interface_1.json"
+        "qa_examples": "easy/qa_examples/public_interface_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/public_interface_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "reactive_runtime_dataflow_1": {
@@ -51,9 +60,12 @@
       "files": {
         "doc": "easy/docs/reactive_runtime_dataflow_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/reactive_runtime_dataflow_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/reactive_runtime_dataflow_1.json",
-        "qa_examples": "easy/qa_examples/reactive_runtime_dataflow_1.json"
+        "qa_examples": "easy/qa_examples/reactive_runtime_dataflow_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/reactive_runtime_dataflow_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "apps_scripts_wasm_1": {
@@ -65,9 +77,12 @@
       "files": {
         "doc": "easy/docs/apps_scripts_wasm_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/apps_scripts_wasm_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/apps_scripts_wasm_1.json",
-        "qa_examples": "easy/qa_examples/apps_scripts_wasm_1.json"
+        "qa_examples": "easy/qa_examples/apps_scripts_wasm_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/apps_scripts_wasm_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "ui_outputs_interactivity_1": {
@@ -79,9 +94,12 @@
       "files": {
         "doc": "easy/docs/ui_outputs_interactivity_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/ui_outputs_interactivity_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/ui_outputs_interactivity_1.json",
-        "qa_examples": "easy/qa_examples/ui_outputs_interactivity_1.json"
+        "qa_examples": "easy/qa_examples/ui_outputs_interactivity_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/ui_outputs_interactivity_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "sql_data_integrations_1": {
@@ -93,9 +111,12 @@
       "files": {
         "doc": "easy/docs/sql_data_integrations_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/sql_data_integrations_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/sql_data_integrations_1.json",
-        "qa_examples": "easy/qa_examples/sql_data_integrations_1.json"
+        "qa_examples": "easy/qa_examples/sql_data_integrations_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/sql_data_integrations_1__iftpwc_epoch2.pt"
+        }
       }
     },
     "ai_mcp_pairing_1": {
@@ -107,9 +128,12 @@
       "files": {
         "doc": "easy/docs/ai_mcp_pairing_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/ai_mcp_pairing_1__iftpwc_epoch2.pt",
         "qa": "easy/qas/ai_mcp_pairing_1.json",
-        "qa_examples": "easy/qa_examples/ai_mcp_pairing_1.json"
+        "qa_examples": "easy/qa_examples/ai_mcp_pairing_1.json",
+        "lora_variants": {
+          "iftpwc_epoch2": "easy/loras/ai_mcp_pairing_1__iftpwc_epoch2.pt"
+        }
       }
     }
   }

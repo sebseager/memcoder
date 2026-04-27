@@ -5,29 +5,33 @@
   "topic": "AI, MCP, and Agent Pairing",
   "topic_slug": "ai_mcp_pairing",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "ai_mcp_pairing_ai_mcp_pairing_1_0001",
-      "question": "What safety boundary does marimo's chat panel use when moving from conversation-only help to notebook editing?",
-      "answer": "The chat panel separates capability by mode: Manual uses only conversation and injected context, Ask adds read-only marimo and MCP client tools for inspection, and Agent adds editing tools that can change or run notebook cells.",
+      "question": "In marimo's AI tool architecture, which module acts as the single handoff point that makes a tool available to both the chat panel and the MCP server, and what base class provides the backend and MCP registration adapters used at that handoff?",
+      "answer": "The shared registry in tools_registry.py is the handoff point: a tool added there is available to both marimo's chat panel and the MCP server. Each tool is built on ToolBase, which provides a typed argument model, typed output, notebook state context, and the backend and MCP registration adapters.",
       "document_id": "ai_mcp_pairing_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "ai_mcp_pairing_ai_mcp_pairing_1_0002",
-      "question": "How does marimo avoid implementing separate tool systems for its chat backend and MCP server?",
-      "answer": "marimo uses a shared ToolBase architecture and a shared tool registry, so a tool with typed dataclass inputs and outputs can be adapted once for backend chat use and once for MCP registration.",
+      "question": "The marimo chat panel separates risk and capability across three modes. What specific capability does Agent mode add on top of Ask mode, and what does Ask mode itself include beyond Manual mode?",
+      "answer": "Manual mode uses only the conversation and user-provided context. Ask mode adds read-only marimo tools and tools from configured MCP client servers so the assistant can inspect notebooks. Agent mode includes everything in Ask mode and additionally enables editing tools that can add, remove, update, and run cells. The doc calls this mode split the main safety boundary in the editor AI experience.",
       "document_id": "ai_mcp_pairing_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "ai_mcp_pairing_ai_mcp_pairing_1_0003",
-      "question": "What is the specific role of the code-mode MCP server in agent pairing?",
-      "answer": "The code-mode MCP server exposes session listing and scratchpad execution so an external agent can run temporary code against variables in a live notebook without modifying notebook cells or the dependency graph.",
+      "question": "Why do marimo's AI tools route notebook access through a shared context object rather than reaching into application state directly, and what specific responsibilities does that context handle?",
+      "answer": "Tools rely on ToolContext so that session lookup, missing-session errors, and error extraction stay consistent across tools instead of each tool reaching into application state independently. ToolContext retrieves active sessions from the server state, resolves a notebook session by session ID, gathers cell notifications, and summarizes notebook or cell errors in notebook order.",
       "document_id": "ai_mcp_pairing_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

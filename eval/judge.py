@@ -26,6 +26,7 @@ LOGGER = logging.getLogger("memcoder.eval.judge")
 
 FAILURE_MODE_VALUES = (
     "wrong_specifics",
+    "no_specifics",
     "missing_information",
     "off_topic",
     "refusal_or_nonresponse",
@@ -34,7 +35,7 @@ FAILURE_MODE_VALUES = (
 )
 
 JUDGE_JSON_SCHEMA = {
-    "name": "memcoder_judge_grading_v0",
+    "name": "memcoder_judge_grading_v1",
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -64,56 +65,102 @@ class _JudgeContext:
 def run_judging(cfg: RunConfig, run_dir: Path) -> Path:
     """Run the judge phase. Returns the path to ``judgments.jsonl``."""
     predictions_path = run_dir / "predictions.jsonl"
-    if not predictions_path.exists():
-        raise FileNotFoundError(f"predictions.jsonl not found at {predictions_path}")
-
     judgments_path = run_dir / "judgments.jsonl"
     if judgments_path.exists():
         raise FileExistsError(
             f"judgments.jsonl already exists at {judgments_path}; the harness "
             "is non-resumable — start a fresh run if you want to re-judge"
         )
-
-    if cfg.judge.dotenv_path is not None:
-        _load_dotenv(cfg.judge.dotenv_path)
-    api_key = os.environ.get(cfg.judge.api_key_env)
-    if not api_key:
-        raise RuntimeError(
-            f"environment variable {cfg.judge.api_key_env!r} is not set; "
-            f"add it to {cfg.judge.dotenv_path or '.env'} or your shell"
-        )
-
-    rubric_template = _load_prompt(cfg.judge.prompt)
-    rows = _read_predictions(predictions_path)
-    LOGGER.info(
-        "Judging %d row(s) with %s (concurrency=%d)",
-        len(rows),
-        cfg.judge.model,
-        cfg.judge.concurrency,
+    return judge_predictions_to(
+        predictions_path=predictions_path,
+        output_path=judgments_path,
+        judge_cfg=cfg.judge,
     )
 
-    judged = asyncio.run(_judge_all(rows, cfg, rubric_template, api_key))
 
-    with judgments_path.open("w", encoding="utf-8") as out:
+def judge_predictions_to(
+    *,
+    predictions_path: Path,
+    output_path: Path,
+    judge_cfg: JudgeConfig,
+    prompt_path: Path | None = None,
+    rubric_version: str | None = None,
+    taxonomy_version: str | None = None,
+) -> Path:
+    """Re-usable entry point: judge a predictions.jsonl into a chosen output
+    path with optional prompt / version overrides.
+
+    Used by ``run_judging`` (for the standard run-dir judge phase) and by
+    ``scripts/rejudge.py`` to write sidecar judgments files like
+    ``judgments_v1.jsonl`` under an existing run dir.
+    """
+    if not predictions_path.exists():
+        raise FileNotFoundError(f"predictions.jsonl not found at {predictions_path}")
+    if output_path.exists():
+        raise FileExistsError(
+            f"judgments output already exists at {output_path}; refusing to clobber"
+        )
+
+    if judge_cfg.dotenv_path is not None:
+        _load_dotenv(judge_cfg.dotenv_path)
+    api_key = os.environ.get(judge_cfg.api_key_env)
+    if not api_key:
+        raise RuntimeError(
+            f"environment variable {judge_cfg.api_key_env!r} is not set; "
+            f"add it to {judge_cfg.dotenv_path or '.env'} or your shell"
+        )
+
+    # Build a per-call effective JudgeConfig with the overrides applied so
+    # downstream code (and the recorded judge block) reflects what was used.
+    effective_prompt = prompt_path or judge_cfg.prompt
+    effective_rubric_version = rubric_version or judge_cfg.rubric_version
+    effective_taxonomy_version = taxonomy_version or judge_cfg.taxonomy_version
+    effective_cfg = JudgeConfig(
+        provider=judge_cfg.provider,
+        model=judge_cfg.model,
+        api_key_env=judge_cfg.api_key_env,
+        dotenv_path=judge_cfg.dotenv_path,
+        concurrency=judge_cfg.concurrency,
+        prompt=effective_prompt,
+        rubric_version=effective_rubric_version,
+        taxonomy_version=effective_taxonomy_version,
+        max_retries=judge_cfg.max_retries,
+    )
+
+    rubric_template = _load_prompt(effective_prompt)
+    rows = _read_predictions(predictions_path)
+    LOGGER.info(
+        "Judging %d row(s) with %s (concurrency=%d, rubric=%s, taxonomy=%s) -> %s",
+        len(rows),
+        effective_cfg.model,
+        effective_cfg.concurrency,
+        effective_cfg.rubric_version,
+        effective_cfg.taxonomy_version,
+        output_path,
+    )
+
+    judged = asyncio.run(_judge_all(rows, effective_cfg, rubric_template, api_key))
+
+    with output_path.open("w", encoding="utf-8") as out:
         for row in judged:
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    LOGGER.info("Judgments complete: %d rows -> %s", len(judged), judgments_path)
-    return judgments_path
+    LOGGER.info("Judgments complete: %d rows -> %s", len(judged), output_path)
+    return output_path
 
 
 async def _judge_all(
     rows: list[dict[str, Any]],
-    cfg: RunConfig,
+    judge_cfg: JudgeConfig,
     rubric_template: str,
     api_key: str,
 ) -> list[dict[str, Any]]:
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
-    semaphore = asyncio.Semaphore(cfg.judge.concurrency)
+    semaphore = asyncio.Semaphore(judge_cfg.concurrency)
     ctx = _JudgeContext(
-        cfg=cfg.judge,
+        cfg=judge_cfg,
         rubric_template=rubric_template,
         semaphore=semaphore,
         client=client,
@@ -129,7 +176,7 @@ async def _judge_all(
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("judge failed for row %d (qa=%s, cond=%s): %s",
                          idx, row.get("qa_id"), row.get("condition"), exc)
-            judge_block = _judge_error_block(cfg.judge, str(exc))
+            judge_block = _judge_error_block(judge_cfg, str(exc))
         merged = dict(row)
         merged["judge"] = judge_block
         judged[idx] = merged

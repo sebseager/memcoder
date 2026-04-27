@@ -5,29 +5,33 @@
   "topic": "SQL and Data Integrations",
   "topic_slug": "sql_data_integrations",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "sql_data_integrations_sql_data_integrations_1_0001",
-      "question": "Why are marimo SQL cells described as part of the Python notebook model instead of a separate SQL-only layer?",
-      "answer": "A SQL cell is syntactic sugar for a Python cell that calls `mo.sql`, so the notebook stays a pure Python script. The SQL is represented as a formatted Python string, letting queries depend on UI controls and other Python values in marimo's reactive graph.",
+      "question": "In marimo, what Python helper does a SQL cell actually compile down to, and which engine backs it when no custom engine is supplied?",
+      "answer": "A SQL cell is syntactic sugar for a Python cell that calls `mo.sql`. When no custom engine is passed, `mo.sql` requires the DuckDB and parsing dependencies and executes the query against an in-memory DuckDB connection.",
       "document_id": "sql_data_integrations_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "sql_data_integrations_sql_data_integrations_1_0002",
-      "question": "How does marimo make Python-defined database connections available to SQL cells?",
-      "answer": "It scans notebook variables for values compatible with its supported engine classes, wraps matching values as query engines or catalog-aware connections, and then exposes those compatible Python connection variables as selectable SQL connections in the notebook.",
+      "question": "Which internal marimo function turns notebook variables into selectable SQL connections, and what does it do with the variables it inspects?",
+      "answer": "marimo uses `get_engines_from_variables`, which checks notebook variables against the supported engine classes and wraps compatible values as query engines or catalog-aware connections so that compatible Python connection variables become selectable SQL connections in the notebook.",
       "document_id": "sql_data_integrations_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "sql_data_integrations_sql_data_integrations_1_0003",
-      "question": "What does marimo do when datasource introspection fails for a detected connection?",
-      "answer": "It logs a warning and still returns a connection entry for the Data Sources panel instead of crashing the notebook, leaving any unavailable database, schema, table, or column details empty.",
+      "question": "Why does the marimo documentation recommend the native SQL output type for large datasets rather than converting results to a Pandas or eager Polars dataframe?",
+      "answer": "Native output is recommended for large datasets because it stays lazy and avoids eagerly loading the full result, which also makes chained SQL cells more efficient.",
       "document_id": "sql_data_integrations_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

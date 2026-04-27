@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "apps_scripts_wasm_1",
+  "topic": "Apps, Scripts, and WebAssembly",
+  "topic_slug": "apps_scripts_wasm",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "apps_scripts_wasm_apps_scripts_wasm_1_0001",
+      "question": "When marimo runs a folder of notebooks as an app gallery with watch mode, what repository-specific warning does the server implementation surface?",
+      "answer": "It warns that gallery files are discovered dynamically, so newly created notebooks in that directory may appear in the gallery and execute code when opened; users should rely on trusted directories and authentication controls.",
+      "document_id": "apps_scripts_wasm_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "apps_scripts_wasm_apps_scripts_wasm_1_0002",
+      "question": "What extra work does the HTML WebAssembly CLI export perform around assets and data folders before writing the notebook HTML?",
+      "answer": "It copies marimo's static assets into the output directory, creates a GitHub Pages compatibility marker, and copies a public folder next to the notebook when one exists.",
+      "document_id": "apps_scripts_wasm_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "apps_scripts_wasm_apps_scripts_wasm_1_0003",
+      "question": "How does marimo's Pyodide session replace the normal server connection for browser-only notebooks?",
+      "answer": "It creates browser-callable bridge methods and asynchronous queues for controls, UI/model updates, completions, and input, while streams send kernel and cell notifications back to the frontend.",
+      "document_id": "apps_scripts_wasm_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ model:
   shine_root: vendor/SHINE
   qwen_cuda: 0
   conversation_max_length: 5000
-  max_new_tokens: 128
+  max_new_tokens: 512
   seed: 42
   lora_r: 8
   metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
@@ -37,7 +37,7 @@ judge:
   api_key_env: OPENAI_API_KEY
   dotenv_path: .env
   concurrency: 8
-  prompt: prompts/llm_judge_grading_v0.md
-  rubric_version: v0
-  taxonomy_version: v0
+  prompt: prompts/llm_judge_grading_v1.md
+  rubric_version: v1
+  taxonomy_version: v1
   max_retries: 4

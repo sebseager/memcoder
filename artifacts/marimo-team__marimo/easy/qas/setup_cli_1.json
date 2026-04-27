@@ -5,29 +5,33 @@
   "topic": "Setup and CLI",
   "topic_slug": "setup_cli",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "setup_cli_setup_cli_1_0001",
-      "question": "What first-time-user actions does marimo's root CLI help emphasize instead of only listing commands mechanically?",
-      "answer": "It highlights launching the intro tutorial, editing a new notebook, running a notebook as an app, and asking the tutorial command for its own help.",
+      "question": "Which source file implements marimo's root CLI, and what library does it use to define the main command group?",
+      "answer": "The root CLI is implemented in `marimo/_cli/cli.py` using Click; its main group sets global behavior (logging, quiet output, automatic yes to prompts, development mode) and then registers subcommands from the surrounding CLI package.",
       "document_id": "setup_cli_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "setup_cli_setup_cli_1_0002",
-      "question": "How does the edit command decide what notebook or directory to open when started from the CLI?",
-      "answer": "It can use a supplied filename, directory, validated URL, or piped notebook contents on Unix-like systems; if no name is supplied, it opens the current working directory, and missing notebook files are created as empty files.",
+      "question": "How does sandbox handling differ between serving a single notebook and serving a multi-notebook gallery through the run command?",
+      "answer": "For a single notebook, sandboxing can re-exec the process through uv, whereas a multi-notebook gallery uses per-notebook sandboxed kernels rather than re-execing the whole process.",
       "document_id": "setup_cli_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     },
     {
       "qa_id": "setup_cli_setup_cli_1_0003",
-      "question": "Which export paths run a marimo app before writing output, and what restriction does watch mode have?",
-      "answer": "HTML exports and output-including Jupyter exports run the app first so notebook arguments can affect results. Watch mode is supported only when an output file is provided.",
+      "question": "What edit-mode-specific checks and behaviors does the document say happen between path validation and the server actually starting?",
+      "answer": "After path validation, edit resolves sandbox mode, can delegate untrusted remote notebooks to Docker, checks shared-memory availability because edit mode communicates with kernel subprocesses, optionally performs an update check, and then starts the server in edit session mode with code included and console output redirected to the browser.",
       "document_id": "setup_cli_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

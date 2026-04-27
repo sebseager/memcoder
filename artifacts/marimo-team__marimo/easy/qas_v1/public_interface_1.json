@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "public_interface_1",
+  "topic": "Public Python Interface",
+  "topic_slug": "public_interface",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "public_interface_public_interface_1_0001",
+      "question": "How does marimo's root package make a broad implementation feel like a compact public API?",
+      "answer": "The root package declares the supported exports in marimo/__init__.py and re-exports implementations from internal modules, so users can rely on the top-level mo namespace instead of importing most internals directly.",
+      "document_id": "public_interface_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "public_interface_public_interface_1_0002",
+      "question": "According to the public interface document, when should a developer reach for marimo's state API rather than ordinary UI element values?",
+      "answer": "They should use it only for advanced cases such as preserving history that cannot be computed from a widget's current value, synchronizing multiple UI elements, or introducing cycles across cells. Ordinary interactivity should usually use UI element values and reactive execution.",
+      "document_id": "public_interface_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "public_interface_public_interface_1_0003",
+      "question": "What happens if a marimo cell both writes output programmatically and ends with a non-empty expression, and what should the developer do to add output instead?",
+      "answer": "The non-empty last expression replaces earlier output. To add to existing output instead of replacing it, the developer should use the public append output helper.",
+      "document_id": "public_interface_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

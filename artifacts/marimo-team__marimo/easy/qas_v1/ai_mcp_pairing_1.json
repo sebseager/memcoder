@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "ai_mcp_pairing_1",
+  "topic": "AI, MCP, and Agent Pairing",
+  "topic_slug": "ai_mcp_pairing",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "ai_mcp_pairing_ai_mcp_pairing_1_0001",
+      "question": "What safety boundary does marimo's chat panel use when moving from conversation-only help to notebook editing?",
+      "answer": "The chat panel separates capability by mode: Manual uses only conversation and injected context, Ask adds read-only marimo and MCP client tools for inspection, and Agent adds editing tools that can change or run notebook cells.",
+      "document_id": "ai_mcp_pairing_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "ai_mcp_pairing_ai_mcp_pairing_1_0002",
+      "question": "How does marimo avoid implementing separate tool systems for its chat backend and MCP server?",
+      "answer": "marimo uses a shared ToolBase architecture and a shared tool registry, so a tool with typed dataclass inputs and outputs can be adapted once for backend chat use and once for MCP registration.",
+      "document_id": "ai_mcp_pairing_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "ai_mcp_pairing_ai_mcp_pairing_1_0003",
+      "question": "What is the specific role of the code-mode MCP server in agent pairing?",
+      "answer": "The code-mode MCP server exposes session listing and scratchpad execution so an external agent can run temporary code against variables in a live notebook without modifying notebook cells or the dependency graph.",
+      "document_id": "ai_mcp_pairing_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

@@ -5,29 +5,33 @@
   "topic": "Apps, Scripts, and WebAssembly",
   "topic_slug": "apps_scripts_wasm",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "apps_scripts_wasm_apps_scripts_wasm_1_0001",
-      "question": "When marimo runs a folder of notebooks as an app gallery with watch mode, what repository-specific warning does the server implementation surface?",
-      "answer": "It warns that gallery files are discovered dynamically, so newly created notebooks in that directory may appear in the gallery and execute code when opened; users should rely on trusted directories and authentication controls.",
+      "question": "Which marimo function builds the WASM notebook template during WebAssembly export, and what inputs does it take?",
+      "answer": "Exporter.export_as_wasm builds the WASM notebook template from the notebook code, app configuration, display configuration, the selected edit or run mode, code visibility, and an optional asset URL.",
       "document_id": "apps_scripts_wasm_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "apps_scripts_wasm_apps_scripts_wasm_1_0002",
-      "question": "What extra work does the HTML WebAssembly CLI export perform around assets and data folders before writing the notebook HTML?",
-      "answer": "It copies marimo's static assets into the output directory, creates a GitHub Pages compatibility marker, and copies a public folder next to the notebook when one exists.",
+      "question": "According to the document, what is the caveat about exporting a marimo notebook as a flat topologically ordered Python script versus running the notebook file directly with Python?",
+      "answer": "The flat topologically ordered Python script export does not support top-level await, even though directly executing the notebook file with Python still does support top-level await.",
       "document_id": "apps_scripts_wasm_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     },
     {
       "qa_id": "apps_scripts_wasm_apps_scripts_wasm_1_0003",
-      "question": "How does marimo's Pyodide session replace the normal server connection for browser-only notebooks?",
-      "answer": "It creates browser-callable bridge methods and asynchronous queues for controls, UI/model updates, completions, and input, while streams send kernel and cell notifications back to the frontend.",
+      "question": "What additional steps does marimo's HTML WASM CLI command perform beyond producing the notebook output, and what serving requirement does it remind users about?",
+      "answer": "The HTML WASM CLI command copies marimo's static assets into the output directory, creates a marker for GitHub Pages compatibility, and copies a neighboring public data folder when present; it also reminds users that the result must be served over HTTP rather than opened through a file URL.",
       "document_id": "apps_scripts_wasm_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

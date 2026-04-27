@@ -25,6 +25,7 @@ LOGGER = logging.getLogger("memcoder.eval.plots")
 
 FAILURE_MODES = (
     "wrong_specifics",
+    "no_specifics",
     "missing_information",
     "off_topic",
     "refusal_or_nonresponse",

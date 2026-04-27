@@ -5,29 +5,33 @@
   "topic": "UI, Outputs, and Interactivity",
   "topic_slug": "ui_outputs_interactivity",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "ui_outputs_interactivity_ui_outputs_interactivity_1_0001",
-      "question": "Why does marimo require an interacted UI element to be bound to a global variable for notebook reactivity to occur?",
-      "answer": "marimo's interaction rule reruns cells that reference the global variable holding the UI element without defining it. Without that global binding, the browser value can update the element object, but marimo has no variable dependency to use for rerunning other cells.",
+      "question": "When a marimo UI element changes in the browser, which cells does the runtime rerun, and which cell is deliberately not rerun?",
+      "answer": "marimo sends the new value back to Python and automatically reruns cells that reference the global variable holding the element without defining it. The cell that defines (creates) the element is deliberately not rerun, because it owns the element; the implementation also prevents reading the element's value from that same defining cell.",
       "document_id": "ui_outputs_interactivity_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     },
     {
       "qa_id": "ui_outputs_interactivity_ui_outputs_interactivity_1_0002",
-      "question": "What two identity mechanisms does a marimo UI element use, and what is each for?",
-      "answer": "A stable object id synchronizes browser instances of the element with the Python kernel. A separate random token changes whenever the creating cell reruns so the frontend resets to the element's new initial value.",
+      "question": "In marimo's UIElement construction, what are the distinct roles of the stable object id versus the separate random token?",
+      "answer": "The stable object id is assigned by the runtime when possible and is used to synchronize browser instances of the UIElement with the kernel. The separate random token changes whenever the creating cell reruns, signaling the frontend to reset to the new initial value.",
       "document_id": "ui_outputs_interactivity_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "ui_outputs_interactivity_ui_outputs_interactivity_1_0003",
-      "question": "What happens if a cell both imperatively appends output and then ends with a non-None last expression?",
-      "answer": "The non-None last expression replaces the existing visual output, including anything previously written imperatively, unless the author wraps that final value in an append operation.",
+      "question": "In a marimo cell that produces output imperatively while running, how does an explicit last expression interact with previously appended outputs, and how can the author preserve them?",
+      "answer": "An explicit last expression that is not None replaces any earlier imperative output in the cell. To preserve earlier output, the author must append the final value (using the runtime's append output helper) rather than letting it be the last expression; appended outputs are stacked vertically through the same layout machinery.",
       "document_id": "ui_outputs_interactivity_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

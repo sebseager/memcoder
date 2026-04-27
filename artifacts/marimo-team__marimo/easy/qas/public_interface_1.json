@@ -5,29 +5,33 @@
   "topic": "Public Python Interface",
   "topic_slug": "public_interface",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "public_interface_public_interface_1_0001",
-      "question": "How does marimo's root package make a broad implementation feel like a compact public API?",
-      "answer": "The root package declares the supported exports in marimo/__init__.py and re-exports implementations from internal modules, so users can rely on the top-level mo namespace instead of importing most internals directly.",
+      "question": "Which file does the document identify as the central declaration of marimo's public Python surface, and what role does it play?",
+      "answer": "The root package file `marimo/__init__.py` is the central declaration of the public surface; it names the public exports and re-exports implementations from internal modules so callers can depend on the top-level `mo` namespace rather than importing internal modules directly.",
       "document_id": "public_interface_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "public_interface_public_interface_1_0002",
-      "question": "According to the public interface document, when should a developer reach for marimo's state API rather than ordinary UI element values?",
-      "answer": "They should use it only for advanced cases such as preserving history that cannot be computed from a widget's current value, synchronizing multiple UI elements, or introducing cycles across cells. Ordinary interactivity should usually use UI element values and reactive execution.",
+      "question": "According to the document, what timing constraint applies to loading LaTeX macros through marimo's public API, and why does that constraint exist?",
+      "answer": "The document says `latex` should be used in the same cell as the marimo import, because loading macros has side effects and later cells will only see the macros if the call happens alongside the import.",
       "document_id": "public_interface_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "public_interface_public_interface_1_0003",
-      "question": "What happens if a marimo cell both writes output programmatically and ends with a non-empty expression, and what should the developer do to add output instead?",
-      "answer": "The non-empty last expression replaces earlier output. To add to existing output instead of replacing it, the developer should use the public append output helper.",
+      "question": "Why does the public-interface document discourage most marimo users from using state, and what specific cases does it list as legitimate reasons to use it anyway?",
+      "answer": "It discourages state because UI elements already carry their own values and marimo's reactive execution usually lets a developer respond to interactions just by reading those values, and state can introduce difficult bugs. The document lists three legitimate advanced cases: preserving history that cannot be derived from a widget's current value, synchronizing multiple UI elements, and introducing cycles across cells.",
       "document_id": "public_interface_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

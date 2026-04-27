@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "ui_outputs_interactivity_1",
+  "topic": "UI, Outputs, and Interactivity",
+  "topic_slug": "ui_outputs_interactivity",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "ui_outputs_interactivity_ui_outputs_interactivity_1_0001",
+      "question": "Why does marimo require an interacted UI element to be bound to a global variable for notebook reactivity to occur?",
+      "answer": "marimo's interaction rule reruns cells that reference the global variable holding the UI element without defining it. Without that global binding, the browser value can update the element object, but marimo has no variable dependency to use for rerunning other cells.",
+      "document_id": "ui_outputs_interactivity_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "ui_outputs_interactivity_ui_outputs_interactivity_1_0002",
+      "question": "What two identity mechanisms does a marimo UI element use, and what is each for?",
+      "answer": "A stable object id synchronizes browser instances of the element with the Python kernel. A separate random token changes whenever the creating cell reruns so the frontend resets to the element's new initial value.",
+      "document_id": "ui_outputs_interactivity_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "ui_outputs_interactivity_ui_outputs_interactivity_1_0003",
+      "question": "What happens if a cell both imperatively appends output and then ends with a non-None last expression?",
+      "answer": "The non-None last expression replaces the existing visual output, including anything previously written imperatively, unless the author wraps that final value in an append operation.",
+      "document_id": "ui_outputs_interactivity_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}

@@ -5,29 +5,33 @@
   "topic": "Reactive Runtime and Dataflow",
   "topic_slug": "reactive_runtime_dataflow",
   "difficulty": "easy",
-  "generator": "codex_subagents_v1",
-  "prompt_version": "doc_derived_qa_generation_v1",
+  "generator": "claude-code-subagent",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
   "qa_pairs": [
     {
       "qa_id": "reactive_runtime_dataflow_reactive_runtime_dataflow_1_0001",
-      "question": "What sequence does the document describe when `DirectedGraph` registers a new cell?",
-      "answer": "Registration records the cell's definitions, computes parent and child edges from definitions and references, adds those edges to the topology, and asks the cycle tracker whether any new edge closes a path back to its source.",
+      "question": "Which implementation component owns marimo's notebook dependency graph state and coordinates the smaller dataflow components that maintain it?",
+      "answer": "DirectedGraph is the central implementation coordinator: it owns the graph state (topology of cells with parent and child links, plus a definition registry for names and SQL definitions) and delegates specialized work to smaller dataflow components such as the cycle tracker.",
       "document_id": "reactive_runtime_dataflow_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
     },
     {
       "qa_id": "reactive_runtime_dataflow_reactive_runtime_dataflow_1_0002",
-      "question": "When the notebook runner is asked to run root cells, what extra cells can it add to the execution queue?",
-      "answer": "It always adds stale ancestors of the requested roots so upstream values are current, and in autorun mode it also adds descendants that are affected by those roots before topologically sorting the selected cells.",
+      "question": "When marimo's notebook runner turns a requested set of root cells into an execution queue, what cells does it add beyond the roots, and how does it order and filter them before execution?",
+      "answer": "The runner always includes stale ancestors of the requested roots because those upstream values are needed before a root can run. In autorun mode it also includes descendants, using graph traversal with import-block pruning. It then topologically sorts the selected cells so parents run before children, skips disabled cells directly, and treats descendants of disabled cells as transitively disabled until the blocking cell is re-enabled.",
       "document_id": "reactive_runtime_dataflow_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     },
     {
       "qa_id": "reactive_runtime_dataflow_reactive_runtime_dataflow_1_0003",
-      "question": "Why is downstream tracing in marimo's minimap broader than upstream tracing?",
-      "answer": "A marimo cell can define multiple variables, so upstream tracing can identify exactly which variables a selected cell reads, but downstream tracing treats a dependent cell as affected if it references any definition from the selected cell.",
+      "question": "How does marimo's graph treat the interaction between Python definitions and SQL definitions when computing edges between cells?",
+      "answer": "Python definitions can flow into SQL cells, so a SQL cell that references a Python-defined name becomes a child of the Python cell that defines it. SQL definitions, however, are not treated as Python references, so Python cells do not become children of SQL cells based on shared names. The definition registry carries the extra information needed for SQL definitions and hierarchical SQL references.",
       "document_id": "reactive_runtime_dataflow_1",
-      "qa_set": "doc_derived"
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
     }
   ]
 }

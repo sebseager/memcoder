@@ -1,0 +1,33 @@
+{
+  "repo_id": "marimo-team__marimo",
+  "commit": "979fe6a82ebfbc151de8a59461de5cfafe61db78",
+  "document_id": "reactive_runtime_dataflow_1",
+  "topic": "Reactive Runtime and Dataflow",
+  "topic_slug": "reactive_runtime_dataflow",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v1",
+  "qa_pairs": [
+    {
+      "qa_id": "reactive_runtime_dataflow_reactive_runtime_dataflow_1_0001",
+      "question": "What sequence does the document describe when `DirectedGraph` registers a new cell?",
+      "answer": "Registration records the cell's definitions, computes parent and child edges from definitions and references, adds those edges to the topology, and asks the cycle tracker whether any new edge closes a path back to its source.",
+      "document_id": "reactive_runtime_dataflow_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "reactive_runtime_dataflow_reactive_runtime_dataflow_1_0002",
+      "question": "When the notebook runner is asked to run root cells, what extra cells can it add to the execution queue?",
+      "answer": "It always adds stale ancestors of the requested roots so upstream values are current, and in autorun mode it also adds descendants that are affected by those roots before topologically sorting the selected cells.",
+      "document_id": "reactive_runtime_dataflow_1",
+      "qa_set": "doc_derived"
+    },
+    {
+      "qa_id": "reactive_runtime_dataflow_reactive_runtime_dataflow_1_0003",
+      "question": "Why is downstream tracing in marimo's minimap broader than upstream tracing?",
+      "answer": "A marimo cell can define multiple variables, so upstream tracing can identify exactly which variables a selected cell reads, but downstream tracing treats a dependent cell as affected if it references any definition from the selected cell.",
+      "document_id": "reactive_runtime_dataflow_1",
+      "qa_set": "doc_derived"
+    }
+  ]
+}
