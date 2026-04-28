@@ -177,10 +177,9 @@ def free_lora_dict(lora_dict: Any) -> None:
 # System prompts. Defaults set during pilot eval (see README §Observations 6).
 #
 # Naive and in-context use the "detail" framing to push the model toward
-# committing to specifics rather than emitting plausible vapor — this
-# widens the SHINE-vs-naive gap under the v1 judge rubric by exposing
-# knowledge gaps the baseline ("answer concisely, output only the final
-# answer") prompt allowed both models to hide.
+# committing to specifics rather than emitting plausible vapor. The naive
+# baseline still asks for succinctness so demo/eval answers do not sprawl
+# when the model lacks repository-specific context.
 #
 # SHINE additionally gets the "adapted" prefix which informs the model
 # that its weights have been adapted to encode a specific document.
@@ -194,7 +193,11 @@ _DETAIL_INSTRUCTION = (
     "multiple items, list each one."
 )
 
-NAIVE_SYSTEM_PROMPT = "You are a helpful assistant. " + _DETAIL_INSTRUCTION
+NAIVE_SYSTEM_PROMPT = (
+    "You are a helpful assistant. Answer directly and succinctly in the final "
+    "answer only. "
+    + _DETAIL_INSTRUCTION
+)
 
 SHINE_SYSTEM_PROMPT = (
     "Your weights have been adapted to encode a specific document about a "
@@ -222,7 +225,7 @@ def build_messages(
     """Build chat messages for an eval row.
 
     The system prompt is selected by ``condition``:
-      - ``"naive"`` → ``NAIVE_SYSTEM_PROMPT`` (detail framing)
+      - ``"naive"`` → ``NAIVE_SYSTEM_PROMPT`` (succinct detail framing)
       - ``"shine"`` → ``SHINE_SYSTEM_PROMPT`` (adapted framing + detail)
       - ``"in_context"`` → detail framing + the document inlined as context
 
