@@ -16,6 +16,12 @@ from dashboard.lib.data import document_by_id, lora_options, question_options
 from dashboard.lib.ui import answer_panel, lora_label, page_setup, progress_button
 
 
+def clear_routing_outputs() -> None:
+    st.session_state["routing_result"] = None
+    st.session_state["routing_answer"] = None
+    st.session_state["routing_judge"] = None
+
+
 def _similarity_cell_style(value: Any, vmin: float, vmax: float) -> str:
     try:
         numeric = float(value)
@@ -77,8 +83,8 @@ def render_outputs(
             judge_pending=judge_pending,
         )
 
-    with ranked_slot.container():
-        route = st.session_state.get("routing_result")
+    route = st.session_state.get("routing_result")
+    with ranked_slot.container(), st.container(border=True):
         st.subheader("Ranked LoRAs")
         if not route:
             st.caption("No routing result yet.")
@@ -142,7 +148,12 @@ with left:
         )
         button_slot = st.empty()
         with button_slot:
-            submit = st.form_submit_button("Route and Answer", type="primary", width="stretch")
+            submit = st.form_submit_button(
+                "Route and Answer",
+                type="primary",
+                width="stretch",
+                on_click=clear_routing_outputs,
+            )
 
 with right:
     answer_slot = st.empty()

@@ -232,7 +232,6 @@ def get_lora_resource(repo_id: str, lora_id: str, lora_path: str, config_path: s
     return lora_dict
 
 
-@st.cache_data(show_spinner=False)
 def generate_answer_cached(
     repo_id: str,
     condition: str,
@@ -264,7 +263,6 @@ def generate_answer_cached(
     )
 
 
-@st.cache_data(show_spinner=False)
 def judge_answer_cached(
     repo_id: str,
     question: str,
@@ -375,7 +373,6 @@ def lora_embeddings_cached(
     return {"loras": loras, "embeddings": embeddings}
 
 
-@st.cache_data(show_spinner=False)
 def route_question_cached(
     repo_id: str,
     question: str,

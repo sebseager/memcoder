@@ -146,7 +146,6 @@ def score_block(judge: dict[str, Any] | None) -> None:
     reasoning = str(judge.get("reasoning") or "")
     one_line = reasoning.split(". ")[0].strip()
 
-    score_col, text_col = st.columns([0.68, 2.32], vertical_alignment="center")
     colors = {
         1: "#dc2626",
         2: "#f97316",
@@ -177,26 +176,27 @@ def score_block(judge: dict[str, Any] | None) -> None:
             f"{idx}"
             "</div>"
         )
-    with score_col:
-        st.markdown(
-            "<div style='"
-            "display:flex;"
-            "overflow:hidden;"
-            "border:1px solid rgba(49,51,63,0.25);"
-            "border-radius:0.6rem;"
-            "background:rgba(49,51,63,0.04);"
-            "max-width:13.5rem;"
-            "'>"
-            + "".join(segments)
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-    with text_col:
-        if one_line:
-            st.markdown(
-                f"<div style='font-size:0.9rem;color:white;'>{html.escape(one_line)}</div>",
-                unsafe_allow_html=True,
-            )
+    summary = (
+        f"<div style='font-size:0.9rem;color:white;'>{html.escape(one_line)}</div>"
+        if one_line
+        else ""
+    )
+    st.markdown(
+        "<div style='display:flex;align-items:center;gap:0.55rem;'>"
+        "<div style='"
+        "display:flex;"
+        "flex:0 0 13.5rem;"
+        "overflow:hidden;"
+        "border:1px solid rgba(49,51,63,0.25);"
+        "border-radius:0.6rem;"
+        "background:rgba(49,51,63,0.04);"
+        "'>"
+        + "".join(segments)
+        + "</div>"
+        + summary
+        + "</div>",
+        unsafe_allow_html=True,
+    )
     st.markdown("<div style='height:0.75rem;'></div>", unsafe_allow_html=True)
     with st.expander("Full judge explanation", expanded=False):
         st.write(reasoning or "No reasoning returned.")

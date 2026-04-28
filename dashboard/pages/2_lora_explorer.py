@@ -23,6 +23,11 @@ ANSWER_CONDITIONS = (
 )
 
 
+def clear_side_by_side_outputs() -> None:
+    st.session_state["side_by_side_answers"] = {}
+    st.session_state["side_by_side_judges"] = {}
+
+
 def render_answer_slots(
     slots: dict[str, Any],
     *,
@@ -117,7 +122,12 @@ with right:
         )
         button_slot = st.empty()
         with button_slot:
-            send = st.form_submit_button("Submit", type="primary", width="stretch")
+            send = st.form_submit_button(
+                "Submit",
+                type="primary",
+                width="stretch",
+                on_click=clear_side_by_side_outputs,
+            )
 
     st.subheader("Answers")
     answer_slots = {condition: st.empty() for condition, _ in ANSWER_CONDITIONS}
