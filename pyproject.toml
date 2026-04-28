@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12, <3.14"
 dependencies = [
+    "altair>=6.1.0",
     "bitsandbytes>=0.49.2",
     "datasets>=4.8.4",
     "hydra-core>=1.3.2",
@@ -16,10 +17,12 @@ dependencies = [
     "openai>=2.0.0",
     "pandas>=3.0.2",
     "peft>=0.19.1",
+    "plotly>=6.7.0",
     "python-dotenv>=1.0.0",
     "pyzmq>=27.1.0",
     "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
+    "streamlit>=1.56.0",
     "swebench",
     "tensorboard>=2.20.0",
     "torch>=2.6.0",
