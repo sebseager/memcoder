@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -44,9 +45,17 @@ with left:
         st.warning("This ledger entry has no `files.lora` path.")
 
     st.markdown("**Source Document**")
-    for sentence in split_sentences(selected_doc.doc_text):
-        st.markdown(f"- {sentence}")
+    source_rows = [
+        {"row": idx, "text": sentence}
+        for idx, sentence in enumerate(split_sentences(selected_doc.doc_text), start=1)
+    ]
+    if source_rows:
+        st.dataframe(pd.DataFrame(source_rows), hide_index=True, width="stretch")
+    else:
+        st.caption("No source document text available.")
 
+with right:
+    st.subheader("Question")
     options = question_options(selected_doc)
     sample_idx = st.selectbox(
         "Question examples",
@@ -66,7 +75,7 @@ with left:
         with st.expander("Ground truth answer", expanded=False):
             st.write(expected_answer)
 
-    send = st.button("Submit", type="primary", use_container_width=True)
+    send = st.button("Submit", type="primary", width="stretch")
 
 if send:
     st.session_state["side_by_side_answers"] = {}

@@ -18,6 +18,8 @@ from typing import Any
 
 from .config import ModelConfig
 
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 LOGGER = logging.getLogger("memcoder.eval.model")
 
 torch: Any = None
@@ -52,6 +54,12 @@ def resolve_qwen_device(qwen_cuda: int) -> Any:
         torch.cuda.set_device(qwen_cuda)
         return torch.device(f"cuda:{qwen_cuda}")
     return torch.device("cpu")
+
+
+def preferred_model_dtype(device: Any) -> Any:
+    if torch is None:
+        raise RuntimeError("call ensure_runtime() first")
+    return torch.bfloat16 if getattr(device, "type", "") == "cuda" else torch.float32
 
 
 def load_qwen_runtime(model_cfg: ModelConfig, qwen_device: Any) -> tuple[Any, Any]:
@@ -103,8 +111,22 @@ def load_qwen_runtime(model_cfg: ModelConfig, qwen_device: Any) -> tuple[Any, An
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    LOGGER.info("Loading Qwen model from %s onto %s", model_cfg.qwen_base, qwen_device)
-    metamodel = meta_model_cls.from_pretrained(str(model_cfg.qwen_base), config=config)
+    load_dtype = preferred_model_dtype(qwen_device)
+    LOGGER.info(
+        "Loading Qwen model from %s onto %s with dtype %s",
+        model_cfg.qwen_base,
+        qwen_device,
+        load_dtype,
+    )
+    metamodel = meta_model_cls.from_pretrained(
+        str(model_cfg.qwen_base),
+        config=config,
+        dtype=load_dtype,
+    )
+    generation_config = getattr(metamodel, "generation_config", None)
+    for attr in ("temperature", "top_p", "top_k"):
+        if generation_config is not None and hasattr(generation_config, attr):
+            setattr(generation_config, attr, None)
     metamodel.reset_mem_tokens()
     metamodel.resize_token_embeddings(len(tokenizer))
     metamodel.to(qwen_device)
@@ -115,7 +137,7 @@ def load_qwen_runtime(model_cfg: ModelConfig, qwen_device: Any) -> tuple[Any, An
     return metamodel, tokenizer
 
 
-def load_lora_dict(path: Path | None, qwen_device: Any) -> Any:
+def load_lora_dict(path: Path | None, qwen_device: Any, *, dtype: Any | None = None) -> Any:
     """Load a pre-baked LoRA dict from disk and move tensors to ``qwen_device``.
 
     Returns ``None`` when ``path`` is ``None``.
@@ -126,19 +148,21 @@ def load_lora_dict(path: Path | None, qwen_device: Any) -> Any:
         raise RuntimeError("call ensure_runtime() first")
     LOGGER.info("Loading pre-baked LoRA dict from %s", path)
     obj = torch.load(str(path), map_location=qwen_device, weights_only=False)
-    return _to_device_recursive(obj, qwen_device)
+    return _to_device_recursive(obj, qwen_device, dtype=dtype)
 
 
-def _to_device_recursive(obj: Any, device: Any) -> Any:
+def _to_device_recursive(obj: Any, device: Any, *, dtype: Any | None = None) -> Any:
     if torch is None:
         raise RuntimeError("call ensure_runtime() first")
     if isinstance(obj, torch.Tensor):
+        if dtype is not None and obj.is_floating_point():
+            return obj.to(device=device, dtype=dtype)
         return obj.to(device)
     if isinstance(obj, dict):
-        return {k: _to_device_recursive(v, device) for k, v in obj.items()}
+        return {k: _to_device_recursive(v, device, dtype=dtype) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         cls = type(obj)
-        return cls(_to_device_recursive(v, device) for v in obj)
+        return cls(_to_device_recursive(v, device, dtype=dtype) for v in obj)
     return obj
 
 
@@ -261,7 +285,7 @@ def generate_answer(
 ) -> dict[str, str]:
     if torch is None:
         raise RuntimeError("call ensure_runtime() first")
-    with torch.no_grad():
+    with torch.inference_mode():
         input_enc = tokenizer.apply_chat_template(
             messages,
             add_generation_prompt=True,
@@ -288,7 +312,10 @@ def generate_answer(
         new_tokens = outputs[0, input_ids.shape[1] :]
         raw = tokenizer.decode(new_tokens, skip_special_tokens=True)
         think, answer = extract_think_and_answer(raw)
-        return {"raw_generation": raw, "think": think, "answer": answer}
+    del input_enc, input_ids, attention_mask, outputs, new_tokens
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return {"raw_generation": raw, "think": think, "answer": answer}
 
 
 __all__ = [
@@ -299,6 +326,7 @@ __all__ = [
     "generate_answer",
     "load_lora_dict",
     "load_qwen_runtime",
+    "preferred_model_dtype",
     "resolve_qwen_device",
     "setup_shine_imports",
 ]

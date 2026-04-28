@@ -53,25 +53,31 @@ summary = score_summary(df)
 if summary.empty:
     st.info("No numeric score or token-F1 values are available.")
 else:
+    styled_summary = summary.style.format(
+        {
+            "mean_score": "{:.3f}",
+            "baseline_mean": "{:.3f}",
+            "delta_vs_baseline": "{:+.3f}",
+        }
+    )
+    if summary["delta_vs_baseline"].notna().any():
+        styled_summary = styled_summary.background_gradient(
+            subset=["delta_vs_baseline"],
+            cmap="RdYlGn",
+        )
     st.dataframe(
-        summary.style.format(
-            {
-                "mean_score": "{:.3f}",
-                "baseline_mean": "{:.3f}",
-                "delta_vs_baseline": "{:+.3f}",
-            }
-        ).background_gradient(subset=["delta_vs_baseline"], cmap="RdYlGn"),
+        styled_summary,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 chart_cols = st.columns(2)
 with chart_cols[0]:
-    st.plotly_chart(failure_mode_bar(df), use_container_width=True)
+    st.plotly_chart(failure_mode_bar(df), width="stretch")
 with chart_cols[1]:
-    st.plotly_chart(score_distribution(df), use_container_width=True)
+    st.plotly_chart(score_distribution(df), width="stretch")
 
-st.plotly_chart(topic_heatmap(df), use_container_width=True)
+st.plotly_chart(topic_heatmap(df), width="stretch")
 
 st.subheader("Question-Level Drill-Down")
 filter_cols = st.columns(4)
@@ -106,7 +112,7 @@ display_cols = [
 event = st.dataframe(
     filtered[display_cols],
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     on_select="rerun",
     selection_mode="single-row",
 )

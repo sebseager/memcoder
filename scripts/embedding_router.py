@@ -270,7 +270,7 @@ def main() -> int:
     model = AutoModel.from_pretrained(
         args.embedding_model,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16 if args.device == "cuda" else torch.float32,
+        dtype=torch.bfloat16 if args.device == "cuda" else torch.float32,
     ).to(args.device)
     model.eval()
 

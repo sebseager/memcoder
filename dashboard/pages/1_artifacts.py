@@ -41,7 +41,7 @@ with left:
     event = st.dataframe(
         doc_df,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         selection_mode="single-row",
     )
@@ -73,7 +73,7 @@ with right:
         qa_event = st.dataframe(
             qa_df,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             on_select="rerun",
             selection_mode="single-row",
         )

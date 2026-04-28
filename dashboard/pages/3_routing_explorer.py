@@ -52,7 +52,13 @@ with left:
     expected_answer = selected_option.get("answer") if selected_option else None
     top_k = st.slider("Top K", min_value=1, max_value=10, value=5)
     embedding_model = st.text_input("Embedding model", value=runtime.DEFAULT_EMBEDDING_MODEL)
-    submit = st.button("Route and Answer", type="primary", use_container_width=True)
+    embedding_device = st.selectbox(
+        "Embedding device",
+        ["cpu", "cuda"],
+        index=0 if runtime.DEFAULT_EMBEDDING_DEVICE == "cpu" else 1,
+        help="CPU keeps the router from competing with the SHINE model for GPU memory.",
+    )
+    submit = st.button("Route and Answer", type="primary", width="stretch")
 
 if submit:
     st.session_state["routing_result"] = None
@@ -60,7 +66,13 @@ if submit:
     st.session_state["routing_judge"] = None
     try:
         with st.spinner("Routing with the embedding router..."):
-            route = runtime.route_question_cached(repo_id, question, top_k, embedding_model)
+            route = runtime.route_question_cached(
+                repo_id,
+                question,
+                top_k,
+                embedding_model,
+                embedding_device,
+            )
         st.session_state["routing_result"] = route
 
         top = (route.get("ranked_loras") or [])[0]
@@ -115,4 +127,4 @@ with right:
                     "description": doc.description if doc else "",
                 }
             )
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")

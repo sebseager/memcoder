@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import os
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +13,18 @@ import yaml
 from dashboard.lib.data import PROJECT_ROOT, load_ledger
 from eval.config import JudgeConfig, load_run_config
 
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+DEFAULT_EMBEDDING_DEVICE = "cpu"
+
+_ANSWER_STATE_KEYS = (
+    "side_by_side_answers",
+    "side_by_side_judges",
+    "routing_result",
+    "routing_answer",
+    "routing_judge",
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -41,16 +52,84 @@ def executor() -> ThreadPoolExecutor:
     return ThreadPoolExecutor(max_workers=1, thread_name_prefix="shine-dashboard")
 
 
+def sync_repo_selection(repo_id: str) -> None:
+    previous_repo = st.session_state.get("active_repo_id")
+    if previous_repo and previous_repo != repo_id:
+        release_lora_resource(reset_status=True)
+        for key in _ANSWER_STATE_KEYS:
+            st.session_state.pop(key, None)
+    st.session_state["active_repo_id"] = repo_id
+
+
+def _lora_key(repo_id: str, lora_id: str, lora_path: str) -> tuple[str, str, str]:
+    return (repo_id, lora_id, lora_path)
+
+
+def release_lora_resource(*, reset_status: bool = False) -> None:
+    future = st.session_state.get("lora_future")
+    if isinstance(future, Future) and not future.done():
+        future.cancel()
+
+    lora_dict = st.session_state.pop("loaded_lora_dict", None)
+    st.session_state.pop("loaded_lora_key", None)
+    st.session_state.pop("loaded_lora_config_path", None)
+    if lora_dict is not None:
+        try:
+            from eval import model as model_module
+
+            model_module.free_lora_dict(lora_dict)
+        except Exception:  # noqa: BLE001
+            del lora_dict
+            gc.collect()
+
+    if reset_status:
+        for key in (
+            "lora_future",
+            "lora_loading_key",
+            "pending_lora_id",
+            "loaded_lora_id",
+            "lora_load_error",
+        ):
+            st.session_state.pop(key, None)
+
+
+def _store_lora_resource(
+    *,
+    key: tuple[str, str, str],
+    config_path: str,
+    lora_dict: Any,
+) -> None:
+    if st.session_state.get("loaded_lora_key") != key:
+        release_lora_resource(reset_status=False)
+    st.session_state["loaded_lora_key"] = key
+    st.session_state["loaded_lora_config_path"] = config_path
+    st.session_state["loaded_lora_dict"] = lora_dict
+    st.session_state["loaded_lora_id"] = key[1]
+    st.session_state["lora_load_error"] = None
+
+
 def start_lora_load(repo_id: str, lora_id: str, lora_path: str | None) -> None:
     if not lora_path:
         return
-    key = (repo_id, lora_id, lora_path)
+    key = _lora_key(repo_id, lora_id, lora_path)
+    if st.session_state.get("loaded_lora_key") == key:
+        st.session_state["loaded_lora_id"] = lora_id
+        return
     if st.session_state.get("lora_loading_key") == key:
         return
+    current_future = st.session_state.get("lora_future")
+    if isinstance(current_future, Future) and not current_future.done():
+        current_future.cancel()
+        if not current_future.cancelled():
+            st.session_state["lora_load_error"] = (
+                "Waiting for the current LoRA load to finish before starting another."
+            )
+            return
     config_path = config_for_repo(repo_id)
     if config_path is None:
         st.session_state["lora_load_error"] = "No eval config found for this repo."
         return
+    release_lora_resource(reset_status=False)
     st.session_state["lora_loading_key"] = key
     st.session_state["pending_lora_id"] = lora_id
     st.session_state["lora_load_error"] = None
@@ -68,14 +147,25 @@ def update_lora_load_status() -> None:
     if not isinstance(future, Future) or not future.done():
         return
     lora_id = st.session_state.get("pending_lora_id")
+    key = st.session_state.get("lora_loading_key")
+    config_path = config_for_repo(str(key[0])) if isinstance(key, tuple) else None
     try:
-        future.result()
+        lora_dict = future.result()
+    except CancelledError:
+        st.session_state["loaded_lora_id"] = None
+        st.session_state["lora_load_error"] = None
     except Exception as exc:  # noqa: BLE001
         st.session_state["loaded_lora_id"] = None
         st.session_state["lora_load_error"] = str(exc)
     else:
+        if isinstance(key, tuple) and config_path is not None:
+            _store_lora_resource(key=key, config_path=config_path, lora_dict=lora_dict)
         st.session_state["loaded_lora_id"] = lora_id
         st.session_state["lora_load_error"] = None
+    finally:
+        st.session_state.pop("lora_future", None)
+        st.session_state.pop("lora_loading_key", None)
+        st.session_state.pop("pending_lora_id", None)
 
 
 @st.cache_resource(show_spinner=False)
@@ -96,12 +186,12 @@ def load_model_runtime(config_path: str) -> dict[str, Any]:
         "cfg": cfg,
         "model_module": model_module,
         "qwen_device": qwen_device,
+        "qwen_dtype": model_module.preferred_model_dtype(qwen_device),
         "metamodel": metamodel,
         "tokenizer": tokenizer,
     }
 
 
-@st.cache_resource(show_spinner=False)
 def load_lora_resource(
     repo_id: str,
     lora_id: str,
@@ -110,7 +200,20 @@ def load_lora_resource(
 ) -> Any:
     del repo_id, lora_id
     runtime = load_model_runtime(config_path)
-    return runtime["model_module"].load_lora_dict(Path(lora_path), runtime["qwen_device"])
+    return runtime["model_module"].load_lora_dict(
+        Path(lora_path),
+        runtime["qwen_device"],
+        dtype=runtime["qwen_dtype"],
+    )
+
+
+def get_lora_resource(repo_id: str, lora_id: str, lora_path: str, config_path: str) -> Any:
+    key = _lora_key(repo_id, lora_id, lora_path)
+    if st.session_state.get("loaded_lora_key") == key:
+        return st.session_state.get("loaded_lora_dict")
+    lora_dict = load_lora_resource(repo_id, lora_id, lora_path, config_path)
+    _store_lora_resource(key=key, config_path=config_path, lora_dict=lora_dict)
+    return lora_dict
 
 
 @st.cache_data(show_spinner=False)
@@ -132,7 +235,7 @@ def generate_answer_cached(
     if condition == "shine":
         if not lora_id or not lora_path:
             raise RuntimeError("SHINE generation requires a selected LoRA.")
-        lora_dict = load_lora_resource(repo_id, lora_id, lora_path, config_path)
+        lora_dict = get_lora_resource(repo_id, lora_id, lora_path, config_path)
     messages = model_module.build_messages(question, doc_for_prompt, condition=condition)
     return model_module.generate_answer(
         metamodel=runtime["metamodel"],
@@ -191,7 +294,7 @@ def _judge_one(
         loop.close()
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=2)
 def load_embedding_runtime(model_name: str, requested_device: str) -> dict[str, Any]:
     import torch
     from transformers import AutoModel, AutoTokenizer
@@ -203,10 +306,31 @@ def load_embedding_runtime(model_name: str, requested_device: str) -> dict[str, 
     model = AutoModel.from_pretrained(
         model_name,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
+        dtype=torch.bfloat16 if device == "cuda" else torch.float32,
     ).to(device)
     model.eval()
     return {"tokenizer": tokenizer, "model": model, "device": device}
+
+
+@st.cache_data(show_spinner=False)
+def lora_embeddings_cached(
+    repo_id: str,
+    embedding_model: str,
+    device: str,
+) -> dict[str, Any]:
+    from scripts.embedding_router import embed_texts, flatten_loras, make_lora_routing_text
+
+    ledger = load_ledger(repo_id)
+    loras = flatten_loras(ledger, PROJECT_ROOT / "artifacts" / repo_id / "ledger.json")
+    runtime = load_embedding_runtime(embedding_model, device)
+    routing_texts = [make_lora_routing_text(lora) for lora in loras]
+    embeddings = embed_texts(
+        routing_texts,
+        runtime["tokenizer"],
+        runtime["model"],
+        runtime["device"],
+    )
+    return {"loras": loras, "embeddings": embeddings}
 
 
 @st.cache_data(show_spinner=False)
@@ -215,18 +339,40 @@ def route_question_cached(
     question: str,
     top_k: int,
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
-    device: str = "cuda",
+    device: str = DEFAULT_EMBEDDING_DEVICE,
 ) -> dict[str, Any]:
-    from scripts.embedding_router import flatten_loras, route_question
+    from scripts.embedding_router import cosine_scores, embed_texts
 
-    ledger = load_ledger(repo_id)
-    loras = flatten_loras(ledger, PROJECT_ROOT / "artifacts" / repo_id / "ledger.json")
     runtime = load_embedding_runtime(embedding_model, device)
-    return route_question(
-        question=question,
-        loras=loras,
+    cached = lora_embeddings_cached(repo_id, embedding_model, runtime["device"])
+    loras = cached["loras"]
+    lora_embeddings = cached["embeddings"]
+    question_embedding = embed_texts(
+        [question],
         tokenizer=runtime["tokenizer"],
         model=runtime["model"],
         device=runtime["device"],
-        top_k=top_k,
     )
+    scores = cosine_scores(question_embedding, lora_embeddings)
+    ranked = sorted(
+        [
+            {
+                "rank": i + 1,
+                "lora_id": loras[idx].get("lora_id"),
+                "score": scores[idx],
+                "topic": loras[idx].get("topic"),
+                "source_doc": loras[idx].get("source_doc"),
+                "lora_path": loras[idx].get("lora_path"),
+            }
+            for i, idx in enumerate(sorted(range(len(scores)), key=lambda j: scores[j], reverse=True))
+        ],
+        key=lambda x: x["rank"],
+    )
+    selected = ranked[: max(1, top_k)]
+    return {
+        "question": question,
+        "method": "embedding_cosine_v1",
+        "top_k": top_k,
+        "selected_lora_ids": [r["lora_id"] for r in selected],
+        "ranked_loras": ranked,
+    }
