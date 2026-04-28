@@ -13,3 +13,12 @@
 [submodule "target_repos/marimo-team__marimo"]
 	path = target_repos/marimo-team__marimo
 	url = https://github.com/marimo-team/marimo
+[submodule "target_repos/fogleman__Craft"]
+	path = target_repos/fogleman__Craft
+	url = https://github.com/fogleman/Craft
+[submodule "target_repos/psf__requests"]
+	path = target_repos/psf__requests
+	url = https://github.com/psf/requests
+[submodule "target_repos/pytest-dev__pytest"]
+	path = target_repos/pytest-dev__pytest
+	url = https://github.com/pytest-dev/pytest
