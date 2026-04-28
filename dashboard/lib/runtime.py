@@ -270,19 +270,33 @@ def judge_answer_cached(
     question: str,
     answer: str,
     expected_answer: str,
+    document_id: str | None = None,
+    document_text: str | None = None,
 ) -> dict[str, Any]:
     config_path = config_for_repo(repo_id)
     if config_path is None:
         raise RuntimeError("No eval config found for this repo.")
     cfg = load_run_config(Path(config_path))
-    return _judge_one(cfg.judge, question, answer, expected_answer)
+    return _judge_one(
+        cfg.judge,
+        repo_id=repo_id,
+        question=question,
+        answer=answer,
+        expected_answer=expected_answer,
+        document_id=document_id,
+        document_text=document_text,
+    )
 
 
 def _judge_one(
     judge_cfg: JudgeConfig,
+    *,
+    repo_id: str,
     question: str,
     answer: str,
     expected_answer: str,
+    document_id: str | None,
+    document_text: str | None,
 ) -> dict[str, Any]:
     from eval.judge import _JudgeContext, _judge_row, _load_dotenv, _load_prompt
     from openai import AsyncOpenAI
@@ -294,13 +308,25 @@ def _judge_one(
         raise RuntimeError(f"Environment variable {judge_cfg.api_key_env!r} is not set.")
 
     async def run() -> dict[str, Any]:
+        rubric_template, needs_doc = _load_prompt(judge_cfg.prompt)
+        docs_by_key = {}
+        if needs_doc and document_id and document_text:
+            docs_by_key[(repo_id, document_id)] = document_text
         ctx = _JudgeContext(
             cfg=judge_cfg,
-            rubric_template=_load_prompt(judge_cfg.prompt),
+            rubric_template=rubric_template,
+            needs_doc=needs_doc,
+            docs_by_key=docs_by_key,
             semaphore=asyncio.Semaphore(1),
             client=AsyncOpenAI(api_key=api_key),
         )
-        row = {"question": question, "answer": answer, "expected_answer": expected_answer}
+        row = {
+            "repo_id": repo_id,
+            "document_id": document_id or "",
+            "question": question,
+            "answer": answer,
+            "expected_answer": expected_answer,
+        }
         return await _judge_row(ctx, row)
 
     loop = asyncio.new_event_loop()

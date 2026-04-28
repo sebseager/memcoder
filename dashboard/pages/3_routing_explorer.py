@@ -203,6 +203,8 @@ if submit:
                 question,
                 answer.get("answer", ""),
                 str(expected_answer),
+                source_doc.document_id,
+                source_doc.doc_text,
             )
             render_outputs(answer_slot, ranked_slot, repo_id=repo_id)
     except Exception as exc:  # noqa: BLE001

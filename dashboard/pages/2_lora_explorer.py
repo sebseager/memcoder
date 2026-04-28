@@ -153,6 +153,8 @@ if send:
                     question,
                     answer.get("answer", ""),
                     str(expected_answer),
+                    selected_doc.document_id,
+                    selected_doc.doc_text,
                 )
                 st.session_state["side_by_side_judges"][condition] = judge
                 render_answer_slots(answer_slots, note_slot=judge_note_slot, expected_answer=expected_answer)
