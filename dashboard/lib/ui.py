@@ -12,12 +12,11 @@ from dashboard.lib.data import list_difficulties, list_repo_ids, load_documents,
 
 def page_setup(title: str) -> tuple[str, str]:
     st.set_page_config(page_title=f"SHINE Dashboard - {title}", layout="wide")
+    _inject_dashboard_css()
     return render_sidebar()
 
 
 def render_sidebar() -> tuple[str, str]:
-    runtime.update_lora_load_status()
-
     repos = list_repo_ids()
     if not repos:
         st.sidebar.error("No artifact repos found under artifacts/.")
@@ -44,34 +43,99 @@ def render_sidebar() -> tuple[str, str]:
     if repo_meta.get("commit"):
         st.sidebar.caption(f"Commit `{str(repo_meta['commit'])[:12]}`")
 
-    _render_lora_status()
+    with st.sidebar:
+        _render_model_statuses()
     return selected_repo, selected_difficulty
 
 
-def _render_lora_status() -> None:
-    st.sidebar.divider()
-    st.sidebar.markdown("**LoRA status**")
+@st.fragment(run_every="1s")
+def _render_model_statuses() -> None:
+    runtime.update_lora_load_status()
+
+    st.divider()
+    st.markdown("**LoRA status**")
     future = st.session_state.get("lora_future")
     pending_lora_id = st.session_state.get("pending_lora_id")
     loaded_lora_id = st.session_state.get("loaded_lora_id")
     error = st.session_state.get("lora_load_error")
 
     if future is not None and not future.done():
-        st.sidebar.info(f"Loading `{pending_lora_id}`...")
-        return
-    if error:
-        st.sidebar.error(error)
-        return
-    if loaded_lora_id:
-        st.sidebar.success(f"Loaded `{loaded_lora_id}`")
+        st.info(f"Loading `{pending_lora_id}`...")
+    elif error:
+        st.error(error)
+    elif loaded_lora_id:
+        st.success(f"Loaded `{loaded_lora_id}`")
     else:
-        st.sidebar.caption("No LoRA loaded")
+        st.caption("No LoRA loaded")
+
+    st.markdown("**Embedding model**")
+    embedding_status = st.session_state.get("embedding_model_status") or {}
+    state = embedding_status.get("state")
+    model_name = embedding_status.get("model_name")
+    device = embedding_status.get("device")
+    if state == "loading" and model_name:
+        st.info(f"Loading `{model_name}` on `{device or 'auto'}`...")
+    elif state == "loaded" and model_name:
+        suffix = f" on `{device}`" if device else ""
+        st.success(f"Loaded `{model_name}`{suffix}")
+    elif state == "error":
+        st.error(str(embedding_status.get("error") or "Embedding model failed to load."))
+    else:
+        st.caption("No embedding model loaded")
 
 
 def lora_label(doc: Any) -> str:
     topic = doc.topic or "Untitled topic"
     suffix = "ready" if doc.lora_exists else "missing file"
     return f"{topic} / {doc.document_id} ({suffix})"
+
+
+def _inject_dashboard_css() -> None:
+    st.markdown(
+        """
+        <style>
+        .mc-progress-button {
+            align-items: center;
+            background: #ff4b4b;
+            border: 1px solid #ff4b4b;
+            border-radius: 0.5rem;
+            color: white;
+            cursor: not-allowed;
+            display: inline-flex;
+            font-weight: 600;
+            gap: 0.5rem;
+            justify-content: center;
+            line-height: 1.6;
+            min-height: 2.5rem;
+            opacity: 0.72;
+            padding: 0.375rem 0.75rem;
+            width: 100%;
+        }
+        .mc-button-spinner {
+            animation: mc-spin 0.8s linear infinite;
+            border: 2px solid rgba(255, 255, 255, 0.45);
+            border-radius: 50%;
+            border-top-color: white;
+            height: 0.9rem;
+            width: 0.9rem;
+        }
+        @keyframes mc-spin {
+            to { transform: rotate(360deg); }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def progress_button(slot: Any, label: str) -> None:
+    slot.markdown(
+        "<button class='mc-progress-button' disabled>"
+        "<span class='mc-button-spinner' aria-hidden='true'></span>"
+        f"<span>{html.escape(label)}</span>"
+        "</button>",
+        unsafe_allow_html=True,
+    )
 
 
 def score_block(judge: dict[str, Any] | None) -> None:
@@ -82,7 +146,7 @@ def score_block(judge: dict[str, Any] | None) -> None:
     reasoning = str(judge.get("reasoning") or "")
     one_line = reasoning.split(". ")[0].strip()
 
-    score_col, text_col = st.columns([0.9, 2.1], vertical_alignment="center")
+    score_col, text_col = st.columns([0.68, 2.32], vertical_alignment="center")
     colors = {
         1: "#dc2626",
         2: "#f97316",
@@ -93,16 +157,22 @@ def score_block(judge: dict[str, Any] | None) -> None:
     segments = []
     for idx in range(1, 6):
         selected = idx == score
+        radius = ""
+        if idx == 1:
+            radius = "border-radius:0.48rem 0 0 0.48rem;"
+        elif idx == 5:
+            radius = "border-radius:0 0.48rem 0.48rem 0;"
         segments.append(
             "<div style='"
             "flex:1;"
-            "padding:0.32rem 0;"
+            "padding:0.26rem 0;"
             "text-align:center;"
             "font-weight:700;"
             f"background:{colors[idx]};"
             "color:white;"
             f"opacity:{'1' if selected else '0.35'};"
-            f"box-shadow:{'inset 0 0 0 2px rgba(255,255,255,0.9)' if selected else 'none'};"
+            f"{radius}"
+            f"box-shadow:{'inset 0 0 0 2px rgba(255,255,255,0.95)' if selected else 'none'};"
             "'>"
             f"{idx}"
             "</div>"
@@ -115,6 +185,7 @@ def score_block(judge: dict[str, Any] | None) -> None:
             "border:1px solid rgba(49,51,63,0.25);"
             "border-radius:0.6rem;"
             "background:rgba(49,51,63,0.04);"
+            "max-width:13.5rem;"
             "'>"
             + "".join(segments)
             + "</div>",
@@ -123,9 +194,10 @@ def score_block(judge: dict[str, Any] | None) -> None:
     with text_col:
         if one_line:
             st.markdown(
-                f"<div style='font-size:0.9rem;color:rgba(49,51,63,0.75);'>{html.escape(one_line)}</div>",
+                f"<div style='font-size:0.9rem;color:white;'>{html.escape(one_line)}</div>",
                 unsafe_allow_html=True,
             )
+    st.markdown("<div style='height:0.75rem;'></div>", unsafe_allow_html=True)
     with st.expander("Full judge explanation", expanded=False):
         st.write(reasoning or "No reasoning returned.")
         modes = judge.get("failure_modes") or []
@@ -133,7 +205,13 @@ def score_block(judge: dict[str, Any] | None) -> None:
             st.write("Failure modes:", ", ".join(modes))
 
 
-def answer_panel(title: str, answer: dict[str, str] | None, judge: dict[str, Any] | None) -> None:
+def answer_panel(
+    title: str,
+    answer: dict[str, str] | None,
+    judge: dict[str, Any] | None,
+    *,
+    judge_pending: bool = False,
+) -> None:
     with st.container(border=True):
         st.subheader(title)
         if not answer:
@@ -143,6 +221,9 @@ def answer_panel(title: str, answer: dict[str, str] | None, judge: dict[str, Any
         if answer.get("think"):
             with st.expander("Thinking trace", expanded=False):
                 st.write(answer["think"])
+        if judge_pending:
+            st.caption("Judging answer...")
+            return
         score_block(judge)
 
 

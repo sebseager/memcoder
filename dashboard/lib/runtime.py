@@ -17,6 +17,7 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 DEFAULT_EMBEDDING_DEVICE = "cpu"
+DEMO_MAX_NEW_TOKENS = 128
 
 _ANSWER_STATE_KEYS = (
     "side_by_side_answers",
@@ -168,6 +169,21 @@ def update_lora_load_status() -> None:
         st.session_state.pop("pending_lora_id", None)
 
 
+def set_embedding_model_status(
+    state: str,
+    *,
+    model_name: str | None = None,
+    device: str | None = None,
+    error: str | None = None,
+) -> None:
+    st.session_state["embedding_model_status"] = {
+        "state": state,
+        "model_name": model_name,
+        "device": device,
+        "error": error,
+    }
+
+
 @st.cache_resource(show_spinner=False)
 def load_model_runtime(config_path: str) -> dict[str, Any]:
     from eval import model as model_module
@@ -243,7 +259,7 @@ def generate_answer_cached(
         qwen_device=runtime["qwen_device"],
         messages=messages,
         lora_dict=lora_dict,
-        max_new_tokens=runtime["cfg"].model.max_new_tokens,
+        max_new_tokens=min(runtime["cfg"].model.max_new_tokens, DEMO_MAX_NEW_TOKENS),
         conversation_max_length=runtime["cfg"].model.conversation_max_length,
     )
 
@@ -372,6 +388,8 @@ def route_question_cached(
     return {
         "question": question,
         "method": "embedding_cosine_v1",
+        "embedding_model": embedding_model,
+        "embedding_device": runtime["device"],
         "top_k": top_k,
         "selected_lora_ids": [r["lora_id"] for r in selected],
         "ranked_loras": ranked,
