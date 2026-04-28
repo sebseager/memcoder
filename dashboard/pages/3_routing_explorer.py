@@ -80,6 +80,7 @@ def render_outputs(
             "Routed SHINE",
             st.session_state.get("routing_answer"),
             st.session_state.get("routing_judge"),
+            panel_key="routed-shine",
             judge_pending=judge_pending,
         )
 

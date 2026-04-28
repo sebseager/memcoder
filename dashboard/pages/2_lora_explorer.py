@@ -44,6 +44,7 @@ def render_answer_slots(
                 label,
                 answers.get(condition),
                 judges.get(condition),
+                panel_key=condition,
                 judge_pending=condition in pending_judges,
             )
 

@@ -210,10 +210,13 @@ def answer_panel(
     answer: dict[str, str] | None,
     judge: dict[str, Any] | None,
     *,
+    panel_key: str | None = None,
     judge_pending: bool = False,
 ) -> None:
     with st.container(border=True):
-        st.subheader(title)
+        # Use explicit anchors so heading link icons always map to the right panel.
+        anchor = f"answer-{panel_key}" if panel_key else None
+        st.subheader(title, anchor=anchor)
         if not answer:
             st.caption("No answer generated yet.")
             return
