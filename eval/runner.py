@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import model as model_module
+from . import composition, model as model_module
 from .artifacts import DocumentRecord, QAPair, iter_documents
 from .config import RunConfig
 from .routing import RoutingDecision, make_router
@@ -60,7 +60,7 @@ def run_predictions(cfg: RunConfig) -> Path:
     rows_written = 0
     with predictions_path.open("w", encoding="utf-8") as out:
         for doc in documents:
-            current_lora_path: Path | None = None
+            current_cache_key: tuple[str, ...] | None = None
             current_lora_dict = None
             try:
                 for qa in doc.qa_pairs:
@@ -74,14 +74,27 @@ def run_predictions(cfg: RunConfig) -> Path:
                                 qa.qa_id,
                                 cfg.routing,
                             )
-                        elif shine_decision.lora_path != current_lora_path:
-                            if current_lora_dict is not None:
-                                model_module.free_lora_dict(current_lora_dict)
-                                current_lora_dict = None
-                            current_lora_path = shine_decision.lora_path
-                            current_lora_dict = model_module.load_lora_dict(
-                                current_lora_path, qwen_device
+                        else:
+                            cache_key = tuple(
+                                sorted(str(p) for p in shine_decision.lora_paths)
                             )
+                            if cache_key != current_cache_key:
+                                loaded = [
+                                    model_module.load_lora_dict(p, qwen_device)
+                                    for p in shine_decision.lora_paths
+                                ]
+                                new_composed = composition.compose_top_k(loaded)
+                                # Drop the per-LoRA dicts; only the composed dict is
+                                # needed downstream. ``compose_top_k`` short-circuits
+                                # to identity at len==1, so skip the free in that case.
+                                for d in loaded:
+                                    if d is not new_composed:
+                                        model_module.free_lora_dict(d)
+                                del loaded
+                                if current_lora_dict is not None:
+                                    model_module.free_lora_dict(current_lora_dict)
+                                current_lora_dict = new_composed
+                                current_cache_key = cache_key
 
                     for cond in cfg.conditions:
                         if cond == "shine" and (
@@ -113,7 +126,7 @@ def run_predictions(cfg: RunConfig) -> Path:
                 if current_lora_dict is not None:
                     model_module.free_lora_dict(current_lora_dict)
                     current_lora_dict = None
-                    current_lora_path = None
+                    current_cache_key = None
 
     LOGGER.info("Predictions complete: %d rows -> %s", rows_written, predictions_path)
     return predictions_path
@@ -175,15 +188,20 @@ def _run_one(
 
     routing_field: dict[str, Any]
     lora_path_str: str | None
+    lora_paths_list: list[str] | None
     if condition == "shine" and shine_decision is not None:
         routing_field = {
             "strategy": shine_decision.strategy,
             "selected_lora_ids": list(shine_decision.selected_lora_ids),
         }
-        lora_path_str = str(shine_decision.lora_path)
+        lora_paths_list = [str(p) for p in shine_decision.lora_paths]
+        # Top-1 mirrored at ``lora_path`` for back-compat with judge.py /
+        # report.py and any external consumers reading the legacy field.
+        lora_path_str = lora_paths_list[0] if lora_paths_list else None
     else:
         routing_field = {"strategy": "n/a", "selected_lora_ids": []}
         lora_path_str = None
+        lora_paths_list = None
 
     return {
         "run_id": run_id,
@@ -203,6 +221,7 @@ def _run_one(
         "raw_generation": generation["raw_generation"],
         "routing": routing_field,
         "lora_path": lora_path_str,
+        "lora_paths": lora_paths_list,
         "doc_in_context": condition == "in_context",
         "timings_ms": {"generation": elapsed_ms},
         "qa_metadata": dict(qa.metadata),

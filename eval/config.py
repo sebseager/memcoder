@@ -60,8 +60,11 @@ class EmbeddingConfig:
 
     ``model`` records which embedder produced the routing JSONLs (informational
     only). ``routing_results`` is the list of pre-computed cosine-retrieval
-    files consumed by ``EmbeddingRouter``. ``top_k`` controls how many LoRA
-    ids are recorded per decision; the runner still applies a single LoRA.
+    files consumed by ``EmbeddingRouter``. ``top_k`` controls how many LoRAs
+    are pulled per decision; for ``top_k > 1`` the runner averages the top-k
+    LoRAs into one composed adapter via ``eval.composition.compose_top_k``
+    (rank_average, scale=1.0). At ``top_k == 1`` the runner short-circuits
+    composition so generations match the pre-composition harness exactly.
     """
 
     model: str | None = None
