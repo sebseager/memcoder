@@ -121,6 +121,7 @@ def main() -> int:
                 predictions_path=predictions_path,
                 output_path=output_path,
                 judge_cfg=cfg.judge,
+                cfg=cfg,
                 prompt_path=args.prompt,
                 rubric_version=args.rubric_version,
                 taxonomy_version=args.taxonomy_version,

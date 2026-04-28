@@ -58,6 +58,8 @@ JUDGE_JSON_SCHEMA = {
 class _JudgeContext:
     cfg: JudgeConfig
     rubric_template: str
+    needs_doc: bool
+    docs_by_key: dict[tuple[str, str], str]
     semaphore: asyncio.Semaphore
     client: Any  # AsyncOpenAI
 
@@ -75,6 +77,7 @@ def run_judging(cfg: RunConfig, run_dir: Path) -> Path:
         predictions_path=predictions_path,
         output_path=judgments_path,
         judge_cfg=cfg.judge,
+        cfg=cfg,
     )
 
 
@@ -83,6 +86,7 @@ def judge_predictions_to(
     predictions_path: Path,
     output_path: Path,
     judge_cfg: JudgeConfig,
+    cfg: RunConfig | None = None,
     prompt_path: Path | None = None,
     rubric_version: str | None = None,
     taxonomy_version: str | None = None,
@@ -93,6 +97,10 @@ def judge_predictions_to(
     Used by ``run_judging`` (for the standard run-dir judge phase) and by
     ``scripts/rejudge.py`` to write sidecar judgments files like
     ``judgments_v1.jsonl`` under an existing run dir.
+
+    ``cfg`` is required only when the judge prompt contains a
+    ``{design_doc}`` placeholder (e.g. v2). It is used to resolve doc text
+    via ``eval.artifacts.iter_documents``. v1 prompts ignore it.
     """
     if not predictions_path.exists():
         raise FileNotFoundError(f"predictions.jsonl not found at {predictions_path}")
@@ -127,7 +135,24 @@ def judge_predictions_to(
         max_retries=judge_cfg.max_retries,
     )
 
-    rubric_template = _load_prompt(effective_prompt)
+    rubric_template, needs_doc = _load_prompt(effective_prompt)
+
+    docs_by_key: dict[tuple[str, str], str] = {}
+    if needs_doc:
+        if cfg is None:
+            raise ValueError(
+                f"judge prompt {effective_prompt} contains a {{design_doc}} "
+                "placeholder; judge_predictions_to(cfg=...) must be provided so "
+                "the harness can resolve doc text from the artifact selectors"
+            )
+        from .artifacts import iter_documents
+
+        for record in iter_documents(cfg):
+            docs_by_key[(record.repo_id, record.document_id)] = record.doc_text
+        LOGGER.info(
+            "Loaded %d design doc(s) for v2-style judging", len(docs_by_key)
+        )
+
     rows = _read_predictions(predictions_path)
     LOGGER.info(
         "Judging %d row(s) with %s (concurrency=%d, rubric=%s, taxonomy=%s) -> %s",
@@ -139,7 +164,9 @@ def judge_predictions_to(
         output_path,
     )
 
-    judged = asyncio.run(_judge_all(rows, effective_cfg, rubric_template, api_key))
+    judged = asyncio.run(
+        _judge_all(rows, effective_cfg, rubric_template, needs_doc, docs_by_key, api_key)
+    )
 
     with output_path.open("w", encoding="utf-8") as out:
         for row in judged:
@@ -153,6 +180,8 @@ async def _judge_all(
     rows: list[dict[str, Any]],
     judge_cfg: JudgeConfig,
     rubric_template: str,
+    needs_doc: bool,
+    docs_by_key: dict[tuple[str, str], str],
     api_key: str,
 ) -> list[dict[str, Any]]:
     from openai import AsyncOpenAI
@@ -162,6 +191,8 @@ async def _judge_all(
     ctx = _JudgeContext(
         cfg=judge_cfg,
         rubric_template=rubric_template,
+        needs_doc=needs_doc,
+        docs_by_key=docs_by_key,
         semaphore=semaphore,
         client=client,
     )
@@ -186,11 +217,24 @@ async def _judge_all(
 
 
 async def _judge_row(ctx: _JudgeContext, row: dict[str, Any]) -> dict[str, Any]:
-    prompt = ctx.rubric_template.format(
-        question=row.get("question", ""),
-        expected_answer=_render_expected(row.get("expected_answer")),
-        model_answer=row.get("answer", ""),
-    )
+    fmt_values: dict[str, str] = {
+        "question": row.get("question", ""),
+        "expected_answer": _render_expected(row.get("expected_answer")),
+        "model_answer": row.get("answer", ""),
+    }
+    if ctx.needs_doc:
+        key = (str(row.get("repo_id") or ""), str(row.get("document_id") or ""))
+        doc_text = ctx.docs_by_key.get(key)
+        if doc_text is None:
+            LOGGER.warning(
+                "no design doc found for (repo_id=%r, document_id=%r); judging "
+                "row without doc grounding",
+                key[0],
+                key[1],
+            )
+            doc_text = "(design doc not available)"
+        fmt_values["design_doc"] = doc_text
+    prompt = ctx.rubric_template.format(**fmt_values)
 
     last_error: Exception | None = None
     for attempt in range(ctx.cfg.max_retries + 1):
@@ -307,7 +351,13 @@ def _read_predictions(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _load_prompt(path: Path) -> str:
+def _load_prompt(path: Path) -> tuple[str, bool]:
+    """Load a judge prompt and report whether it needs design-doc input.
+
+    Returns ``(template, needs_doc)``. ``needs_doc`` is ``True`` iff the
+    template contains a ``{design_doc}`` placeholder (v2+); v1 prompts
+    have no such placeholder and yield ``False`` for back-compat.
+    """
     text = path.read_text(encoding="utf-8")
     required_placeholders = ("{question}", "{expected_answer}", "{model_answer}")
     missing = [p for p in required_placeholders if p not in text]
@@ -316,7 +366,8 @@ def _load_prompt(path: Path) -> str:
             f"judge prompt {path} missing placeholders: {missing} "
             "(expected {question}, {expected_answer}, {model_answer})"
         )
-    return text
+    needs_doc = "{design_doc}" in text
+    return text, needs_doc
 
 
 def _render_expected(value: Any) -> str:

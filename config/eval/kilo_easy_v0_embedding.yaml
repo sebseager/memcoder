@@ -59,7 +59,7 @@ judge:
   api_key_env: OPENAI_API_KEY
   dotenv_path: .env
   concurrency: 8
-  prompt: prompts/llm_judge_grading_v1.md
-  rubric_version: v1
+  prompt: prompts/llm_judge_grading_v2.md
+  rubric_version: v2
   taxonomy_version: v1
   max_retries: 4
