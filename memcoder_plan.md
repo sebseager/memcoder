@@ -62,12 +62,18 @@ The eval harness is implemented under `eval/` with the CLI at
 plus a dedicated bake script at `scripts/generate_shine_lora.py`. Run
 configs live in `config/eval/<run_name>.yaml`; one config per run.
 
-First pilot run lives at `results/kilo_easy_v0_20260427T0037/` on
-`antirez__kilo` with three easy docs (`overview_purpose_1`,
-`raw_terminal_input_1`, `rows_editing_persistence_1`), oracle routing,
-and conditions `naive | in_context | shine`. A second run with two of the
-docs rewritten in lean prose (and matching QAs) is in progress to test
-the code-density hypothesis described in §18.
+Pilot artifacts now span both kilo and marimo on the easy tier under
+oracle routing with conditions `naive | in_context | shine`. The
+original kilo pilot run is `results/kilo_easy_v0_20260427T0037/` over
+three docs (`overview_purpose_1`, `raw_terminal_input_1`,
+`rows_editing_persistence_1`); the marimo pilot is at
+`results/marimo_easy_v0_20260427T1929/`. The lean-prose A/B test of the
+code-density hypothesis (§18) has completed and lives as paired
+`*_detail_*` and `*_adapted_*` run dirs (e.g.,
+`results/kilo_easy_v0_detail_20260427T1731/` and
+`results/kilo_easy_v0_adapted_20260427T1747/`); see those reports for
+the per-doc deltas. An embedding-routing run on kilo also exists for
+the §10 routing comparison.
 
 The pilot has surfaced two important findings that feed back into the
 plan: doc code-density appears to drive LoRA quality (see §18), and
@@ -172,7 +178,7 @@ The store is the single source of truth for any system component that needs to l
 
 For each LoRA in the LoRA store, compute and store an embedding using a local sentence embedder (suggested: bge-small or e5-small — chosen for being small, local, and well-benchmarked on retrieval).
 
-The embedded text is the concatenation of: topic name, title, description, the doc-derived questions this LoRA is intended to answer, and the underlying document text itself. This richer string is used only for retrieval and is held in the LoRA store; the ledger remains lean.
+The embedded text (built by `scripts/embedding_router.py::make_lora_routing_text`) is the concatenation of: LoRA ID, title, description, keywords, the **example questions** exposed in the ledger, and the underlying document text itself. Note: the *example questions* (the routing-only set, kept disjoint from the eval QAs per §7) are deliberately used here rather than the doc-derived eval QAs — feeding doc-derived eval QAs into the embedding would let the router peek at the test set. This richer string is used only for retrieval and is held in the LoRA store; the ledger remains lean.
 
 ## 10. Routing Strategies
 
@@ -180,28 +186,28 @@ Three routing strategies are evaluated:
 
 **Ground-truth oracle.** For each test question, a human (or an automatic mapping where unambiguous) provides the correct LoRA. This isolates SHINE-quality from routing-quality.
 
-**Qwen-as-router.** Qwen3-8B is given the ledger markdown directly and asked to return the top-k most relevant LoRA IDs (with confidence). The ledger's ID scheme is designed to be Qwen-readable.
+**Qwen-as-router.** Qwen3-8B is given the ledger markdown directly and asked to return the top-k most relevant LoRA IDs (with confidence). The ledger's ID scheme is designed to be Qwen-readable. *Status: not yet implemented; depends on the markdown ledger described in §8.1.*
 
-**Embedding-based retrieval.** The question is embedded; cosine similarity to LoRA embeddings (held in the LoRA store) determines top-k. The ledger is not consulted in this path — IDs are looked up directly in the store.
+**Embedding-based retrieval.** The question is embedded; cosine similarity to LoRA embeddings (held in the LoRA store) determines top-k. The ledger is not consulted in this path — IDs are looked up directly in the store. *Status: implemented (`eval/routing.py::EmbeddingRouter`, fed by `scripts/embedding_router.py`).*
 
-For each strategy, k is varied (k = 1, 2, 3, possibly more). When k > 1, the retrieved LoRAs are averaged before loading into Qwen3-8B.
+For each strategy, k is varied (k = 1, 2, 3, possibly more). When k > 1, the retrieved LoRAs are averaged before loading into Qwen3-8B via rank-concatenation in `eval/composition.py` (rank_average, scale=1.0); k=1 short-circuits to identity for bit-for-bit reproducibility against pre-composition runs.
 
 ## 11. Baselines
 
 - **Naive Qwen3-8B:** No retrieval, no context. Establishes a floor.
 - **In-context Qwen3-8B:** Full ground-truth document in the prompt. Establishes a per-document ceiling for what a SHINE LoRA could do.
-- **RAG-over-design-docs:** Retrieve top-k design documents using the same embedding model, stuff into Qwen3-8B's context. This is the most important non-SHINE baseline because it shares the privacy story. *Status: required, not nice-to-have. The project's headline claim depends on understanding this comparison.*
+- **RAG-over-design-docs:** Retrieve top-k design documents using the same embedding model, stuff into Qwen3-8B's context. This is the most important non-SHINE baseline because it shares the privacy story. *Status: required, not nice-to-have. Not yet implemented in the eval harness — `VALID_CONDITIONS` currently is `("naive", "in_context", "shine")`; a `rag` condition still needs to be added. The project's headline claim depends on understanding this comparison.*
 - **RAG-over-raw-code:** Stretch goal only.
 
 ## 12. Evaluation
 
-**Scoring.** Answer correctness is judged by an LLM-as-judge using a stronger model than Qwen3-8B (v0: OpenAI `gpt-5.1`). The judge receives the question, the ground-truth answer, and the model's answer (no source document — pure substance check), and emits structured JSON conforming to `schemas/judge_result.schema.json`:
-- An integer **score** on a 1–5 scale (resolved from the original "to-be-defined rubric"; see prompt at `prompts/llm_judge_grading_v0.md` for the rubric definition).
+**Scoring.** Answer correctness is judged by an LLM-as-judge using a stronger model than Qwen3-8B (v0: OpenAI `gpt-5.1`). The judge receives the question, the ground-truth answer, the model's answer, and — under the current default rubric (v2) — the source design document so it can verify whether the model's claims are grounded in this repo or generic plausibility. It emits structured JSON conforming to `schemas/judge_result.schema.json`:
+- An integer **score** on a 1–5 scale; current default rubric is `prompts/llm_judge_grading_v2.md` (`rubric_version: v2`). v0 and v1 prompts are retained on disk for backfill / comparison runs and remain fully supported.
 - A free-text **reasoning** field, encouraged to elaborate.
 - A list of **failure_modes** drawn from the taxonomy below (required when score < 5; empty when score == 5).
 - An optional **failure_mode_notes** for `other`.
 
-The judge prompt explicitly instructs leniency on phrasing / equivalent paraphrases and strictness on specifics (wrong identifiers, values, names). The harness post-processes: clears tags on score==5; auto-tags `other` if score<5 returned no tags.
+The judge prompt explicitly instructs leniency on phrasing / equivalent paraphrases and strictness on specifics (wrong identifiers, values, names). v2 adds two further calibrations: an explicit *length-neutrality* clause (a one-sentence answer that names the right specific is a 5) and *doc-grounding* (a specific that does not trace to the design document is treated as fabrication). The harness post-processes: clears tags on score==5; auto-tags `other` if score<5 returned no tags.
 
 LLM-as-judge has known failure modes (favoring verbose answers, leniency on near-misses, run-to-run drift). v0 mitigation:
 - Logging the judge's full output for spot-checking (`judgments.jsonl` row carries `judge.reasoning` and `judge.raw_response`).
@@ -216,14 +222,23 @@ LLM-as-judge has known failure modes (favoring verbose answers, leniency on near
 - F1 and exact-match scores.
 - Wall-clock time and any errors.
 
-**Failure mode taxonomy (v0, taxonomy_version `v0`).** Multi-label, applied
-when score is in {1, 2, 3, 4}; cleared when score == 5.
+**Failure mode taxonomy (taxonomy_version `v1`).** Multi-label, applied
+when score is in {1, 2, 3, 4}; cleared when score == 5. The v0 taxonomy
+shipped 5 tags; v1 added `no_specifics` to distinguish *absence of
+substance* (vapor / restated question) from *wrong substance*
+(`wrong_specifics`). v2 of the rubric did not change the tag set, only
+the wording of the `no_specifics` definition (it is now reserved for
+genuine absence of substance, not merely brief answers).
 
 - `wrong_specifics` — Right concept or topic but specific names, values,
   or details are wrong. Subsumes the originally-planned `hallucinated`
-  tag — fabricated specifics land here. Also subsumes "right entity,
-  wrong attribute" and "right topic, wrong specific fact".
-- `missing_information` — Key required facts omitted.
+  tag — fabricated specifics, including specifics that do not trace to
+  the design document under v2, land here.
+- `no_specifics` — The answer is conceptually framed but commits to no
+  ground-truth-aligned facts; *substance is absent*, not merely word
+  count low.
+- `missing_information` — Key required facts omitted while at least one
+  ground-truth-style fact is present.
 - `off_topic` — Answer addresses a different question.
 - `refusal_or_nonresponse` — Model declined, said it didn't know, or
   returned empty.
@@ -245,7 +260,16 @@ those out before they reach the eval.
 ## 13. Experimental Matrix
 
 For the main evaluation, we sweep:
-- 10 repositories × 3 difficulty levels × N documents per (repo, topic, difficulty) × 2 doc-generators (CC/Codex vs Qwen) × 2 QA sets (doc-derived vs blind) × 3 routing strategies × multiple k values × baselines.
+- 5 repositories × 3 difficulty levels × N documents per (repo, topic, difficulty) × 2 doc-generators (CC/Codex vs Qwen) × 2 QA sets (doc-derived vs blind) × 3 routing strategies × multiple k values × baselines.
+
+The repo lineup (under `target_repos/`) is `antirez__kilo`,
+`fogleman__Craft`, `marimo-team__marimo`, `psf__requests`, and
+`pytest-dev__pytest`, chosen to span a ~150× size range and to give a
+Python-only sub-series (requests → pytest → marimo) for a within-language
+size scan. *Status:* full doc/QA/LoRA artifacts currently exist for
+`antirez__kilo` and `marimo-team__marimo`; the remaining three are
+scraped as submodules but have not yet been put through the
+doc-generation / QA / LoRA-baking pipeline.
 
 This is a large matrix. We start with easy-difficulty documents only on 2–3 repos to catch bugs and validate the pipeline end-to-end, then expand to medium and hard difficulties and additional repositories. Some cells (e.g., baselines × difficulty levels) collapse where the variable does not apply.
 
@@ -320,16 +344,19 @@ These streams have dependencies (B and C need outputs from A; C needs outputs fr
 ## 17. Open Questions to Resolve Early
 
 - ~~What is the correctness rubric the LLM judge should use (binary,
-  three-point, finer)?~~ **Resolved:** integer 1–5 (`gpt-5.1`,
-  `rubric_version` and `taxonomy_version` both `v0`). Rubric in
-  `prompts/llm_judge_grading_v0.md`.
+  three-point, finer)?~~ **Resolved:** integer 1–5 (`gpt-5.1`). Current
+  defaults are `rubric_version: v2`, `taxonomy_version: v1`; rubric at
+  `prompts/llm_judge_grading_v2.md`. v0/v1 rubric files are retained on
+  disk for backfill comparisons.
 - ~~How do we score answers when the ground-truth answer is a list,
   code reference, or numeric value?~~ **Resolved (operational):** judge
   prompt instructs leniency on phrasing, strictness on specifics. Pilot
   spot-checks indicate this works for prose-style answers and is
-  reasonable for short code-token answers. Outstanding nuance: judge
-  can be too lenient when a vague-but-plausible answer overlaps a
-  loosely-worded ground truth — see §18 risk on QA quality.
+  reasonable for short code-token answers. The v1→v2 nuance — judge
+  being lenient when a vague-but-plausible answer overlaps a loosely
+  worded ground truth — is partially mitigated by v2's doc-grounding
+  clause: claims that do not trace to the design document are now
+  treated as fabrication.
 - What is the tolerance for the pilot decision gate (how close to
   In-context is "close enough")? **Partially answered by pilot:** on
   the unfiltered kilo `easy` set, in-context is 4.93 and shine is 2.40
@@ -357,8 +384,11 @@ These streams have dependencies (B and C need outputs from A; C needs outputs fr
   write design docs in prose-first style with backtick density at or
   below the `overview_purpose_1` reference (~2.5%); avoid enumeration
   of constants, flags, or struct fields; describe purpose alongside
-  the named entity rather than listing entities. Currently being
-  validated by an A/B re-bake of two kilo docs in lean-prose form.
+  the named entity rather than listing entities. The lean-prose A/B
+  re-bake of two kilo docs has completed; paired runs live at
+  `results/kilo_easy_v0_detail_*/` and `results/kilo_easy_v0_adapted_*/`
+  (and the matching marimo pair under `results/marimo_easy_v0_*`).
+  Per-doc deltas are in those reports.
 - **QA quality leaks into pretrained knowledge. (Pilot finding.)**
   Doc-derived QAs frequently ask questions that Qwen3-8B can answer
   from pretrained knowledge alone — standard ANSI escape codes,
