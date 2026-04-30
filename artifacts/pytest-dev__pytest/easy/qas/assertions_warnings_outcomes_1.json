@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "assertions_warnings_outcomes_1",
+  "topic": "Assertions, Warnings, and Outcomes",
+  "topic_slug": "assertions_warnings_outcomes",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "assertions_warnings_outcomes_assertions_warnings_outcomes_1_0001",
+      "question": "Which pytest component rewrites plain assert statements, and what kinds of files does the document say it rewrites?",
+      "answer": "AssertionRewritingHook rewrites plain assert statements. The document says it rewrites files pytest considers relevant, including test modules, conftest files, and modules explicitly registered for assertion rewriting.",
+      "document_id": "assertions_warnings_outcomes_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "assertions_warnings_outcomes_assertions_warnings_outcomes_1_0002",
+      "question": "How does pytest.warns handle warnings that are emitted inside its context but do not match the expected category or message?",
+      "answer": "pytest.warns records all emitted warnings, requires at least one matching warning, and can fail if the regex message check does not match. When the context exits, warnings that did not match the expectation are re-emitted so unrelated warnings are not silently swallowed.",
+      "document_id": "assertions_warnings_outcomes_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "assertions_warnings_outcomes_assertions_warnings_outcomes_1_0003",
+      "question": "What is the practical difference between declaring an expected failure with a marker and calling the imperative xfail helper?",
+      "answer": "An xfail marker still lets the test body run and can report an unexpected pass if the test succeeds. The imperative xfail helper raises an outcome immediately, so no further code in that test path is executed.",
+      "document_id": "assertions_warnings_outcomes_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

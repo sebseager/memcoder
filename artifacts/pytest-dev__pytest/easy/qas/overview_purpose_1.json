@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "overview_purpose_1",
+  "topic": "Overview / Purpose",
+  "topic_slug": "overview_purpose",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0001",
+      "question": "Which top-level pytest file is described as the stable convenience surface, and what role does it play for users?",
+      "answer": "src/pytest/__init__.py is the stable convenience surface. It re-exports commonly used helpers, decorators, classes, warnings, reports, node types, configuration objects, command entry points, debugging support, and version metadata so users normally import from the public pytest namespace rather than private modules.",
+      "document_id": "overview_purpose_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0002",
+      "question": "How does the document distinguish pytest's console entry point from its programmable in-process API?",
+      "answer": "The console entry point is the CLI path: running pytest as a module delegates to pytest.console_main(), which calls the runner, flushes stdout, and handles broken pipes. The programmable API is pytest.main(), which code should use for in-process test runs.",
+      "document_id": "overview_purpose_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "overview_purpose_overview_purpose_1_0003",
+      "question": "At a high level, what happens after pytest's default command protocol creates a session?",
+      "answer": "It configures pytest, fires session start and finish hooks around the run, restores the invocation directory, and maps interruptions, test failures, internal errors, and explicit exits to exit statuses. The default routine collects tests, runs the runtest loop, then returns a status for failures, no collected tests, or success.",
+      "document_id": "overview_purpose_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

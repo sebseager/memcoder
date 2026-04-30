@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "fixtures_parametrize_marks_1",
+  "topic": "Fixtures, Parametrization, and Marks",
+  "topic_slug": "fixtures_parametrize_marks",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "fixtures_parametrize_marks_fixtures_parametrize_marks_1_0001",
+      "question": "Which record type carries a normalized parameter value set together with its per-case marks and optional id?",
+      "answer": "`ParameterSet` carries one normalized value set, any marks attached to that set, and an optional id.",
+      "document_id": "fixtures_parametrize_marks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "fixtures_parametrize_marks_fixtures_parametrize_marks_1_0002",
+      "question": "How does pytest make a fixture declared with parameters produce multiple collected test cases?",
+      "answer": "During fixture-driven generation, pytest finds a needed fixture definition with parameter values and calls metafunc parametrization indirectly with the fixture name, values, scope, and ids. Those planned calls later become separate collected function items.",
+      "document_id": "fixtures_parametrize_marks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "fixtures_parametrize_marks_fixtures_parametrize_marks_1_0003",
+      "question": "Why does a skip mark placed on one value in a parametrized fixture affect only that generated invocation?",
+      "answer": "The selected parameter set's marks are copied into the generated call spec, and when that call spec becomes a Function item its marks are added to that item's own markers. The skipping plugin then evaluates markers per item, so only the invocation built from that marked value is skipped.",
+      "document_id": "fixtures_parametrize_marks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

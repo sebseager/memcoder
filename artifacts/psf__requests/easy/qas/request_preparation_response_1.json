@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "request_preparation_response_1",
+  "topic": "Request Preparation and Response Objects",
+  "topic_slug": "request_preparation_response",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "request_preparation_response_request_preparation_response_1_0001",
+      "question": "Which model object does the document identify as containing the exact outbound request, and why is it documented below the ordinary request class?",
+      "answer": "PreparedRequest contains the exact request that will be sent. It is documented below Request because Request is the user-created container, while PreparedRequest is the finalized lower-level outbound message built from it.",
+      "document_id": "request_preparation_response_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "request_preparation_response_request_preparation_response_1_0002",
+      "question": "How does the document say Requests chooses between JSON, form data, multipart files, and streamed request bodies during preparation?",
+      "answer": "JSON is used only when ordinary data is absent and a JSON value was supplied, then it is serialized to UTF-8 bytes and can add the JSON content type. Mapping or tuple data is form-encoded, file uploads become multipart form data, and streamed bodies are handled separately from files with either a known content length or chunked transfer.",
+      "document_id": "request_preparation_response_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "request_preparation_response_request_preparation_response_1_0003",
+      "question": "Which response helper does the document describe as the preferred way to consume streamed downloads, and what extra handling does it provide compared with using the raw stream directly?",
+      "answer": "Response.iter_content is the preferred streaming helper. It reads from urllib3 streams or file-like objects, validates chunk size, lets urllib3 decode compressed transfer encodings, and wraps lower-level protocol, decoding, timeout, and SSL failures in Requests exceptions.",
+      "document_id": "request_preparation_response_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    }
+  ]
+}

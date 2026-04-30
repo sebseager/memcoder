@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "config_plugins_hooks_1",
+  "topic": "Configuration, Plugins, and Hooks",
+  "topic_slug": "config_plugins_hooks",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "config_plugins_hooks_config_plugins_hooks_1_0001",
+      "question": "Which pytest object does the document describe as the central owner of parsed options, ini values, cleanup callbacks, and the hook relay?",
+      "answer": "The central object is `Config` in `src/_pytest/config/__init__.py`; it stores the parsed command-line namespace, selected root and config file, ini-style values, cleanup callbacks, and the hook relay used by the rest of the run.",
+      "document_id": "config_plugins_hooks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "config_plugins_hooks_config_plugins_hooks_1_0002",
+      "question": "How does pytest decide between a config-file value and a command-line override when code asks for an ini setting?",
+      "answer": "The parser records the setting's type, default, and aliases. When the config object retrieves the value, aliases resolve to the canonical name, command-line overrides take precedence over file values, and the chosen value is converted or validated according to the declared type.",
+      "document_id": "config_plugins_hooks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "config_plugins_hooks_config_plugins_hooks_1_0003",
+      "question": "Why does the document say pytest rejects plugin dependencies declared from a non-top-level conftest after configuration has begun?",
+      "answer": "It rejects that pattern because plugin dependencies imported from a conftest affect the whole pytest run, not just the directory subtree where that conftest lives, so allowing them from non-top-level conftests would be misleading.",
+      "document_id": "config_plugins_hooks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

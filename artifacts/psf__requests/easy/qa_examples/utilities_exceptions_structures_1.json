@@ -1,0 +1,17 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "lora_id": "utilities_exceptions_structures_1",
+  "document_id": "utilities_exceptions_structures_1",
+  "topic": "Utilities, Exceptions, and Data Structures",
+  "topic_slug": "utilities_exceptions_structures",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How does Requests estimate the remaining length of an upload body?",
+    "What utility behavior does Requests use when normalizing URLs with percent escapes?",
+    "How are friendly HTTP status names attached to the Requests status-code object?",
+    "What request and response context does RequestException preserve?",
+    "How does LookupDict differ from a normal dictionary in Requests?"
+  ]
+}

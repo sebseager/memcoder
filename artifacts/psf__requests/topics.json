@@ -1,0 +1,183 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "topic_discovery_v1",
+  "seed_topics": [
+    "overview_purpose",
+    "setup_installation",
+    "public_interface"
+  ],
+  "topics": [
+    {
+      "topic_slug": "overview_purpose",
+      "title": "Overview / Purpose",
+      "description": "What Requests is, why it exists as an HTTP-for-humans library, and how the top-level package is organized around simple calls, sessions, models, transport, auth, cookies, and utilities.",
+      "evidence": [
+        "README.md",
+        "docs/index.rst",
+        "src/requests/__init__.py",
+        "src/requests/api.py",
+        "src/requests/sessions.py"
+      ],
+      "evidence_pack_hint": [
+        "README.md",
+        "docs/index.rst",
+        "src/requests/__init__.py",
+        "src/requests/api.py",
+        "src/requests/sessions.py class overview"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "setup_installation",
+      "title": "Setup and Installation",
+      "description": "How Requests is installed and developed, supported Python versions, package metadata, optional extras, testing commands, and documentation build inputs.",
+      "evidence": [
+        "README.md",
+        "docs/user/install.rst",
+        "pyproject.toml",
+        "setup.py",
+        "requirements-dev.txt",
+        "tox.ini",
+        "Makefile",
+        "docs/requirements.txt"
+      ],
+      "evidence_pack_hint": [
+        "README.md install and cloning sections",
+        "docs/user/install.rst",
+        "pyproject.toml",
+        "setup.py",
+        "requirements-dev.txt",
+        "tox.ini",
+        "Makefile",
+        "docs/requirements.txt"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "public_api_interface",
+      "title": "Public API Interface",
+      "description": "The top-level request helpers, exported classes and exceptions, public API docs, and the relationship between convenience functions and Session-backed execution.",
+      "evidence": [
+        "docs/api.rst",
+        "src/requests/api.py",
+        "src/requests/__init__.py",
+        "src/requests/sessions.py",
+        "src/requests/exceptions.py"
+      ],
+      "evidence_pack_hint": [
+        "docs/api.rst main interface and developer interface sections",
+        "src/requests/api.py",
+        "src/requests/__init__.py",
+        "src/requests/sessions.py public methods",
+        "src/requests/exceptions.py"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "request_preparation_response",
+      "title": "Request Preparation and Response Objects",
+      "description": "How user-created requests become prepared requests, how parameters, bodies, files, headers, hooks, cookies, and response content are represented.",
+      "evidence": [
+        "src/requests/models.py",
+        "docs/api.rst",
+        "docs/user/quickstart.rst",
+        "tests/test_requests.py"
+      ],
+      "evidence_pack_hint": [
+        "src/requests/models.py Request, PreparedRequest, Response, RequestEncodingMixin, RequestHooksMixin",
+        "docs/api.rst lower-level classes",
+        "docs/user/quickstart.rst response and request examples",
+        "tests/test_requests.py focused model behavior"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "sessions_redirects_state",
+      "title": "Sessions, Redirects, and State",
+      "description": "How Session persists defaults, prepares and sends requests, merges settings, follows redirects, rewrites auth/proxies, records history, and mounts adapters.",
+      "evidence": [
+        "src/requests/sessions.py",
+        "docs/user/advanced.rst",
+        "tests/test_requests.py",
+        "tests/test_hooks.py"
+      ],
+      "evidence_pack_hint": [
+        "src/requests/sessions.py Session and SessionRedirectMixin",
+        "docs/user/advanced.rst session objects and prepared requests",
+        "tests/test_requests.py redirect/session behavior",
+        "tests/test_hooks.py"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "transport_adapters_tls_proxies",
+      "title": "Transport Adapters, TLS, and Proxies",
+      "description": "How Requests delegates network I/O to adapters and urllib3, configures pools and retries, handles TLS verification and client certificates, and chooses proxy managers.",
+      "evidence": [
+        "src/requests/adapters.py",
+        "src/requests/certs.py",
+        "src/requests/utils.py",
+        "docs/user/advanced.rst",
+        "tests/test_adapters.py"
+      ],
+      "evidence_pack_hint": [
+        "src/requests/adapters.py",
+        "src/requests/certs.py",
+        "src/requests/utils.py proxy helpers",
+        "docs/user/advanced.rst SSL cert verification and proxies",
+        "tests/test_adapters.py"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "auth_cookies_hooks",
+      "title": "Authentication, Cookies, and Hooks",
+      "description": "How Requests applies basic, proxy, digest, and custom authentication, bridges CookieJar behavior into requests, persists cookies, and dispatches response hooks.",
+      "evidence": [
+        "src/requests/auth.py",
+        "src/requests/cookies.py",
+        "src/requests/hooks.py",
+        "docs/user/authentication.rst",
+        "docs/user/advanced.rst",
+        "tests/test_hooks.py",
+        "tests/test_requests.py"
+      ],
+      "evidence_pack_hint": [
+        "src/requests/auth.py",
+        "src/requests/cookies.py",
+        "src/requests/hooks.py",
+        "docs/user/authentication.rst",
+        "docs/user/advanced.rst cookies and hooks sections",
+        "tests/test_hooks.py",
+        "tests/test_requests.py auth/cookie behavior"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "utilities_exceptions_structures",
+      "title": "Utilities, Exceptions, and Data Structures",
+      "description": "How utility helpers handle encoding, URLs, proxies, headers, environment integration, JSON guessing, rewindability, case-insensitive headers, status codes, and the exception hierarchy.",
+      "evidence": [
+        "src/requests/utils.py",
+        "src/requests/structures.py",
+        "src/requests/status_codes.py",
+        "src/requests/exceptions.py",
+        "src/requests/_internal_utils.py",
+        "tests/test_utils.py",
+        "tests/test_structures.py"
+      ],
+      "evidence_pack_hint": [
+        "src/requests/utils.py",
+        "src/requests/structures.py",
+        "src/requests/status_codes.py",
+        "src/requests/exceptions.py",
+        "src/requests/_internal_utils.py",
+        "tests/test_utils.py",
+        "tests/test_structures.py"
+      ],
+      "priority": "medium"
+    }
+  ]
+}

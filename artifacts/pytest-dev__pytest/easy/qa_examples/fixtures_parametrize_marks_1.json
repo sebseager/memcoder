@@ -1,0 +1,17 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "lora_id": "fixtures_parametrize_marks_1",
+  "document_id": "fixtures_parametrize_marks_1",
+  "topic": "Fixtures, Parametrization, and Marks",
+  "topic_slug": "fixtures_parametrize_marks",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How do fixture params flow through Metafunc during pytest collection?",
+    "What happens to marks attached with pytest.param in a parametrized test or fixture?",
+    "How does pytest build item names and marker state for parametrized Function items?",
+    "Why are marks rejected when someone applies them directly to fixture functions?",
+    "How do skip and xfail evaluation use marks that originated from parameter sets?"
+  ]
+}

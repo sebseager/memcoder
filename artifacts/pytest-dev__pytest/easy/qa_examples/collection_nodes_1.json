@@ -1,0 +1,17 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "lora_id": "collection_nodes_1",
+  "document_id": "collection_nodes_1",
+  "topic": "Collection and Node Model",
+  "topic_slug": "collection_nodes",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How does pytest build its collection tree from directories and Python test files?",
+    "What information does a pytest node store for reporting and selection?",
+    "How do pytest's import modes affect collection of Python test modules?",
+    "When does pytest create Module, Class, and Function nodes during Python collection?",
+    "How do ignore rules and deselection fit into pytest's collection phase?"
+  ]
+}

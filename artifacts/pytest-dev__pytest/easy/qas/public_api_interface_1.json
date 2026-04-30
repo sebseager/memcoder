@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "public_api_interface_1",
+  "topic": "Public API Interface",
+  "topic_slug": "public_api_interface",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "public_api_interface_public_api_interface_1_0001",
+      "question": "Which source file does the document identify as the declaration of pytest's public root-level API, and what does that file do?",
+      "answer": "`src/pytest/__init__.py` declares the public root-level API by importing implementations from internal modules, assigning the debugger entry point, and publishing the supported names through its export list.",
+      "document_id": "public_api_interface_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "public_api_interface_public_api_interface_1_0002",
+      "question": "How does pytest's public approximate-comparison helper choose behavior for different expected values?",
+      "answer": "The document says `pytest.approx` dispatches based on the expected value, using specialized comparison objects for scalars, decimals, mappings, ordered sequences, and NumPy arrays when NumPy is already imported, while all forms delegate scalar tolerance decisions to shared core behavior.",
+      "document_id": "public_api_interface_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "public_api_interface_public_api_interface_1_0003",
+      "question": "What checks must pass before an exception captured by pytest's public exception assertion helper is accepted?",
+      "answer": "The captured exception must match the expected type using subclass-aware checking, satisfy the optional regex search against the formatted exception text, and then satisfy the optional predicate check; the predicate runs only after the type and text checks succeed.",
+      "document_id": "public_api_interface_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

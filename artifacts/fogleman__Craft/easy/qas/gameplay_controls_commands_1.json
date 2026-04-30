@@ -1,0 +1,37 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "document_id": "gameplay_controls_commands_1",
+  "topic": "Gameplay, Controls, and Commands",
+  "topic_slug": "gameplay_controls_commands",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "gameplay_controls_commands_gameplay_controls_commands_1_0001",
+      "question": "Which client-side helper recognizes local slash commands, and what happens to an unrecognized slash line when forwarding is enabled?",
+      "answer": "`parse_command` recognizes the local slash commands. If it does not handle a slash line locally and forwarding is enabled, the buffer is forwarded through chat with `client_talk`, allowing multiplayer commands outside the local parser to be handled elsewhere.",
+      "document_id": "gameplay_controls_commands_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "gameplay_controls_commands_gameplay_controls_commands_1_0002",
+      "question": "How does Craft choose the cell for placing a block on right click, and what safety check prevents placing it inside the player?",
+      "answer": "Right-click placement asks the sight ray for the empty cell just before the targeted solid block, then places the currently selected buildable item there. Before placing, it checks whether that cell intersects the player's two-block body and refuses the placement if it would.",
+      "document_id": "gameplay_controls_commands_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "gameplay_controls_commands_gameplay_controls_commands_1_0003",
+      "question": "What lets the player pass through clouds and plants but not ordinary terrain blocks during movement?",
+      "answer": "Movement collision relies on the obstacle classification from the item code. Empty space, clouds, and plants are treated as non-obstacles, while ordinary terrain blocks are obstacles that cause collision correction to nudge the player away.",
+      "document_id": "gameplay_controls_commands_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

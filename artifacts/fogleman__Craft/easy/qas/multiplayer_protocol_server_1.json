@@ -1,0 +1,37 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "document_id": "multiplayer_protocol_server_1",
+  "topic": "Multiplayer Protocol and Server",
+  "topic_slug": "multiplayer_protocol_server",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "multiplayer_protocol_server_multiplayer_protocol_server_1_0001",
+      "question": "Which source file provides the Python server's access to Craft's default terrain generation, and why does the multiplayer server need it?",
+      "answer": "world.py provides access to the compiled world library. The server needs it so it can generate the same default terrain as the client before applying stored multiplayer edits.",
+      "document_id": "multiplayer_protocol_server_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "multiplayer_protocol_server_multiplayer_protocol_server_1_0002",
+      "question": "When the Craft client switches into online mode, what does it change locally before the connection is used?",
+      "answer": "It switches the global mode to online, stores the server address and port, and points the local database path at a cache file named for that server and port. During online initialization it then enables networking, connects, starts the receive thread, sends the protocol version, and runs login.",
+      "document_id": "multiplayer_protocol_server_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "multiplayer_protocol_server_multiplayer_protocol_server_1_0003",
+      "question": "How do chunk cache keys reduce the amount of block data the server sends back to a Craft client?",
+      "answer": "The client reads its saved key for a chunk and includes it in the chunk request. The server sends only block rows newer than that key, sends a replacement key when newer blocks exist, and the client stores that key for the next request.",
+      "document_id": "multiplayer_protocol_server_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

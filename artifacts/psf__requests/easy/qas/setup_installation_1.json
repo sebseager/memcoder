@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "setup_installation_1",
+  "topic": "Setup and Installation",
+  "topic_slug": "setup_installation",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "setup_installation_setup_installation_1_0001",
+      "question": "Which file is the source of truth for Requests packaging metadata, and what major installation facts does it define?",
+      "answer": "`pyproject.toml` is the main packaging metadata file. It defines the setuptools build backend, project metadata, the Python 3.10-or-newer requirement, dynamic version source, runtime dependencies, and optional extras.",
+      "document_id": "setup_installation_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "setup_installation_setup_installation_1_0002",
+      "question": "Why does the Requests README show a special Git configuration when cloning the repository?",
+      "answer": "The README says Requests history contains a commit timestamp that can trigger Git object-checking errors, so it recommends `fetch.fsck.badTimezone=ignore` either for the clone command or in global Git configuration.",
+      "document_id": "setup_installation_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "setup_installation_setup_installation_1_0003",
+      "question": "How does the project separate ordinary user installation from source and development setup?",
+      "answer": "Ordinary users install the published package from PyPI with pip. Source users clone or download the repository and install the local checkout, while developers also install the editable project plus test tools from the development requirements and can run tests through Makefile targets or tox.",
+      "document_id": "setup_installation_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

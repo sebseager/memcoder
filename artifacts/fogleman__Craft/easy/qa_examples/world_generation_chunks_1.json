@@ -1,0 +1,17 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "lora_id": "world_generation_chunks_1",
+  "document_id": "world_generation_chunks_1",
+  "topic": "World Generation and Chunks",
+  "topic_slug": "world_generation_chunks",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How does Craft use Simplex noise to build the default terrain in each chunk?",
+    "What role do Craft's chunk create, render, sign, and delete radii play around the player?",
+    "How are generated terrain and sqlite block deltas combined when a chunk loads?",
+    "What does Craft's Map structure store for a chunk's block data?",
+    "How does render_chunks decide which loaded chunks are actually drawn?"
+  ]
+}

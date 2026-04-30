@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "public_api_interface_1",
+  "topic": "Public API Interface",
+  "topic_slug": "public_api_interface",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "public_api_interface_public_api_interface_1_0001",
+      "question": "How do Requests' top-level helper calls execute a one-off request while avoiding leftover open resources?",
+      "answer": "The generic top-level helper creates a temporary Session as a context manager and delegates to the session request path. Exiting the context closes the session, which avoids leaving sockets open and prevents resource-warning or leak-like behavior.",
+      "document_id": "public_api_interface_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "public_api_interface_public_api_interface_1_0002",
+      "question": "Which top-level request helper changes the normal redirect default, and what default does it set?",
+      "answer": "`head` is the special top-level helper; it disables redirects by default unless the caller explicitly provides a redirect setting.",
+      "document_id": "public_api_interface_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "public_api_interface_public_api_interface_1_0003",
+      "question": "What public failure base class can retain both the response and request involved in a Requests error?",
+      "answer": "`RequestException` is the base class for request failures. It can carry the response and request, and it derives the request from the response when possible.",
+      "document_id": "public_api_interface_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    }
+  ]
+}

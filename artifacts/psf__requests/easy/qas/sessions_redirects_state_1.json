@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "sessions_redirects_state_1",
+  "topic": "Sessions, Redirects, and State",
+  "topic_slug": "sessions_redirects_state",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "sessions_redirects_state_sessions_redirects_state_1_0001",
+      "question": "Which session method should a caller use when they want a manually prepared request to include session cookies and other stored state, and why?",
+      "answer": "They should use `prepare_request` on the session. Preparing through the session merges in session cookies and other defaults, while preparing directly from the request object loses those session-level advantages.",
+      "document_id": "sessions_redirects_state_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "sessions_redirects_state_sessions_redirects_state_1_0002",
+      "question": "How do per-request dictionary settings interact with session-level defaults in this Requests session design?",
+      "answer": "Per-request values override session defaults, missing request values fall back to the session, and a request dictionary entry set to None removes the matching session-level key. Method-level cookies are sent for that call but are not persisted into the session jar.",
+      "document_id": "sessions_redirects_state_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "sessions_redirects_state_sessions_redirects_state_1_0003",
+      "question": "What does the redirect resolver do to keep redirect history and connection reuse safe across multiple hops?",
+      "answer": "For each hop it records prior responses as history without self-references, copies the prepared request, consumes or drains the response body so the connection can be released, enforces the session redirect limit, and puts the earlier responses on the final response's history.",
+      "document_id": "sessions_redirects_state_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

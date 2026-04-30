@@ -1,0 +1,37 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "document_id": "rendering_graphics_pipeline_1",
+  "topic": "Rendering and Graphics Pipeline",
+  "topic_slug": "rendering_graphics_pipeline",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "rendering_graphics_pipeline_rendering_graphics_pipeline_1_0001",
+      "question": "Which function prepares chunk geometry by skipping hidden blocks and computing the per-corner values later used by the block shader?",
+      "answer": "`compute_chunk` prepares chunk geometry. It examines the chunk and neighboring maps, skips fully hidden blocks, counts exposed faces, and computes per-corner ambient occlusion and block light values for the vertex stream.",
+      "document_id": "rendering_graphics_pipeline_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "rendering_graphics_pipeline_rendering_graphics_pipeline_1_0002",
+      "question": "Why does Craft render the sky before world geometry and then clear the depth buffer?",
+      "answer": "The sky is drawn first as a sphere centered on the player using the player's rotation. Craft then clears the depth buffer so the sky provides the background without preventing later block, sign, player, and HUD geometry from being drawn in front of it.",
+      "document_id": "rendering_graphics_pipeline_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "rendering_graphics_pipeline_rendering_graphics_pipeline_1_0003",
+      "question": "How does Craft use the sky texture outside the sky dome itself?",
+      "answer": "The block fragment shader samples the sky texture to get a fog color based on time of day and vertical fog position, then blends distant block fragments toward that sky color.",
+      "document_id": "rendering_graphics_pipeline_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "setup_development_1",
+  "topic": "Setup and Development",
+  "topic_slug": "setup_development",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "setup_development_setup_development_1_0001",
+      "question": "Which metadata file defines pytest's development extra, and how is that extra used by the two local development workflows described in the document?",
+      "answer": "`pyproject.toml` defines the development extra. The direct virtualenv workflow installs the checkout with that extra, and regular tox test environments also install the same extra so both paths share the same dependency intent.",
+      "document_id": "setup_development_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "setup_development_setup_development_1_0002",
+      "question": "Why does the contributor setup ask developers to fetch tags from the official pytest repository when preparing a local branch?",
+      "answer": "The document says the tag step matters because pytest uses version information during local testing, so contributors should fetch tags if their clone does not already have them.",
+      "document_id": "setup_development_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "setup_development_setup_development_1_0003",
+      "question": "How does the document distinguish the quick local tox path from the broader tox configuration in the repository?",
+      "answer": "For ordinary changes, contributors are told to run a small useful subset such as linting plus a current or default Python test environment. The full tox configuration is much broader, covering supported Python versions, PyPy, doctests, documentation, link checks, plugin integration, frozen-executable testing, and selected dependency combinations for CI and maintainer use.",
+      "document_id": "setup_development_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "collection_nodes_1",
+  "topic": "Collection and Node Model",
+  "topic_slug": "collection_nodes",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "collection_nodes_collection_nodes_1_0001",
+      "question": "Which node-construction entry point are pytest plugins and subclasses expected to use, and what tree-inheritance rule does it enforce?",
+      "answer": "They are expected to use `from_parent`. It prevents callers from manually passing config or session, so those values are inherited from the parent node in the collection tree.",
+      "document_id": "collection_nodes_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "collection_nodes_collection_nodes_1_0002",
+      "question": "How does the session treat overlapping or repeated collection arguments before expanding the collection tree?",
+      "answer": "The session resolves each argument into a path and selected name parts, then normalizes overlapping or duplicate inputs unless duplicate preservation is enabled. It also records explicit initial paths and their parents so directly requested targets are not skipped by normal recursion filters.",
+      "document_id": "collection_nodes_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "collection_nodes_collection_nodes_1_0003",
+      "question": "What is the practical difference between package directories and ordinary directories during default collection?",
+      "answer": "Directories with an initializer are collected as package collectors, while ordinary directories use the default directory collector. Package collectors import and handle package-level setup before collecting children and order the initializer before other entries; both kinds scan child directories and files through ignore checks and collection hooks.",
+      "document_id": "collection_nodes_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

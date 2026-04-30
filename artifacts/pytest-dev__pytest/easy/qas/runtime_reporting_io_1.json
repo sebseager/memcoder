@@ -1,0 +1,37 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "document_id": "runtime_reporting_io_1",
+  "topic": "Runtime, Reporting, and IO Helpers",
+  "topic_slug": "runtime_reporting_io",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "runtime_reporting_io_runtime_reporting_io_1_0001",
+      "question": "Which runner helper connects a test phase hook invocation to report creation, and what call wrapper does it use?",
+      "answer": "`call_and_report` chooses the phase hook, wraps it in `CallInfo`, asks the hook system to build a test report, logs that report, and handles interactive exception reporting when needed.",
+      "document_id": "runtime_reporting_io_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "runtime_reporting_io_runtime_reporting_io_1_0002",
+      "question": "How do stdout, stderr, and logs produced during a test phase become available in terminal failure output?",
+      "answer": "The capture plugin adds stdout and stderr from each setup, call, or teardown block to the item as report sections, and the logging plugin adds formatted log text as another section. Reports expose those sections, and the terminal reporter prints the selected captured sections according to the capture-display setting.",
+      "document_id": "runtime_reporting_io_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "runtime_reporting_io_runtime_reporting_io_1_0003",
+      "question": "Under the failed-only temporary path retention policy, when does pytest remove temporary directories?",
+      "answer": "After an individual passing test, the tmp_path fixture removes that test's directory. After a fully passing session, pytest can also remove the generated base temporary directory, but only when the user did not provide an explicit base temp path.",
+      "document_id": "runtime_reporting_io_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

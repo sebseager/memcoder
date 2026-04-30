@@ -1,0 +1,17 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "lora_id": "overview_purpose_1",
+  "document_id": "overview_purpose_1",
+  "topic": "Overview / Purpose",
+  "topic_slug": "overview_purpose",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "What kind of game is Craft and what major features does its README emphasize?",
+    "How does src/main.c organize chunks, players, input, networking, and rendering at a high level?",
+    "What initialization work happens before Craft enters its main game loop?",
+    "Which defaults and feature toggles does src/config.h provide for the Craft client?",
+    "How does the CMake build assemble the Craft executable and its dependencies?"
+  ]
+}

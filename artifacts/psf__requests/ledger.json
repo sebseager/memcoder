@@ -1,0 +1,116 @@
+{
+  "documents": {
+    "overview_purpose_1": {
+      "document_id": "overview_purpose_1",
+      "difficulty": "easy",
+      "topic": "Overview / Purpose",
+      "topic_slug": "overview_purpose",
+      "description": "Explains Requests as a human-oriented Python HTTP library, how its top-level helpers relate to sessions, and what Session owns for state, preparation, sending, redirects, and transport.",
+      "files": {
+        "doc": "easy/docs/overview_purpose_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/overview_purpose_1.json",
+        "qa_examples": "easy/qa_examples/overview_purpose_1.json"
+      }
+    },
+    "setup_installation_1": {
+      "document_id": "setup_installation_1",
+      "difficulty": "easy",
+      "topic": "Setup and Installation",
+      "topic_slug": "setup_installation",
+      "description": "Explains how Requests is installed from PyPI or source, what Python/package metadata controls installation, and how development, test, tox, and documentation setup are wired.",
+      "files": {
+        "doc": "easy/docs/setup_installation_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/setup_installation_1.json",
+        "qa_examples": "easy/qa_examples/setup_installation_1.json"
+      }
+    },
+    "public_api_interface_1": {
+      "document_id": "public_api_interface_1",
+      "difficulty": "easy",
+      "topic": "Public API Interface",
+      "topic_slug": "public_api_interface",
+      "description": "Explains how Requests exposes its public developer API through top-level helpers, Session-backed execution, package exports, and documented exception classes.",
+      "files": {
+        "doc": "easy/docs/public_api_interface_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/public_api_interface_1.json",
+        "qa_examples": "easy/qa_examples/public_api_interface_1.json"
+      }
+    },
+    "request_preparation_response_1": {
+      "document_id": "request_preparation_response_1",
+      "difficulty": "easy",
+      "topic": "Request Preparation and Response Objects",
+      "topic_slug": "request_preparation_response",
+      "description": "Explains how Requests models user requests, prepared requests, encoded bodies, hooks, cookies, and response content/status helpers in the lower-level model layer.",
+      "files": {
+        "doc": "easy/docs/request_preparation_response_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/request_preparation_response_1.json",
+        "qa_examples": "easy/qa_examples/request_preparation_response_1.json"
+      }
+    },
+    "sessions_redirects_state_1": {
+      "document_id": "sessions_redirects_state_1",
+      "difficulty": "easy",
+      "topic": "Sessions, Redirects, and State",
+      "topic_slug": "sessions_redirects_state",
+      "description": "Explains how Requests sessions persist state, prepare requests with session defaults, follow redirects safely, merge cookies/hooks/settings, and update authentication and proxy handling across redirects.",
+      "files": {
+        "doc": "easy/docs/sessions_redirects_state_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/sessions_redirects_state_1.json",
+        "qa_examples": "easy/qa_examples/sessions_redirects_state_1.json"
+      }
+    },
+    "transport_adapters_tls_proxies_1": {
+      "document_id": "transport_adapters_tls_proxies_1",
+      "difficulty": "easy",
+      "topic": "Transport Adapters, TLS, and Proxies",
+      "topic_slug": "transport_adapters_tls_proxies",
+      "description": "Explains how Requests' default HTTP transport adapter connects Session requests to urllib3, how TLS verification and client certificates are translated into connection settings, and how proxy configuration is selected and applied.",
+      "files": {
+        "doc": "easy/docs/transport_adapters_tls_proxies_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/transport_adapters_tls_proxies_1.json",
+        "qa_examples": "easy/qa_examples/transport_adapters_tls_proxies_1.json"
+      }
+    },
+    "auth_cookies_hooks_1": {
+      "document_id": "auth_cookies_hooks_1",
+      "difficulty": "easy",
+      "topic": "Authentication, Cookies, and Hooks",
+      "topic_slug": "auth_cookies_hooks",
+      "description": "Explains how Requests applies authentication handlers, bridges cookies through CookieJar-compatible storage, and uses response hooks for user callbacks and digest-auth retry behavior.",
+      "files": {
+        "doc": "easy/docs/auth_cookies_hooks_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/auth_cookies_hooks_1.json",
+        "qa_examples": "easy/qa_examples/auth_cookies_hooks_1.json"
+      }
+    },
+    "utilities_exceptions_structures_1": {
+      "document_id": "utilities_exceptions_structures_1",
+      "difficulty": "easy",
+      "topic": "Utilities, Exceptions, and Data Structures",
+      "topic_slug": "utilities_exceptions_structures",
+      "description": "Explains Requests helper utilities, case-insensitive and lookup mappings, status-code aliases, and the Requests-specific exception hierarchy.",
+      "files": {
+        "doc": "easy/docs/utilities_exceptions_structures_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/utilities_exceptions_structures_1.json",
+        "qa_examples": "easy/qa_examples/utilities_exceptions_structures_1.json"
+      }
+    }
+  }
+}

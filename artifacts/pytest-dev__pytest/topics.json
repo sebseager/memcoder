@@ -1,0 +1,238 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "topic_discovery_v1",
+  "seed_topics": [
+    "overview_purpose",
+    "setup_installation",
+    "public_interface"
+  ],
+  "topics": [
+    {
+      "topic_slug": "overview_purpose",
+      "title": "Overview / Purpose",
+      "description": "What pytest is, how it presents plain-assert testing and scalable test execution, and how the public pytest package maps to internal subsystems.",
+      "evidence": [
+        "README.rst",
+        "doc/en/contents.rst",
+        "src/pytest/__init__.py",
+        "src/pytest/__main__.py",
+        "src/_pytest/main.py",
+        "src/_pytest/config/__init__.py"
+      ],
+      "evidence_pack_hint": [
+        "README.rst",
+        "doc/en/contents.rst",
+        "src/pytest/__init__.py",
+        "src/pytest/__main__.py",
+        "src/_pytest/main.py startup flow",
+        "src/_pytest/config/__init__.py main and console_main"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "setup_development",
+      "title": "Setup and Development",
+      "description": "How pytest is packaged, installed, tested, documented, released, and developed from the repository.",
+      "evidence": [
+        "README.rst",
+        "pyproject.toml",
+        "tox.ini",
+        "CONTRIBUTING.rst",
+        "doc/en/development_guide.rst",
+        "doc/en/getting-started.rst",
+        "RELEASING.rst"
+      ],
+      "evidence_pack_hint": [
+        "README.rst install/support sections",
+        "pyproject.toml",
+        "tox.ini",
+        "CONTRIBUTING.rst",
+        "doc/en/development_guide.rst",
+        "doc/en/getting-started.rst",
+        "RELEASING.rst"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "public_api_interface",
+      "title": "Public API Interface",
+      "description": "The public names exported by pytest, including test outcome helpers, fixtures, marks, raises/warns helpers, plugin markers, node/report classes, and backwards-compatible entry points.",
+      "evidence": [
+        "src/pytest/__init__.py",
+        "src/_pytest/python_api.py",
+        "src/_pytest/raises.py",
+        "src/_pytest/outcomes.py",
+        "src/_pytest/recwarn.py",
+        "doc/en/reference/reference.rst",
+        "doc/en/builtin.rst"
+      ],
+      "evidence_pack_hint": [
+        "src/pytest/__init__.py",
+        "src/_pytest/python_api.py",
+        "src/_pytest/raises.py",
+        "src/_pytest/outcomes.py",
+        "src/_pytest/recwarn.py",
+        "doc/en/reference/reference.rst",
+        "doc/en/builtin.rst"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "config_plugins_hooks",
+      "title": "Configuration, Plugins, and Hooks",
+      "description": "How pytest parses command line and ini configuration, prepares Config, manages plugin registration, loads conftest files, and exposes hook specifications and plugin-writing APIs.",
+      "evidence": [
+        "src/_pytest/config/__init__.py",
+        "src/_pytest/config/argparsing.py",
+        "src/_pytest/config/findpaths.py",
+        "src/_pytest/hookspec.py",
+        "doc/en/how-to/plugins.rst",
+        "doc/en/how-to/writing_plugins.rst",
+        "doc/en/how-to/writing_hook_functions.rst",
+        "testing/test_config.py",
+        "testing/test_pluginmanager.py"
+      ],
+      "evidence_pack_hint": [
+        "src/_pytest/config/__init__.py",
+        "src/_pytest/config/argparsing.py",
+        "src/_pytest/config/findpaths.py",
+        "src/_pytest/hookspec.py",
+        "doc/en/how-to/plugins.rst",
+        "doc/en/how-to/writing_plugins.rst",
+        "doc/en/how-to/writing_hook_functions.rst",
+        "testing/test_config.py",
+        "testing/test_pluginmanager.py"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "collection_nodes",
+      "title": "Collection and Node Model",
+      "description": "How pytest discovers tests, represents collection trees with nodes and collectors, imports Python modules, applies ignore/deselect options, and creates collected items.",
+      "evidence": [
+        "src/_pytest/main.py",
+        "src/_pytest/nodes.py",
+        "src/_pytest/python.py",
+        "src/_pytest/pathlib.py",
+        "doc/en/explanation/goodpractices.rst",
+        "doc/en/example/pythoncollection.rst",
+        "testing/test_collection.py",
+        "testing/test_nodes.py"
+      ],
+      "evidence_pack_hint": [
+        "src/_pytest/main.py collection options and Session",
+        "src/_pytest/nodes.py",
+        "src/_pytest/python.py",
+        "src/_pytest/pathlib.py import_path",
+        "doc/en/explanation/goodpractices.rst",
+        "doc/en/example/pythoncollection.rst",
+        "testing/test_collection.py",
+        "testing/test_nodes.py"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "fixtures_parametrize_marks",
+      "title": "Fixtures, Parametrization, and Marks",
+      "description": "How pytest declares and resolves fixtures, handles scopes and requests, parametrizes tests, stores marks, evaluates skip/xfail behavior, and exposes marker APIs.",
+      "evidence": [
+        "src/_pytest/fixtures.py",
+        "src/_pytest/python.py",
+        "src/_pytest/mark/structures.py",
+        "src/_pytest/mark/__init__.py",
+        "src/_pytest/skipping.py",
+        "src/_pytest/scope.py",
+        "doc/en/explanation/fixtures.rst",
+        "doc/en/how-to/fixtures.rst",
+        "doc/en/how-to/parametrize.rst",
+        "doc/en/how-to/mark.rst",
+        "testing/test_fixtures.py",
+        "testing/test_mark.py"
+      ],
+      "evidence_pack_hint": [
+        "src/_pytest/fixtures.py",
+        "src/_pytest/python.py Metafunc and Function",
+        "src/_pytest/mark/structures.py",
+        "src/_pytest/mark/__init__.py",
+        "src/_pytest/skipping.py",
+        "src/_pytest/scope.py",
+        "doc/en/explanation/fixtures.rst",
+        "doc/en/how-to/fixtures.rst",
+        "doc/en/how-to/parametrize.rst",
+        "doc/en/how-to/mark.rst",
+        "testing/test_fixtures.py if present, otherwise testing/python and testing/test_mark.py"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "assertions_warnings_outcomes",
+      "title": "Assertions, Warnings, and Outcomes",
+      "description": "How pytest rewrites assertions, produces comparison explanations, truncates assertion output, records warnings, and implements skip, fail, xfail, raises, warns, and importorskip helpers.",
+      "evidence": [
+        "src/_pytest/assertion/rewrite.py",
+        "src/_pytest/assertion/util.py",
+        "src/_pytest/assertion/truncate.py",
+        "src/_pytest/outcomes.py",
+        "src/_pytest/raises.py",
+        "src/_pytest/recwarn.py",
+        "src/_pytest/warnings.py",
+        "doc/en/how-to/assert.rst",
+        "doc/en/how-to/skipping.rst",
+        "doc/en/how-to/capture-warnings.rst",
+        "testing/test_assertion.py",
+        "testing/test_assertrewrite.py"
+      ],
+      "evidence_pack_hint": [
+        "src/_pytest/assertion/rewrite.py",
+        "src/_pytest/assertion/util.py",
+        "src/_pytest/assertion/truncate.py",
+        "src/_pytest/outcomes.py",
+        "src/_pytest/raises.py",
+        "src/_pytest/recwarn.py",
+        "src/_pytest/warnings.py",
+        "doc/en/how-to/assert.rst",
+        "doc/en/how-to/skipping.rst",
+        "doc/en/how-to/capture-warnings.rst",
+        "testing/test_assertion.py",
+        "testing/test_assertrewrite.py"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "runtime_reporting_io",
+      "title": "Runtime, Reporting, and IO Helpers",
+      "description": "How pytest runs collected items, records reports, manages setup/teardown state, captures stdout/stderr/logging, creates temporary paths, and renders terminal output.",
+      "evidence": [
+        "src/_pytest/runner.py",
+        "src/_pytest/reports.py",
+        "src/_pytest/terminal.py",
+        "src/_pytest/capture.py",
+        "src/_pytest/logging.py",
+        "src/_pytest/tmpdir.py",
+        "doc/en/how-to/output.rst",
+        "doc/en/how-to/capture-stdout-stderr.rst",
+        "doc/en/how-to/logging.rst",
+        "doc/en/how-to/tmp_path.rst",
+        "testing/test_runner.py",
+        "testing/test_terminal.py"
+      ],
+      "evidence_pack_hint": [
+        "src/_pytest/runner.py",
+        "src/_pytest/reports.py",
+        "src/_pytest/terminal.py",
+        "src/_pytest/capture.py",
+        "src/_pytest/logging.py",
+        "src/_pytest/tmpdir.py",
+        "doc/en/how-to/output.rst",
+        "doc/en/how-to/capture-stdout-stderr.rst",
+        "doc/en/how-to/logging.rst",
+        "doc/en/how-to/tmp_path.rst",
+        "testing/test_runner.py",
+        "testing/test_terminal.py"
+      ],
+      "priority": "high"
+    }
+  ]
+}

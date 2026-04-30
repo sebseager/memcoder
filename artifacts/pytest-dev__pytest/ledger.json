@@ -1,0 +1,116 @@
+{
+  "documents": {
+    "overview_purpose_1": {
+      "document_id": "overview_purpose_1",
+      "difficulty": "easy",
+      "topic": "Overview / Purpose",
+      "topic_slug": "overview_purpose",
+      "description": "Explains pytest's purpose as a Python testing framework, its public entry points, documentation shape, and the high-level path from CLI invocation through configuration, session setup, collection, and test execution.",
+      "files": {
+        "doc": "easy/docs/overview_purpose_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/overview_purpose_1.json",
+        "qa_examples": "easy/qa_examples/overview_purpose_1.json"
+      }
+    },
+    "setup_development_1": {
+      "document_id": "setup_development_1",
+      "difficulty": "easy",
+      "topic": "Setup and Development",
+      "topic_slug": "setup_development",
+      "description": "Explains how pytest is installed, how contributors prepare a local checkout, and how tox, pre-commit, documentation builds, changelog entries, and release tooling fit into the development workflow.",
+      "files": {
+        "doc": "easy/docs/setup_development_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/setup_development_1.json",
+        "qa_examples": "easy/qa_examples/setup_development_1.json"
+      }
+    },
+    "public_api_interface_1": {
+      "document_id": "public_api_interface_1",
+      "difficulty": "easy",
+      "topic": "Public API Interface",
+      "topic_slug": "public_api_interface",
+      "description": "Explains how pytest's top-level public API is assembled, where the reference documentation points users, and how key exported helpers for comparisons, exceptions, outcomes, and warnings behave.",
+      "files": {
+        "doc": "easy/docs/public_api_interface_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/public_api_interface_1.json",
+        "qa_examples": "easy/qa_examples/public_api_interface_1.json"
+      }
+    },
+    "config_plugins_hooks_1": {
+      "document_id": "config_plugins_hooks_1",
+      "difficulty": "easy",
+      "topic": "Configuration, Plugins, and Hooks",
+      "topic_slug": "config_plugins_hooks",
+      "description": "Explains how pytest builds configuration, discovers and controls plugins, loads conftest files, and exposes hook-based extension points during startup and test execution.",
+      "files": {
+        "doc": "easy/docs/config_plugins_hooks_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/config_plugins_hooks_1.json",
+        "qa_examples": "easy/qa_examples/config_plugins_hooks_1.json"
+      }
+    },
+    "collection_nodes_1": {
+      "document_id": "collection_nodes_1",
+      "difficulty": "easy",
+      "topic": "Collection and Node Model",
+      "topic_slug": "collection_nodes",
+      "description": "Explains how pytest turns command-line inputs into a collection tree, how collection nodes are constructed and identified, and how filesystem and Python collectors produce runnable test items.",
+      "files": {
+        "doc": "easy/docs/collection_nodes_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/collection_nodes_1.json",
+        "qa_examples": "easy/qa_examples/collection_nodes_1.json"
+      }
+    },
+    "fixtures_parametrize_marks_1": {
+      "document_id": "fixtures_parametrize_marks_1",
+      "difficulty": "easy",
+      "topic": "Fixtures, Parametrization, and Marks",
+      "topic_slug": "fixtures_parametrize_marks",
+      "description": "Explains how pytest turns fixture parameters and parametrize marks into collected test cases, how per-parameter marks are stored on items, and how skip, xfail, and marker selection consume those marks.",
+      "files": {
+        "doc": "easy/docs/fixtures_parametrize_marks_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/fixtures_parametrize_marks_1.json",
+        "qa_examples": "easy/qa_examples/fixtures_parametrize_marks_1.json"
+      }
+    },
+    "assertions_warnings_outcomes_1": {
+      "document_id": "assertions_warnings_outcomes_1",
+      "difficulty": "easy",
+      "topic": "Assertions, Warnings, and Outcomes",
+      "topic_slug": "assertions_warnings_outcomes",
+      "description": "Explains how pytest turns plain asserts into useful failure reports, how warning capture and warning assertions work, and how skip, fail, xfail, exit, raises, and import-based outcomes are represented.",
+      "files": {
+        "doc": "easy/docs/assertions_warnings_outcomes_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/assertions_warnings_outcomes_1.json",
+        "qa_examples": "easy/qa_examples/assertions_warnings_outcomes_1.json"
+      }
+    },
+    "runtime_reporting_io_1": {
+      "document_id": "runtime_reporting_io_1",
+      "difficulty": "easy",
+      "topic": "Runtime, Reporting, and IO Helpers",
+      "topic_slug": "runtime_reporting_io",
+      "description": "Explains how pytest runs test phases, turns phase results into reports, attaches captured output and logs, prints terminal progress and summaries, and manages tmp_path directories.",
+      "files": {
+        "doc": "easy/docs/runtime_reporting_io_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/runtime_reporting_io_1.json",
+        "qa_examples": "easy/qa_examples/runtime_reporting_io_1.json"
+      }
+    }
+  }
+}

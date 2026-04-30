@@ -1,0 +1,102 @@
+{
+  "documents": {
+    "overview_purpose_1": {
+      "document_id": "overview_purpose_1",
+      "difficulty": "easy",
+      "topic": "Overview / Purpose",
+      "topic_slug": "overview_purpose",
+      "description": "Explains Craft's purpose as a small cross-platform Minecraft-like game, how the main client organizes world state and rendering, and how configuration, persistence, multiplayer, and build setup fit together.",
+      "files": {
+        "doc": "easy/docs/overview_purpose_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/overview_purpose_1.json",
+        "qa_examples": "easy/qa_examples/overview_purpose_1.json"
+      }
+    },
+    "setup_build_run_1": {
+      "document_id": "setup_build_run_1",
+      "difficulty": "easy",
+      "topic": "Setup, Build, and Run",
+      "topic_slug": "setup_build_run",
+      "description": "Explains how Craft is built from source, how the client and multiplayer server are launched, and how the Python server depends on the compiled world-generation library.",
+      "files": {
+        "doc": "easy/docs/setup_build_run_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/setup_build_run_1.json",
+        "qa_examples": "easy/qa_examples/setup_build_run_1.json"
+      }
+    },
+    "gameplay_controls_commands_1": {
+      "document_id": "gameplay_controls_commands_1",
+      "difficulty": "easy",
+      "topic": "Gameplay, Controls, and Commands",
+      "topic_slug": "gameplay_controls_commands",
+      "description": "Explains how Craft turns player input into movement, view changes, block editing, signs, chat, slash commands, hit testing, and collision behavior.",
+      "files": {
+        "doc": "easy/docs/gameplay_controls_commands_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/gameplay_controls_commands_1.json",
+        "qa_examples": "easy/qa_examples/gameplay_controls_commands_1.json"
+      }
+    },
+    "world_generation_chunks_1": {
+      "document_id": "world_generation_chunks_1",
+      "difficulty": "easy",
+      "topic": "World Generation and Chunks",
+      "topic_slug": "world_generation_chunks",
+      "description": "Explains how Craft generates deterministic terrain, stores block data by chunk, loads and updates chunks around the player, and builds renderable chunk buffers.",
+      "files": {
+        "doc": "easy/docs/world_generation_chunks_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/world_generation_chunks_1.json",
+        "qa_examples": "easy/qa_examples/world_generation_chunks_1.json"
+      }
+    },
+    "rendering_graphics_pipeline_1": {
+      "document_id": "rendering_graphics_pipeline_1",
+      "difficulty": "easy",
+      "topic": "Rendering and Graphics Pipeline",
+      "topic_slug": "rendering_graphics_pipeline",
+      "description": "Explains how Craft builds chunk, block, plant, sign, sky, text, and player geometry into OpenGL buffers, then renders them with shaders, culling, daylight, fog, transparency, and ambient occlusion.",
+      "files": {
+        "doc": "easy/docs/rendering_graphics_pipeline_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/rendering_graphics_pipeline_1.json",
+        "qa_examples": "easy/qa_examples/rendering_graphics_pipeline_1.json"
+      }
+    },
+    "persistence_database_cache_1": {
+      "document_id": "persistence_database_cache_1",
+      "difficulty": "easy",
+      "topic": "Persistence, Database, and Cache",
+      "topic_slug": "persistence_database_cache",
+      "description": "Explains how Craft persists world edits, player state, signs, lights, auth tokens, and multiplayer cache keys through sqlite and a background write queue.",
+      "files": {
+        "doc": "easy/docs/persistence_database_cache_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/persistence_database_cache_1.json",
+        "qa_examples": "easy/qa_examples/persistence_database_cache_1.json"
+      }
+    },
+    "multiplayer_protocol_server_1": {
+      "document_id": "multiplayer_protocol_server_1",
+      "difficulty": "easy",
+      "topic": "Multiplayer Protocol and Server",
+      "topic_slug": "multiplayer_protocol_server",
+      "description": "Explains Craft's socket-based multiplayer protocol, how the C client enters online mode, how chunk cache keys and world updates flow through the Python server, and how login, chat, players, time, lights, and signs are synchronized.",
+      "files": {
+        "doc": "easy/docs/multiplayer_protocol_server_1.json",
+        "doc_embedding": null,
+        "lora": null,
+        "qa": "easy/qas/multiplayer_protocol_server_1.json",
+        "qa_examples": "easy/qa_examples/multiplayer_protocol_server_1.json"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "repo_id": "pytest-dev__pytest",
+  "commit": "5dfd4eab7d328266fb3788dcbb031c9d67903daf",
+  "lora_id": "config_plugins_hooks_1",
+  "document_id": "config_plugins_hooks_1",
+  "topic": "Configuration, Plugins, and Hooks",
+  "topic_slug": "config_plugins_hooks",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How does pytest discover built-in, entry point, environment, and conftest plugins during startup?",
+    "What role does PytestPluginManager play in registering plugins and loading hook specifications?",
+    "How are local conftest.py files scoped and cached for directory-specific hook behavior?",
+    "What does pytest's hook argument pruning allow older plugins to do safely?",
+    "How can pytest disable automatic third-party plugin autoloading while still allowing explicit plugins?"
+  ]
+}

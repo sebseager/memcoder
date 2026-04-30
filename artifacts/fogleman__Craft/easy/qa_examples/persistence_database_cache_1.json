@@ -1,0 +1,16 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "lora_id": "persistence_database_cache_1",
+  "document_id": "persistence_database_cache_1",
+  "topic": "Persistence, Database, and Cache",
+  "topic_slug": "persistence_database_cache",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "What world data does Craft store in sqlite instead of regenerating every session?",
+    "How does db_init set up Craft's persistence layer before gameplay starts?",
+    "Why do Craft's block and light database writes go through a background worker?",
+    "How do the /online and /offline commands choose which sqlite database file Craft uses?"
+  ]
+}

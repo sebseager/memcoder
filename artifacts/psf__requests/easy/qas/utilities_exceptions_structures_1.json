@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "utilities_exceptions_structures_1",
+  "topic": "Utilities, Exceptions, and Data Structures",
+  "topic_slug": "utilities_exceptions_structures",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "utilities_exceptions_structures_utilities_exceptions_structures_1_0001",
+      "question": "How does the Requests utility layer decide that a request URL should bypass proxies?",
+      "answer": "It bypasses proxies for URLs without hostnames, then checks explicit or environment no-proxy rules against IP addresses, CIDR ranges, host suffixes, and host-with-port values. If those checks do not decide, it temporarily restores the no-proxy environment and asks the platform proxy-bypass function.",
+      "document_id": "utilities_exceptions_structures_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "utilities_exceptions_structures_utilities_exceptions_structures_1_0002",
+      "question": "Which Requests data structure supports HTTP-style header mappings, and what case behavior does it provide?",
+      "answer": "`CaseInsensitiveDict` supports HTTP-style mappings such as headers. It stores entries under lowercase keys for lookup, deletion, containment, and equality, while preserving the most recent original key spelling for iteration and representation.",
+      "document_id": "utilities_exceptions_structures_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "utilities_exceptions_structures_utilities_exceptions_structures_1_0003",
+      "question": "What is special about Requests' JSON decode exception compared with ordinary subclasses in the exception hierarchy?",
+      "answer": "The JSON decode wrapper inherits from both the Requests JSON branch and the compatibility JSON error. It initializes the compatibility error first to preserve the JSON-specific arguments and message, and its pickle hook delegates back to that compatibility class.",
+      "document_id": "utilities_exceptions_structures_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

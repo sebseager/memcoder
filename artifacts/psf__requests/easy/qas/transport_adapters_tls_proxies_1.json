@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "transport_adapters_tls_proxies_1",
+  "topic": "Transport Adapters, TLS, and Proxies",
+  "topic_slug": "transport_adapters_tls_proxies",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "transport_adapters_tls_proxies_transport_adapters_tls_proxies_1_0001",
+      "question": "Which helper converts a prepared request's URL plus the verify and client-certificate options into urllib3 connection key material, and what two kinds of data does it return?",
+      "answer": "_urllib3_request_context does this. It returns host information for the request and SSL-related pool arguments used when selecting or creating the urllib3 connection pool.",
+      "document_id": "transport_adapters_tls_proxies_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "transport_adapters_tls_proxies_transport_adapters_tls_proxies_1_0002",
+      "question": "How does Requests' adapter behavior differ when TLS verification is disabled versus when verification is given as a filesystem path?",
+      "answer": "When verification is disabled, the adapter disables certificate requirements and clears CA bundle or directory fields. When verification is a path, the adapter treats it as either a CA bundle file or a CA directory based on the filesystem and uses that location for certificate verification.",
+      "document_id": "transport_adapters_tls_proxies_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "transport_adapters_tls_proxies_transport_adapters_tls_proxies_1_0003",
+      "question": "What proxy precedence does the document describe before a request reaches urllib3, and how does the adapter change the URL for a plain HTTP request through a non-SOCKS proxy?",
+      "answer": "Proxy selection prefers a scheme-and-host entry, then a scheme entry, then all-proxy entries, with environment proxies added only when trusted and not bypassed. For a plain HTTP request through a non-SOCKS proxy, the adapter sends the full request URL with fragment and auth removed instead of only the prepared path.",
+      "document_id": "transport_adapters_tls_proxies_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

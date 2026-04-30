@@ -1,0 +1,37 @@
+{
+  "repo_id": "psf__requests",
+  "commit": "6ec76b4a36fba4a32fb72f5f9ba04e632635e477",
+  "document_id": "auth_cookies_hooks_1",
+  "topic": "Authentication, Cookies, and Hooks",
+  "topic_slug": "auth_cookies_hooks",
+  "difficulty": "easy",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "doc_derived_qa_generation_v2",
+  "qa_set_notes": "",
+  "qa_pairs": [
+    {
+      "qa_id": "auth_cookies_hooks_auth_cookies_hooks_1_0001",
+      "question": "Which authentication class handles a digest challenge by registering response hooks and retrying a copied prepared request?",
+      "answer": "`HTTPDigestAuth` does this. It stores per-thread challenge state, registers hooks for 401 challenge handling and redirect handling, then can copy the prepared request, add cookies and a digest Authorization header, and resend it.",
+      "document_id": "auth_cookies_hooks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": true
+    },
+    {
+      "qa_id": "auth_cookies_hooks_auth_cookies_hooks_1_0002",
+      "question": "How does this Requests code keep cookie handling compatible with Python cookiejar policy while still using Requests request and response objects?",
+      "answer": "It wraps Requests objects in small mock request and response adapters that expose the URL, host, headers, and response header data expected by cookiejar. Cookie extraction and outgoing Cookie header generation then delegate to the jar's normal policy logic.",
+      "document_id": "auth_cookies_hooks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    },
+    {
+      "qa_id": "auth_cookies_hooks_auth_cookies_hooks_1_0003",
+      "question": "What happens when response hooks return values versus returning nothing in Requests?",
+      "answer": "Hooks are called in order with the current response data and keyword arguments. A non-None return value replaces the data passed to later hooks, while returning None leaves the existing data unchanged.",
+      "document_id": "auth_cookies_hooks_1",
+      "qa_set": "doc_derived",
+      "identifier_targeted": false
+    }
+  ]
+}

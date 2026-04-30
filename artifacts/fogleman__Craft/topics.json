@@ -1,0 +1,165 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "topic_discovery_v1",
+  "seed_topics": [
+    "overview_purpose",
+    "setup_installation",
+    "public_interface"
+  ],
+  "topics": [
+    {
+      "topic_slug": "overview_purpose",
+      "title": "Overview / Purpose",
+      "description": "What Craft is, the gameplay and implementation goals described by the project, and the major systems that make up the client and server.",
+      "evidence": [
+        "README.md",
+        "src/main.c",
+        "src/config.h",
+        "CMakeLists.txt"
+      ],
+      "evidence_pack_hint": [
+        "README.md",
+        "src/main.c top-level model structs and main initialization",
+        "src/config.h",
+        "CMakeLists.txt"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "setup_build_run",
+      "title": "Setup, Build, and Run",
+      "description": "How Craft is built and run on supported platforms, how the C client is linked, and how the optional Python multiplayer server is started.",
+      "evidence": [
+        "README.md",
+        "CMakeLists.txt",
+        "builder.py",
+        "server.py",
+        "world.py"
+      ],
+      "evidence_pack_hint": [
+        "README.md install, compile, and server sections",
+        "CMakeLists.txt",
+        "builder.py",
+        "server.py startup code",
+        "world.py"
+      ],
+      "priority": "initial"
+    },
+    {
+      "topic_slug": "gameplay_controls_commands",
+      "title": "Gameplay, Controls, and Commands",
+      "description": "How user input drives movement, block editing, signs, chat, in-game commands, builder operations, hit testing, and collision behavior.",
+      "evidence": [
+        "README.md",
+        "src/main.c input, command, block editing, hit-test, and movement code",
+        "src/item.c",
+        "src/sign.c",
+        "src/sign.h"
+      ],
+      "evidence_pack_hint": [
+        "README.md controls and chat commands",
+        "src/main.c functions around hit_test, collide, parse_command, input callbacks, handle_movement",
+        "src/item.c",
+        "src/sign.c",
+        "src/sign.h"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "world_generation_chunks",
+      "title": "World Generation and Chunks",
+      "description": "How Craft generates deterministic terrain, divides the world into chunks, stores chunk block maps, loads chunks, schedules worker computation, and manages dirty chunk geometry.",
+      "evidence": [
+        "README.md implementation details",
+        "src/world.c",
+        "src/world.h",
+        "src/main.c chunk and worker functions",
+        "src/map.c",
+        "src/map.h",
+        "src/config.h"
+      ],
+      "evidence_pack_hint": [
+        "README.md terrain generation implementation details",
+        "src/world.c",
+        "src/world.h",
+        "src/main.c chunk lifecycle and worker functions",
+        "src/map.c",
+        "src/map.h",
+        "src/config.h chunk parameters"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "rendering_graphics_pipeline",
+      "title": "Rendering and Graphics Pipeline",
+      "description": "How Craft turns chunks, blocks, plants, signs, sky, text, and players into OpenGL buffers and shaders, including culling, lighting, transparency, and ambient occlusion.",
+      "evidence": [
+        "README.md rendering implementation details",
+        "src/main.c render and buffer functions",
+        "src/cube.c",
+        "src/cube.h",
+        "src/matrix.c",
+        "src/matrix.h",
+        "src/util.c",
+        "shaders/"
+      ],
+      "evidence_pack_hint": [
+        "README.md rendering, sky dome, and ambient occlusion sections",
+        "src/main.c render_* and draw_* functions",
+        "src/cube.c",
+        "src/matrix.c",
+        "src/util.c shader and texture helpers",
+        "shaders/"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "persistence_database_cache",
+      "title": "Persistence, Database, and Cache",
+      "description": "How Craft persists world deltas, signs, lights, auth state, player state, chunk cache keys, and asynchronous SQLite writes through a ring queue.",
+      "evidence": [
+        "README.md database and multiplayer caching sections",
+        "src/db.c",
+        "src/db.h",
+        "src/ring.c",
+        "src/ring.h",
+        "src/main.c block, sign, light, and mode switching functions"
+      ],
+      "evidence_pack_hint": [
+        "README.md database section",
+        "src/db.c",
+        "src/db.h",
+        "src/ring.c",
+        "src/ring.h",
+        "src/main.c set_block, set_sign, set_light, parse_command"
+      ],
+      "priority": "high"
+    },
+    {
+      "topic_slug": "multiplayer_protocol_server",
+      "title": "Multiplayer Protocol and Server",
+      "description": "How the C client and Python server exchange line-based protocol messages for login, chunks, block changes, lights, signs, chat, player state, cache keys, and time.",
+      "evidence": [
+        "README.md multiplayer section",
+        "src/client.c",
+        "src/client.h",
+        "src/auth.c",
+        "server.py",
+        "world.py",
+        "src/main.c parse_buffer and online/offline commands"
+      ],
+      "evidence_pack_hint": [
+        "README.md multiplayer section",
+        "src/client.c",
+        "src/client.h",
+        "src/auth.c",
+        "server.py",
+        "world.py",
+        "src/main.c parse_buffer, login, request_chunk, online/offline commands"
+      ],
+      "priority": "high"
+    }
+  ]
+}

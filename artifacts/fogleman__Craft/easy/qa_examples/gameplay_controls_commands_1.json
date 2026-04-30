@@ -1,0 +1,17 @@
+{
+  "repo_id": "fogleman__Craft",
+  "commit": "d6888a6e1e54340358ce25b1220f410541360b6b",
+  "lora_id": "gameplay_controls_commands_1",
+  "document_id": "gameplay_controls_commands_1",
+  "topic": "Gameplay, Controls, and Commands",
+  "topic_slug": "gameplay_controls_commands",
+  "generator": "codex_subagents_v1",
+  "prompt_version": "ledger_example_question_generation_v1",
+  "example_questions": [
+    "How does Craft switch between normal gameplay controls and chat, command, or sign typing?",
+    "What do the mouse buttons do for destroying blocks, creating blocks, toggling lights, and picking block types?",
+    "How does backquote sign entry decide which block face receives the text?",
+    "How does handle_movement combine walking, flying, jumping, zoom, and arrow-key camera input?",
+    "Which kinds of local builder commands can Craft parse from slash commands?"
+  ]
+}
