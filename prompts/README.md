@@ -1,20 +1,12 @@
-# Prompt Versioning
-
-Prompt versions use the convention `{prompt_name}_v{major}`.
-
-Increment the major version whenever a template change can materially change
-generated artifact content or schema shape. Every generated JSON artifact must
-include the exact `prompt_version` string from the prompt template, populated by
-the generator or manual run.
-
-The current version of each prompt lives in this directory under its canonical
-filename; older versions are recovered from git history using the
-`prompt_version` string in the artifact as a key.
-
 # Prompts
 
-This directory stores versioned prompt templates used to generate MemCoder
-artifacts from target repositories.
+This directory stores versioned prompt templates used to generate and evaluate
+MemCoder artifacts.
+
+Prompt versions use the convention `{prompt_name}_v{major}`. Increment the major
+version whenever a template change can materially change generated artifact
+content or schema shape. Generated JSON artifacts should include the exact
+`prompt_version` string from the prompt template when the schema supports it.
 
 Templates:
 
@@ -28,14 +20,18 @@ Templates:
   pairs from a design document.
 - `ledger_example_question_generation.md` (**v1**): generate a separate routing
   example question artifact kept distinct from evaluation QAs.
-- `llm_judge_grading_v0.md`: rubric used by the eval harness's LLM judge phase. Version is in the filename per a different convention because the harness loads it by literal path.
+- `doc_derived_qa_generation_v2.md`: newer QA prompt variant with identifier
+  tagging and leakage checks.
+- `llm_judge_grading_v0.md`, `llm_judge_grading_v1.md`, and
+  `llm_judge_grading_v2.md`: judge rubrics loaded by literal path from
+  `config/eval/*.yaml`; v2 is the current default.
 
 Generated artifacts should record the prompt filename and version used to create
 them.
 
-## Pilot-driven changes (v0 → v1)
+## Pilot-Driven Changes
 
-The kilo `easy` pilot (see `memcoder_plan.md` §4.3) surfaced two findings
+The kilo `easy` pilot (see `docs/initial_plan.md` §4.3) surfaced two findings
 that prompted the v1 bumps to the doc and QA prompts:
 
 - **Code-density of a doc strongly drives SHINE compression quality.**

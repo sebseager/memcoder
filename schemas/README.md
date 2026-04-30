@@ -1,22 +1,22 @@
-# Artifact Schemas
+# Schemas
 
 Schemas live as JSON Schema files in this directory. The JSON fields are the
-canonical contract; examples in prompts should match these schemas.
+canonical artifact contracts; examples in prompts should match these schemas.
 
-Important eval-script contracts:
+Important contracts:
 
 - Design document JSON must contain `document`; the full JSON object is passed
-  through as `doc_metadata` in the eval sidecar.
+  through as `doc_metadata` during evaluation.
 - QA JSON must contain top-level `qa_pairs`; each QA record must contain
   `question` and `answer`. The full QA record is passed through as
-  `qa_metadata` in each eval result line.
+  `qa_metadata`.
 - Repo-level `topics.json` records the audited topic set before document
   generation starts.
-- Repo-level `ledger.json` maps each `document_id` to canonical difficulty,
-  topic metadata, and `docs/`, `loras/`, `qas/`, `qa_examples`, and
-  `doc_embedding` paths. `doc_embedding` is `null` until generated.
-  `qa_examples` is `null` until routing examples are generated.
-- Repo-level `repo.json` contains only the artifact repository ID and source
-  commit.
-- Evaluation results are emitted by `scripts/run_shine_eval.py` as JSONL
-  records joined to `<output>.meta.json` by `run_id`.
+- Repo-level `ledger.json` maps each `document_id` to difficulty, topic
+  metadata, and file paths for docs, LoRAs, QA pairs, routing examples, and
+  embeddings.
+- `judge_result.schema.json` describes the structured score, reasoning, and
+  failure-mode payload returned by the LLM judge.
+- `eval_result.schema.json` covers legacy JSONL result records. The newer
+  `scripts/run_eval.py` pipeline writes `predictions.jsonl`, `judgments.jsonl`,
+  `manifest.json`, and `run_config.yaml` into `results/<run_name>_<timestamp>/`.

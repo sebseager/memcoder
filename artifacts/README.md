@@ -1,38 +1,45 @@
 # Artifacts
 
-This directory stores generated MemCoder artifacts.
+This directory stores generated MemCoder data products: design documents, QA
+pairs, LoRA dictionaries, ledgers, routing outputs, and small scored-result
+fixtures.
 
-The initial pilot layout is:
+Current repo-level artifact directories include:
 
-```text
-artifacts/
-  antirez__kilo/
-    repo.json
-    topics.json
-    ledger.json
-    easy/
-      docs/
-      qas/
-      qa_examples/
-      loras/
-      ledger.md
-      eval_results.jsonl
-```
+- `antirez__kilo/`: easy-tier artifacts for the kilo editor pilot.
+- `marimo-team__marimo/`: easy-tier artifacts for the marimo pilot.
+- `fake_lora_composition/`: synthetic fixtures for LoRA-composition tests and
+  demos.
 
-Generated artifacts should record the target repository identity in
-`repo.json`:
+Common layout:
 
 ```text
-repo_id: antirez__kilo
-commit: 323d93b29bd89a2cb446de90c4ed4fea1764176e
+artifacts/<repo_id>/
+  repo.json
+  topics.json
+  ledger.json
+  easy/
+    docs/
+    qas/
+    qas_v1/
+    qa_examples/
+    loras/
+    ledger.md
+    routing_results.*.jsonl
 ```
 
-Within each repo directory, `topics.json` records the discovered topic set before
-documents are written. `ledger.json` is the canonical mapping from `document_id`
-to the generated files. The `docs/`, `loras/`, `qas/`, and `qa_examples/`
-filenames should use the same document ID stem, for example
-`easy/docs/overview_purpose_1.json`, `easy/loras/overview_purpose_1.pt`,
-`easy/qas/overview_purpose_1.json`, and
-`easy/qa_examples/overview_purpose_1.json`. `doc_embedding` remains `null` until
-that artifact is generated. `qa_examples` is `null` until routing examples are
-generated, then points to the separate example-question artifact.
+`repo.json` records target repository identity. `topics.json` records the audited
+topic set before documents are written. `ledger.json` is the canonical mapping
+from `document_id` to the generated files and metadata used by the eval harness.
+
+Document, QA, LoRA, and routing files should share the same document ID stem
+where applicable, for example:
+
+```text
+easy/docs/overview_purpose_1.json
+easy/qas/overview_purpose_1.json
+easy/loras/overview_purpose_1.pt
+```
+
+The harness treats missing LoRA paths as "skip the `shine` row for this document"
+while still allowing `naive` and `in_context` rows to run.
