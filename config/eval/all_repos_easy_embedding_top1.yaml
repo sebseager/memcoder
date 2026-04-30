@@ -1,0 +1,65 @@
+# MemCoder evaluation harness — all five artifact repos, embedding-routed.
+#
+# Routing JSONLs are produced by config/run_all_repos_easy_eval.sh before this
+# config is executed. Each repo gets one combined JSONL containing rows for all
+# easy QA files. The embedding route still requires real LoRA paths in the
+# ledgers; rows whose ranked_loras lack lora_path cannot serve shine.
+
+run_name: all_repos_easy_embedding_top1
+
+artifacts:
+  - root: artifacts/antirez__kilo
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+  - root: artifacts/fogleman__Craft
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+  - root: artifacts/marimo-team__marimo
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+  - root: artifacts/psf__requests
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+  - root: artifacts/pytest-dev__pytest
+    difficulties: [easy]
+    document_ids: []
+    topics: []
+
+conditions: [naive, in_context, shine]
+routing: embedding
+
+embedding:
+  model: Qwen/Qwen3-Embedding-0.6B
+  routing_results:
+    - artifacts/antirez__kilo/easy/routing_results.qwen3.all.top1.jsonl
+    - artifacts/fogleman__Craft/easy/routing_results.qwen3.all.top1.jsonl
+    - artifacts/marimo-team__marimo/easy/routing_results.qwen3.all.top1.jsonl
+    - artifacts/psf__requests/easy/routing_results.qwen3.all.top1.jsonl
+    - artifacts/pytest-dev__pytest/easy/routing_results.qwen3.all.top1.jsonl
+  top_k: 1
+
+model:
+  qwen_base: /home/mms2309/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
+  shine_root: vendor/SHINE
+  qwen_cuda: 5
+  conversation_max_length: 5000
+  max_new_tokens: 512
+  seed: 42
+  lora_r: 8
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: .env
+  concurrency: 8
+  prompt: prompts/llm_judge_grading_v2.md
+  rubric_version: v2
+  taxonomy_version: v1
+  max_retries: 4
