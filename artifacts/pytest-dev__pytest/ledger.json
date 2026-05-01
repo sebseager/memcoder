@@ -9,7 +9,7 @@
       "files": {
         "doc": "easy/docs/overview_purpose_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/overview_purpose_1.pt",
         "qa": "easy/qas/overview_purpose_1.json",
         "qa_examples": "easy/qa_examples/overview_purpose_1.json"
       }
@@ -23,7 +23,7 @@
       "files": {
         "doc": "easy/docs/setup_development_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/setup_development_1.pt",
         "qa": "easy/qas/setup_development_1.json",
         "qa_examples": "easy/qa_examples/setup_development_1.json"
       }
@@ -37,7 +37,7 @@
       "files": {
         "doc": "easy/docs/public_api_interface_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/public_api_interface_1.pt",
         "qa": "easy/qas/public_api_interface_1.json",
         "qa_examples": "easy/qa_examples/public_api_interface_1.json"
       }
@@ -51,7 +51,7 @@
       "files": {
         "doc": "easy/docs/config_plugins_hooks_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/config_plugins_hooks_1.pt",
         "qa": "easy/qas/config_plugins_hooks_1.json",
         "qa_examples": "easy/qa_examples/config_plugins_hooks_1.json"
       }
@@ -65,7 +65,7 @@
       "files": {
         "doc": "easy/docs/collection_nodes_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/collection_nodes_1.pt",
         "qa": "easy/qas/collection_nodes_1.json",
         "qa_examples": "easy/qa_examples/collection_nodes_1.json"
       }
@@ -79,7 +79,7 @@
       "files": {
         "doc": "easy/docs/fixtures_parametrize_marks_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/fixtures_parametrize_marks_1.pt",
         "qa": "easy/qas/fixtures_parametrize_marks_1.json",
         "qa_examples": "easy/qa_examples/fixtures_parametrize_marks_1.json"
       }
@@ -93,7 +93,7 @@
       "files": {
         "doc": "easy/docs/assertions_warnings_outcomes_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/assertions_warnings_outcomes_1.pt",
         "qa": "easy/qas/assertions_warnings_outcomes_1.json",
         "qa_examples": "easy/qa_examples/assertions_warnings_outcomes_1.json"
       }
@@ -107,7 +107,7 @@
       "files": {
         "doc": "easy/docs/runtime_reporting_io_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/runtime_reporting_io_1.pt",
         "qa": "easy/qas/runtime_reporting_io_1.json",
         "qa_examples": "easy/qa_examples/runtime_reporting_io_1.json"
       }

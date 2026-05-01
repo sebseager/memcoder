@@ -43,6 +43,7 @@ def run_predictions(cfg: RunConfig) -> Path:
     model_module.setup_shine_imports(cfg.model.shine_root)
     qwen_device = model_module.resolve_qwen_device(cfg.model.qwen_cuda)
     metamodel, tokenizer = model_module.load_qwen_runtime(cfg.model, qwen_device)
+    lora_dtype = model_module.preferred_model_dtype(qwen_device)
     router = make_router(
         cfg.routing,
         routing_results_paths=cfg.embedding.routing_results,
@@ -80,7 +81,7 @@ def run_predictions(cfg: RunConfig) -> Path:
                             )
                             if cache_key != current_cache_key:
                                 loaded = [
-                                    model_module.load_lora_dict(p, qwen_device)
+                                    model_module.load_lora_dict(p, qwen_device, dtype=lora_dtype)
                                     for p in shine_decision.lora_paths
                                 ]
                                 new_composed = composition.compose_top_k(loaded)

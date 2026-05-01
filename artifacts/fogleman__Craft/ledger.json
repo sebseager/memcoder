@@ -9,7 +9,7 @@
       "files": {
         "doc": "easy/docs/overview_purpose_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/overview_purpose_1.pt",
         "qa": "easy/qas/overview_purpose_1.json",
         "qa_examples": "easy/qa_examples/overview_purpose_1.json"
       }
@@ -23,7 +23,7 @@
       "files": {
         "doc": "easy/docs/setup_build_run_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/setup_build_run_1.pt",
         "qa": "easy/qas/setup_build_run_1.json",
         "qa_examples": "easy/qa_examples/setup_build_run_1.json"
       }
@@ -37,7 +37,7 @@
       "files": {
         "doc": "easy/docs/gameplay_controls_commands_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/gameplay_controls_commands_1.pt",
         "qa": "easy/qas/gameplay_controls_commands_1.json",
         "qa_examples": "easy/qa_examples/gameplay_controls_commands_1.json"
       }
@@ -51,7 +51,7 @@
       "files": {
         "doc": "easy/docs/world_generation_chunks_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/world_generation_chunks_1.pt",
         "qa": "easy/qas/world_generation_chunks_1.json",
         "qa_examples": "easy/qa_examples/world_generation_chunks_1.json"
       }
@@ -65,7 +65,7 @@
       "files": {
         "doc": "easy/docs/rendering_graphics_pipeline_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/rendering_graphics_pipeline_1.pt",
         "qa": "easy/qas/rendering_graphics_pipeline_1.json",
         "qa_examples": "easy/qa_examples/rendering_graphics_pipeline_1.json"
       }
@@ -79,7 +79,7 @@
       "files": {
         "doc": "easy/docs/persistence_database_cache_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/persistence_database_cache_1.pt",
         "qa": "easy/qas/persistence_database_cache_1.json",
         "qa_examples": "easy/qa_examples/persistence_database_cache_1.json"
       }
@@ -93,7 +93,7 @@
       "files": {
         "doc": "easy/docs/multiplayer_protocol_server_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/multiplayer_protocol_server_1.pt",
         "qa": "easy/qas/multiplayer_protocol_server_1.json",
         "qa_examples": "easy/qa_examples/multiplayer_protocol_server_1.json"
       }

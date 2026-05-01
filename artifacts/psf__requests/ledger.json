@@ -9,7 +9,7 @@
       "files": {
         "doc": "easy/docs/overview_purpose_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/overview_purpose_1.pt",
         "qa": "easy/qas/overview_purpose_1.json",
         "qa_examples": "easy/qa_examples/overview_purpose_1.json"
       }
@@ -23,7 +23,7 @@
       "files": {
         "doc": "easy/docs/setup_installation_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/setup_installation_1.pt",
         "qa": "easy/qas/setup_installation_1.json",
         "qa_examples": "easy/qa_examples/setup_installation_1.json"
       }
@@ -37,7 +37,7 @@
       "files": {
         "doc": "easy/docs/public_api_interface_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/public_api_interface_1.pt",
         "qa": "easy/qas/public_api_interface_1.json",
         "qa_examples": "easy/qa_examples/public_api_interface_1.json"
       }
@@ -51,7 +51,7 @@
       "files": {
         "doc": "easy/docs/request_preparation_response_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/request_preparation_response_1.pt",
         "qa": "easy/qas/request_preparation_response_1.json",
         "qa_examples": "easy/qa_examples/request_preparation_response_1.json"
       }
@@ -65,7 +65,7 @@
       "files": {
         "doc": "easy/docs/sessions_redirects_state_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/sessions_redirects_state_1.pt",
         "qa": "easy/qas/sessions_redirects_state_1.json",
         "qa_examples": "easy/qa_examples/sessions_redirects_state_1.json"
       }
@@ -79,7 +79,7 @@
       "files": {
         "doc": "easy/docs/transport_adapters_tls_proxies_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/transport_adapters_tls_proxies_1.pt",
         "qa": "easy/qas/transport_adapters_tls_proxies_1.json",
         "qa_examples": "easy/qa_examples/transport_adapters_tls_proxies_1.json"
       }
@@ -93,7 +93,7 @@
       "files": {
         "doc": "easy/docs/auth_cookies_hooks_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/auth_cookies_hooks_1.pt",
         "qa": "easy/qas/auth_cookies_hooks_1.json",
         "qa_examples": "easy/qa_examples/auth_cookies_hooks_1.json"
       }
@@ -107,7 +107,7 @@
       "files": {
         "doc": "easy/docs/utilities_exceptions_structures_1.json",
         "doc_embedding": null,
-        "lora": null,
+        "lora": "easy/loras/utilities_exceptions_structures_1.pt",
         "qa": "easy/qas/utilities_exceptions_structures_1.json",
         "qa_examples": "easy/qa_examples/utilities_exceptions_structures_1.json"
       }
