@@ -1,0 +1,324 @@
+{
+  "run_id": "20260430T233611Z",
+  "run_name": "all_repos_easy_embedding_top1",
+  "timestamp": "20260430T2335",
+  "created_at": "2026-04-30T23:36:11.803966+00:00",
+  "git_sha": "9f47c51cc70244ca07886933e9f17dc45a2c17e5",
+  "qwen_device": "cuda:5",
+  "qwen_base": "/home/mms2309/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+  "shine_root": "/home/mms2309/memcoder/vendor/SHINE",
+  "conditions": [
+    "naive",
+    "in_context",
+    "shine"
+  ],
+  "routing": "embedding",
+  "documents": [
+    {
+      "repo_id": "antirez__kilo",
+      "document_id": "overview_purpose_1",
+      "topic": "Overview / Purpose",
+      "difficulty": "easy",
+      "description": null,
+      "lora_path": "/home/mms2309/memcoder/artifacts/antirez__kilo/easy/loras/overview_purpose_1.pt",
+      "qa_count": 16
+    },
+    {
+      "repo_id": "antirez__kilo",
+      "document_id": "raw_terminal_input_1",
+      "topic": "Raw Terminal Input",
+      "difficulty": "easy",
+      "description": null,
+      "lora_path": "/home/mms2309/memcoder/artifacts/antirez__kilo/easy/loras/raw_terminal_input_1.pt",
+      "qa_count": 14
+    },
+    {
+      "repo_id": "antirez__kilo",
+      "document_id": "rows_editing_persistence_1",
+      "topic": "Rows, Editing, and Persistence",
+      "difficulty": "easy",
+      "description": null,
+      "lora_path": "/home/mms2309/memcoder/artifacts/antirez__kilo/easy/loras/rows_editing_persistence_1.pt",
+      "qa_count": 13
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "overview_purpose_1",
+      "topic": "Overview / Purpose",
+      "difficulty": "easy",
+      "description": "Explains Craft's purpose as a small cross-platform Minecraft-like game, how the main client organizes world state and rendering, and how configuration, persistence, multiplayer, and build setup fit together.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/overview_purpose_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "setup_build_run_1",
+      "topic": "Setup, Build, and Run",
+      "difficulty": "easy",
+      "description": "Explains how Craft is built from source, how the client and multiplayer server are launched, and how the Python server depends on the compiled world-generation library.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/setup_build_run_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "gameplay_controls_commands_1",
+      "topic": "Gameplay, Controls, and Commands",
+      "difficulty": "easy",
+      "description": "Explains how Craft turns player input into movement, view changes, block editing, signs, chat, slash commands, hit testing, and collision behavior.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/gameplay_controls_commands_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "world_generation_chunks_1",
+      "topic": "World Generation and Chunks",
+      "difficulty": "easy",
+      "description": "Explains how Craft generates deterministic terrain, stores block data by chunk, loads and updates chunks around the player, and builds renderable chunk buffers.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/world_generation_chunks_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "rendering_graphics_pipeline_1",
+      "topic": "Rendering and Graphics Pipeline",
+      "difficulty": "easy",
+      "description": "Explains how Craft builds chunk, block, plant, sign, sky, text, and player geometry into OpenGL buffers, then renders them with shaders, culling, daylight, fog, transparency, and ambient occlusion.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/rendering_graphics_pipeline_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "persistence_database_cache_1",
+      "topic": "Persistence, Database, and Cache",
+      "difficulty": "easy",
+      "description": "Explains how Craft persists world edits, player state, signs, lights, auth tokens, and multiplayer cache keys through sqlite and a background write queue.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/persistence_database_cache_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "fogleman__Craft",
+      "document_id": "multiplayer_protocol_server_1",
+      "topic": "Multiplayer Protocol and Server",
+      "difficulty": "easy",
+      "description": "Explains Craft's socket-based multiplayer protocol, how the C client enters online mode, how chunk cache keys and world updates flow through the Python server, and how login, chat, players, time, lights, and signs are synchronized.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/fogleman__Craft/easy/loras/multiplayer_protocol_server_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "overview_purpose_1",
+      "topic": "Overview / Purpose",
+      "difficulty": "easy",
+      "description": "Explains marimo's purpose as a reactive Python notebook, why it emphasizes reproducibility and app/script reuse, and how its public library supports interactive notebooks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/overview_purpose_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "setup_cli_1",
+      "topic": "Setup and CLI",
+      "difficulty": "easy",
+      "description": "Explains how marimo is installed, how the command-line interface introduces editing, running, tutorials, conversion, export, and how the main Click commands route those workflows.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/setup_cli_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "public_interface_1",
+      "topic": "Public Python Interface",
+      "difficulty": "easy",
+      "description": "Explains how marimo exposes its top-level Python API, how the API docs group the interface, and when developers should use key public helpers for apps, markdown, state, outputs, and console capture.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/public_interface_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "reactive_runtime_dataflow_1",
+      "topic": "Reactive Runtime and Dataflow",
+      "difficulty": "easy",
+      "description": "Explains how marimo derives a notebook dependency graph from cell definitions and references, how that graph drives reactive execution, stale and disabled behavior, and dataflow visualization.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/reactive_runtime_dataflow_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "apps_scripts_wasm_1",
+      "topic": "Apps, Scripts, and WebAssembly",
+      "difficulty": "easy",
+      "description": "Explains how marimo notebooks are run as web apps, ordinary Python scripts, exported artifacts, and browser-only WebAssembly notebooks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/apps_scripts_wasm_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "ui_outputs_interactivity_1",
+      "topic": "UI, Outputs, and Interactivity",
+      "difficulty": "easy",
+      "description": "Explains how marimo connects interactive UI elements, cell reactivity, markdown and rich outputs, and imperative output updates for app-like notebooks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/ui_outputs_interactivity_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "sql_data_integrations_1",
+      "topic": "SQL and Data Integrations",
+      "difficulty": "easy",
+      "description": "Explains how marimo SQL cells execute queries, return dataframe-like results, discover database connections and schemas, and connect notebook data workflows to external data sources.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/sql_data_integrations_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "ai_mcp_pairing_1",
+      "topic": "AI, MCP, and Agent Pairing",
+      "difficulty": "easy",
+      "description": "Explains how marimo connects its notebook-aware AI assistant, MCP server and client support, external agent pairing, and shared tool registration model.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/ai_mcp_pairing_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "overview_purpose_1",
+      "topic": "Overview / Purpose",
+      "difficulty": "easy",
+      "description": "Explains Requests as a human-oriented Python HTTP library, how its top-level helpers relate to sessions, and what Session owns for state, preparation, sending, redirects, and transport.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/overview_purpose_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "setup_installation_1",
+      "topic": "Setup and Installation",
+      "difficulty": "easy",
+      "description": "Explains how Requests is installed from PyPI or source, what Python/package metadata controls installation, and how development, test, tox, and documentation setup are wired.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/setup_installation_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "public_api_interface_1",
+      "topic": "Public API Interface",
+      "difficulty": "easy",
+      "description": "Explains how Requests exposes its public developer API through top-level helpers, Session-backed execution, package exports, and documented exception classes.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/public_api_interface_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "request_preparation_response_1",
+      "topic": "Request Preparation and Response Objects",
+      "difficulty": "easy",
+      "description": "Explains how Requests models user requests, prepared requests, encoded bodies, hooks, cookies, and response content/status helpers in the lower-level model layer.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/request_preparation_response_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "sessions_redirects_state_1",
+      "topic": "Sessions, Redirects, and State",
+      "difficulty": "easy",
+      "description": "Explains how Requests sessions persist state, prepare requests with session defaults, follow redirects safely, merge cookies/hooks/settings, and update authentication and proxy handling across redirects.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/sessions_redirects_state_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "transport_adapters_tls_proxies_1",
+      "topic": "Transport Adapters, TLS, and Proxies",
+      "difficulty": "easy",
+      "description": "Explains how Requests' default HTTP transport adapter connects Session requests to urllib3, how TLS verification and client certificates are translated into connection settings, and how proxy configuration is selected and applied.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/transport_adapters_tls_proxies_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "auth_cookies_hooks_1",
+      "topic": "Authentication, Cookies, and Hooks",
+      "difficulty": "easy",
+      "description": "Explains how Requests applies authentication handlers, bridges cookies through CookieJar-compatible storage, and uses response hooks for user callbacks and digest-auth retry behavior.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/auth_cookies_hooks_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "psf__requests",
+      "document_id": "utilities_exceptions_structures_1",
+      "topic": "Utilities, Exceptions, and Data Structures",
+      "difficulty": "easy",
+      "description": "Explains Requests helper utilities, case-insensitive and lookup mappings, status-code aliases, and the Requests-specific exception hierarchy.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/psf__requests/easy/loras/utilities_exceptions_structures_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "overview_purpose_1",
+      "topic": "Overview / Purpose",
+      "difficulty": "easy",
+      "description": "Explains pytest's purpose as a Python testing framework, its public entry points, documentation shape, and the high-level path from CLI invocation through configuration, session setup, collection, and test execution.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/overview_purpose_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "setup_development_1",
+      "topic": "Setup and Development",
+      "difficulty": "easy",
+      "description": "Explains how pytest is installed, how contributors prepare a local checkout, and how tox, pre-commit, documentation builds, changelog entries, and release tooling fit into the development workflow.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/setup_development_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "public_api_interface_1",
+      "topic": "Public API Interface",
+      "difficulty": "easy",
+      "description": "Explains how pytest's top-level public API is assembled, where the reference documentation points users, and how key exported helpers for comparisons, exceptions, outcomes, and warnings behave.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/public_api_interface_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "config_plugins_hooks_1",
+      "topic": "Configuration, Plugins, and Hooks",
+      "difficulty": "easy",
+      "description": "Explains how pytest builds configuration, discovers and controls plugins, loads conftest files, and exposes hook-based extension points during startup and test execution.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/config_plugins_hooks_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "collection_nodes_1",
+      "topic": "Collection and Node Model",
+      "difficulty": "easy",
+      "description": "Explains how pytest turns command-line inputs into a collection tree, how collection nodes are constructed and identified, and how filesystem and Python collectors produce runnable test items.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/collection_nodes_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "fixtures_parametrize_marks_1",
+      "topic": "Fixtures, Parametrization, and Marks",
+      "difficulty": "easy",
+      "description": "Explains how pytest turns fixture parameters and parametrize marks into collected test cases, how per-parameter marks are stored on items, and how skip, xfail, and marker selection consume those marks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/fixtures_parametrize_marks_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "assertions_warnings_outcomes_1",
+      "topic": "Assertions, Warnings, and Outcomes",
+      "difficulty": "easy",
+      "description": "Explains how pytest turns plain asserts into useful failure reports, how warning capture and warning assertions work, and how skip, fail, xfail, exit, raises, and import-based outcomes are represented.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/assertions_warnings_outcomes_1.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "pytest-dev__pytest",
+      "document_id": "runtime_reporting_io_1",
+      "topic": "Runtime, Reporting, and IO Helpers",
+      "difficulty": "easy",
+      "description": "Explains how pytest runs test phases, turns phase results into reports, attaches captured output and logs, prints terminal progress and summaries, and manages tmp_path directories.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/pytest-dev__pytest/easy/loras/runtime_reporting_io_1.pt",
+      "qa_count": 3
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+run_name: kilo_easy_v0
+timestamp: 20260427T0026
+source_path: /home/mms2309/memcoder/config/eval/kilo_easy_v0.yaml
+artifacts:
+- root: /home/mms2309/memcoder/artifacts/antirez__kilo
+  difficulties:
+  - easy
+  document_ids: []
+  topics: []
+conditions:
+- naive
+- in_context
+- shine
+routing: oracle
+model:
+  qwen_base: /home/mms2309/memcoder/vendor/SHINE/models/Qwen3-8B
+  shine_root: /home/mms2309/memcoder/vendor/SHINE
+  qwen_cuda: 0
+  conversation_max_length: 5000
+  max_new_tokens: 128
+  seed: 42
+  lora_r: 8
+  metamodel_class_path: LoraQwen.LoraQwen3ForCausalLM
+  config_class_path: LoraQwen.Qwen3Config
+embedding:
+  model: null
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: /home/mms2309/memcoder/.env
+  concurrency: 8
+  prompt: /home/mms2309/memcoder/prompts/llm_judge_grading_v0.md
+  rubric_version: v0
+  taxonomy_version: v0
+  max_retries: 4

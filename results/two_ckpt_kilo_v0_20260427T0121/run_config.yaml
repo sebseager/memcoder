@@ -1,0 +1,36 @@
+run_name: two_ckpt_kilo_v0
+timestamp: 20260427T0121
+source_path: /home/mms2309/memcoder/config/eval/two_checkpoint_kilo_v0.yaml
+shine_base_config: /home/mms2309/memcoder/config/shine_eval_demo.yaml
+shine_overrides: []
+artifacts:
+- root: /home/mms2309/memcoder/artifacts/antirez__kilo
+  difficulties:
+  - easy
+  document_ids: []
+  topics: []
+checkpoints:
+- label: iftpwc_epoch2
+  path: /home/mms2309/memcoder/vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/iftpwc/checkpoint-epoch-2
+  cuda: 1
+- label: train_epoch1
+  path: /home/mms2309/memcoder/vendor/SHINE/checkpoints/8gpu_8lora_128metalora_lr5e-5_grouppretrain_1150/train/checkpoint-epoch-1
+  cuda: 2
+model:
+  qwen_base: /home/mms2309/memcoder/vendor/SHINE/models/Qwen3-8B
+  shine_root: /home/mms2309/memcoder/vendor/SHINE
+  qwen_cuda: 0
+  context_max_length: 1150
+  conversation_max_length: 5000
+  max_new_tokens: 128
+  seed: 42
+judge:
+  provider: openai
+  model: gpt-5.1
+  api_key_env: OPENAI_API_KEY
+  dotenv_path: /home/mms2309/memcoder/.env
+  concurrency: 8
+  prompt: /home/mms2309/memcoder/prompts/llm_judge_grading_v0.md
+  rubric_version: v0
+  taxonomy_version: v0
+  max_retries: 4

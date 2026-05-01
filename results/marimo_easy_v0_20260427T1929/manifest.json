@@ -1,0 +1,90 @@
+{
+  "run_id": "20260427T192950Z",
+  "run_name": "marimo_easy_v0",
+  "timestamp": "20260427T1929",
+  "created_at": "2026-04-27T19:29:50.839903+00:00",
+  "git_sha": "c42188052df81321b85666ad358f509c1cba5cad",
+  "qwen_device": "cuda:0",
+  "qwen_base": "/home/mms2309/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+  "shine_root": "/home/mms2309/memcoder/vendor/SHINE",
+  "conditions": [
+    "naive",
+    "in_context",
+    "shine"
+  ],
+  "routing": "oracle",
+  "documents": [
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "overview_purpose_1",
+      "topic": "Overview / Purpose",
+      "difficulty": "easy",
+      "description": "Explains marimo's purpose as a reactive Python notebook, why it emphasizes reproducibility and app/script reuse, and how its public library supports interactive notebooks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/overview_purpose_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "setup_cli_1",
+      "topic": "Setup and CLI",
+      "difficulty": "easy",
+      "description": "Explains how marimo is installed, how the command-line interface introduces editing, running, tutorials, conversion, export, and how the main Click commands route those workflows.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/setup_cli_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "public_interface_1",
+      "topic": "Public Python Interface",
+      "difficulty": "easy",
+      "description": "Explains how marimo exposes its top-level Python API, how the API docs group the interface, and when developers should use key public helpers for apps, markdown, state, outputs, and console capture.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/public_interface_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "reactive_runtime_dataflow_1",
+      "topic": "Reactive Runtime and Dataflow",
+      "difficulty": "easy",
+      "description": "Explains how marimo derives a notebook dependency graph from cell definitions and references, how that graph drives reactive execution, stale and disabled behavior, and dataflow visualization.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/reactive_runtime_dataflow_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "apps_scripts_wasm_1",
+      "topic": "Apps, Scripts, and WebAssembly",
+      "difficulty": "easy",
+      "description": "Explains how marimo notebooks are run as web apps, ordinary Python scripts, exported artifacts, and browser-only WebAssembly notebooks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/apps_scripts_wasm_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "ui_outputs_interactivity_1",
+      "topic": "UI, Outputs, and Interactivity",
+      "difficulty": "easy",
+      "description": "Explains how marimo connects interactive UI elements, cell reactivity, markdown and rich outputs, and imperative output updates for app-like notebooks.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/ui_outputs_interactivity_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "sql_data_integrations_1",
+      "topic": "SQL and Data Integrations",
+      "difficulty": "easy",
+      "description": "Explains how marimo SQL cells execute queries, return dataframe-like results, discover database connections and schemas, and connect notebook data workflows to external data sources.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/sql_data_integrations_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    },
+    {
+      "repo_id": "marimo-team__marimo",
+      "document_id": "ai_mcp_pairing_1",
+      "topic": "AI, MCP, and Agent Pairing",
+      "difficulty": "easy",
+      "description": "Explains how marimo connects its notebook-aware AI assistant, MCP server and client support, external agent pairing, and shared tool registration model.",
+      "lora_path": "/home/mms2309/memcoder/artifacts/marimo-team__marimo/easy/loras/ai_mcp_pairing_1__iftpwc_epoch2.pt",
+      "qa_count": 3
+    }
+  ]
+}
