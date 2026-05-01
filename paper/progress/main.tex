@@ -1,0 +1,67 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage[backend=biber]{biblatex}
+\addbibresource{references.bib}
+\bibliography{references}
+
+\title{MemCoder: Composable LoRA for Modular Codebase Memory}
+\author{Brian Siegel, Seb Seager, Magnus Saebo}
+\date{April 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Overview}
+We propose a new framework for LLM-based coding agents working on large software repositories. Code agents, while successful in bug fixing and reasoning across multiple files and subdirectories, are constrained by fixed context windows. Long-horizon tasks thus require information compression, prior context summarization, or reliance on RAG, ultimately resulting performance degradation. We explore how low-rank adaptors (LoRA) can be trained to parametrically store repository knowledge and dynamically called upon when a code agent operates in a relevant region of the directory. We utilize a Doc-to-LoRA hypernetwork, developed by Charakorn et al. (2026), to transform repository documentation into LoRA that can be loaded dynamically as a coding agent works throughout a codebase \cite{doctolora}. The broad goal is determining if these adaptors capture repository conventions, structure, and overall design information in a reusable and efficient way.
+
+Our first main experimental focus is systematically varying the hypernetwork inputs to study how resulting LoRAs differ. Particularly, early experimentation has suggested that these generated LoRAs respond more favorably towards more succinct and natural prose-style text than highly dense or structured documentation. This will help to understand the styles of repository inputs most suitable for parametric memory.
+
+Our second focus is studying multi-LoRA composition, combining multiple LoRAs across different segments of a repository integrating strategies such as LoRA switching and Elastic Weight Consolidation for sequential, continual learning-like updates. We will evaluate these approaches against more conventional methods such as using static context files and RAG. Our evaluation will consider metrics such as trajectory efficiency measured via token consumption per task and file localization accuracy for bug identification. We use SWE-Bench and SWE-Bench-CL as benchmarks and aim to compare one-shot memory strategies against continual memory approaches through mulit-LoRA composition to better understand tradeoffs between static and dynamic parametric repository memory modules. 
+
+\section{Research Questions}
+1. Can repository-specific knowledge be effectively stored in small, modular LoRA adapters for code agents? Our goal is to test if these generated adapters from repository documentation or summaries can improve an agent's reasoning about a codebase.
+
+2. What is the best unit of organization for parametric memory? Early experimentation with Doc-to-LoRA has highlighted its preference for shorter, prose-style text over dense documentation or bulleted information. Investigating whether this is a byproduct of the parameterization of LoRAs or the underlying LLM such as Gemma-2B can help determine the most effective form of textual input for generating useful repo-specific memory modules. We aim to compare various candidate units ranging from subdirectory regions, related file clusters, and agent-generated design documents to understand which representation produces the most useful LoRAs.
+
+3. How should multiple LoRAs be selected and composed at inference?
+We should determine how to best choose LoRAs, whether via an agent, LoRA-Switch, and if composing multiple LoRAs is a feasible and effective technique.
+
+4. How does this approach compare to baselines such as using static context files and RAG? For the static context file baseline, we use the documents that are transformed into LoRAs and instead provide them in-context.
+The baselines we aim to use for this comparison are SWE-Bench Verified and SWE-Bench-CL. 
+For the former, we add a ``preprocessing'' step where the LoRAs are prepared before evaluation. For the latter, the consecutive evaluation naturally facilitates generating/updating LoRAs over time.
+
+5. What are the tradeoffs between performance and efficiency?
+We aim to evaluate the extent to which improvements in downstream task performance justify the computational and architectural costs of LoRA-based memory. Alongside standard performance metrics such as accuracy, precision, and recall, we will measure factors including storage cost, adapter latency, token efficiency, and other system level constraints introduced by LoRA. 
+
+\section{Value to User Community}
+
+The main users of this project will be additional researchers and developers working on LLM-based software engineering tasks, utilizing coding agents on complex coding repositories. We aim to provide an efficient tool for representing repository knowledge with lightweight memory modules. Our project would provide new system design structures for coding agents, allowing for repo knowledge to be stored modularly with adaptors instead of repeated retrival. Further, we would improve efficiencies reducing prompt length and token cost particularly for longer tasks and larger repositories. Additionally our project contributes to the broader study of PEFT-based memory systems by examining their strengths and limitations relative to alternative approaches for repository memory, including retrieval-based methods such as RAG. In instances where context windows are limited (e.g. when using small, open-source models), our proposal can benefit real developers alongside researchers studying LLM memory architectures, parameter capacity for memory compression, and longer context reasoning. 
+
+\section{Demo}
+
+\subsection{Elevator pitch}
+
+We begin by motivating our work by discussing a key limitation of coding agents: lack of memory. We draw the analogy of an engineer seeing a codebase for the first time versus an engineer with years of experience maintaining. Then, we briefly touch on the pitfalls on current approaches for memory, particularly the pitfalls of static context files. We contrast this with our core idea of introducing relevant information parametrically as opposed to in-context and why this is especially effective for small models.
+
+\subsection{Demo}
+
+We give a high-level overview of our architecture using an architectural diagram. This will mainly show how we source the codebase information, how we transform this into LoRAs, and then how we index and retrieve these LoRAs. From there, we demonstrate our set-up with an example from our SWE-Bench CL evaluation. We pick a particular issue from one of the repositories, and show how the agent navigates the repository, retrieves relevant LoRAs, and then finally distills learned insights into a new LoRAs that then gets indexed. We finish with some plots showing the performance of our method to relevant baselines such as static context files and RAG.
+
+\section{Delivery}
+
+We sill provide a public GitHub repository containing our code, experiments, and documentation. In the repository, scripts for our LoRA generation pipeline will be available for evaluation with the doc-to-LoRA hypernetwork as an external package. Alongside this, we will provde documentation to aid in reproducing our setup, benchmarks and model details, and instructions for running experiments.
+
+\section{Etcetera}
+
+The code for our architecture is made available at \url{https://github.com/sebseager/memcoder}. 
+
+We leverage the repository for Doc-to-LoRA, downloading it as a key extenral package, found at \url{https://github.com/SakanaAI/doc-to-lora}. 
+
+We evaluate on SWE-Bench Verified (\url{https://github.com/SWE-bench/SWE-bench}) and SWE-Bench CL (\url{https://github.com/thomasjoshi/agents-never-forget/}).
+
+\section{Bibliography}
+
+\printbibliography
+
+\end{document}

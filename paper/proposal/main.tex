@@ -1,0 +1,38 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage[backend=biber]{biblatex}
+\addbibresource{references.bib}
+\bibliography{references}
+
+\title{Project Proposal TiSE}
+\author{Brian Siegel, Seb Seager, Magnus Saebo}
+\date{March 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+We propose a new memory architecture for transformer-based code agents operating in large software repositories. While code agents are successful in patch generation, bug fixing, and reasoning between multiple files across subdirectories, they are constrained by fixed context windows. Large prompts thus result in information compression, prior context summarization, or reliance on retrieval-augmented generation (RAG). While effective for reasonable context lengths, performance degrades on coding tasks with longer horizons as relevant information becomes broken across files, histories, and dependencies that are isolated amongst multiple prompts.
+
+This project explores how repository knowledge can be stored parametrically in a series of specialized low-rank adaptors (LoRA) that are dynamically called upon when a code agent begins operating in the corresponding adaptor's subdirectory region. Rather than retrieving a large repository or prompt in full, the model loads compact weight updates from LoRA that ideally capture the structure, conventions, and localized details of that repository. 
+
+\section{Background}
+Several papers inspire this approach. \citeauthor{charakorn2025texttolorainstanttransformeradaption} (2025) proposes Text-to-LoRA similarly has high zero-shot accuracy utilizing a hypernetwork for generating LoRA from natural language descriptions. \citeauthor{doctolora} (2026) further proposes Doc-to-LoRA that uses a hypernetwork to perform lightweight context distillation from novel documents into generated LoRA adaptors in a single forward pass, achieving high zero-shot accuracy with context lengths greater than $4\times $ that of the target LLM \cite{doctolora}. Various repository metadata ranging from README files to directory names can help generate or select the right adaptor instead of more expensive fine-tuning methods \cite{charakorn2025texttolorainstanttransformeradaption}.
+
+However, a blanket, rank-agnostic LoRA approach is not necessarily sufficient. An additional study, \citeauthor{back2026understandingloraknowledgememory}, explores LoRA beyond fine-tuning for memory applications. While LoRA scales with rank, it can saturate as capacity gains are not proportional to parameter cost \cite{back2026understandingloraknowledgememory}. Similarly, they find non-monotonic parameter efficiency at smaller ranks suggesting memory-centric LoRA should aim to be correctly sized rather than maximal rank. Hybrid and multi-LoRA architectures can often outperform standalone instances of LoRA and other techniques. Thus, a ``sharded'' memory approach containing a distributed system of small LoRA aiming to capture disparate parts of a codebase. Finally, \citeauthor{zhang2026sketchadaptfinetunablesketches} argues that their proposed SketchTune compression strategy utilizing sketch-based compression can approximate weight updates better than PERF techniques like LoRA, pointing out that structurally complex information may be too difficult for LoRA to express \cite{zhang2026sketchadaptfinetunablesketches}. Identifying the ideal rank, architectural placement, and strategic allocation of LoRA will be key to understanding if modular parametric memory can lead to more stable and longer context windows for code agents. 
+
+\section{Methodology}
+
+We leverage the pre-trained LoRA generators (hypernetworks) from \citeauthor{doctolora} for document-to-LoRA transformation for our framework. Given a set of GitHub-style issue-resolving tasks (a la SWE-Bench \cite{jimenez2024swebenchlanguagemodelsresolve}) for a repository, we first prompt our agent model to generate documentation detailing important system information at various levels of granularity for the repository. These ``design documents'' are then transformed into LoRAs using the pre-existing hypernetwork (requires only one forward pass) and stored for later use. At task time, we expose a tool to the coding agent which allows the agent to specify a directory it would like to gain knowledge about. The tool then grabs the LoRA for the specified directory and merges it with the base weights for the model for subsequent actions. If the agent tries to load-in an additional knowledge LoRA, we will explore whether the new LoRA is merged with the original weights or if the new LoRA can be composed with the previously merged weights. \citeauthor{doctolora} suggests that LoRAs are highly composable, though this will need to be validated.
+
+\subsection{Evaluation}
+
+We compare this approach to full-context prompts (entire relevant context is included up to the model's context limit), RAG (retrieval over chunked repository files), and no-memory (task description, no additional help as a baseline). We can evaluate on a set of multi-file coding tasks from, e.g., SWE-Bench \cite{jimenez2024swebenchlanguagemodelsresolve}. Evaluation metrics could include trajectory efficiency (number of tokens consumed per task), file localization accuracy (identifying buggy files), patch correctness, adaptor latency (to give a sense of practical viability), storage cost for saving the LoRAs, as well as additional qualitative analyses.
+
+\section{Bibliography}
+
+\printbibliography
+
+\end{document}
